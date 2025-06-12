@@ -66,47 +66,46 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt', // Using JWT for session strategy
   },
   callbacks: {
-    async jwt({ token, user, account, profile }) {
+    async jwt({ token, user, account }) {
+      await connectMongoose(); // Ensure DB connection for all JWT operations involving DB
+
       // Persist the OAuth access_token and provider to the token right after signin
       if (account) {
         token.accessToken = account.access_token;
         token.provider = account.provider; // e.g. "github" or "google"
       }
-      // Persist the user ID and role to the token
-      if (user) { // This block usually runs on initial sign-in when user object is passed
-        token.id = user.id; // This is the user ID from the database
-        
-        await connectMongoose(); // Ensure DB connection
-        const dbUser = await UserModel.findById(user.id).select('role email').lean();
-        
+
+      // If user object exists (typically on initial sign-in), set token.id
+      if (user?.id) {
+        token.id = user.id;
+      }
+
+      // Always refresh the role from the database if token.id exists
+      // This ensures that role changes are reflected in the session promptly.
+      if (token.id) {
+        const dbUser = await UserModel.findById(token.id).select('role email').lean();
         if (dbUser) {
           token.role = dbUser.role || 'user'; // Default to 'user' if not set
 
-          // First user admin assignment logic
-          // This logic assumes that the MongoDBAdapter has already created the user.
-          const userCount = await UserModel.countDocuments();
-          if (userCount === 1 && token.role !== 'admin') {
-            // This is the very first user in the system
-            console.log(`INFO: First user detected (Email: ${dbUser.email}, ID: ${user.id}). Promoting to admin.`);
-            try {
-              await UserModel.updateOne({ _id: user.id }, { $set: { role: 'admin' } });
-              token.role = 'admin';
-              console.log(`INFO: User ${user.id} successfully promoted to admin.`);
-            } catch (e: any) {
-              console.error(`ERROR: Failed to promote first user ${user.id} to admin: ${e.message}`);
+          // First user admin assignment logic - only relevant if it's a new user context
+          // Check if it's the user's initial sign-in or if we need to check user count
+          if (user) { // `user` is present on initial sign-in or account linking
+            const userCount = await UserModel.countDocuments();
+            if (userCount === 1 && token.role !== 'admin') {
+              console.log(`INFO: First user detected (Email: ${dbUser.email}, ID: ${token.id}). Promoting to admin.`);
+              try {
+                await UserModel.updateOne({ _id: token.id }, { $set: { role: 'admin' } });
+                token.role = 'admin'; // Update token immediately
+                console.log(`INFO: User ${token.id} successfully promoted to admin.`);
+              } catch (e: any) {
+                console.error(`ERROR: Failed to promote first user ${token.id} to admin: ${e.message}`);
+              }
             }
           }
         } else {
-          // Fallback if user somehow not found immediately after adapter creation (should be rare)
-           token.role = 'user';
-        }
-      } else if (token.id && !token.role) { 
-        // For subsequent JWT creations (e.g., session refresh) if role wasn't set previously
-        // or to ensure role is still fresh if it could change outside of sign-in.
-        await connectMongoose();
-        const dbUser = await UserModel.findById(token.id).select('role').lean();
-        if (dbUser) {
-          token.role = dbUser.role || 'user';
+          // User not found in DB, potentially an issue. Clear role or handle as error.
+          console.warn(`User with ID ${token.id} not found in database during JWT callback.`);
+          delete token.role; // Or set to a default guest role if applicable
         }
       }
       return token;
