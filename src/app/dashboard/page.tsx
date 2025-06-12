@@ -11,10 +11,11 @@ import TopIssues from '@/components/dashboard/top-issues';
 import SecurityHotspots from '@/components/dashboard/security-hotspots'; 
 import TeamMetrics from '@/components/dashboard/team-metrics'; 
 import { DashboardData } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import Link from 'next/link';
 import Navbar from '@/components/layout/navbar';
 import DashboardLoading from './loading'; // Import the detailed loading skeleton
+import { BarChartBig } from 'lucide-react';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -39,14 +40,11 @@ export default function DashboardPage() {
       if (!response.ok) {
         let errorMessage = `Failed to fetch dashboard data. Status: ${response.status} ${response.statusText}`;
         try {
-          // Try to parse as JSON first, as our API usually sends JSON errors
           const errorData = await response.json();
           errorMessage = errorData.error || errorData.message || errorData.details || errorMessage;
         } catch (e) {
-          // If response is not JSON, use the response text or a generic message
           const textError = await response.text();
           console.error("Non-JSON error response from /api/dashboard:", textError);
-          // Avoid displaying potentially large HTML error pages directly to the user
           if (textError.toLowerCase().includes("<html")) {
             errorMessage = `API error ${response.status}: Server returned an unexpected response. Check console for details.`;
           } else {
@@ -101,8 +99,12 @@ export default function DashboardPage() {
         <Navbar />
         <main className="flex-1 container py-8 flex items-center justify-center">
           <Card className="w-full max-w-lg text-center shadow-xl">
-            <CardHeader>
+            <CardHeader className="items-center">
+              <BarChartBig className="w-16 h-16 text-primary mb-4" />
               <CardTitle className="text-3xl font-headline text-primary">Welcome to codexair!</CardTitle>
+              <CardDescription className="text-md text-muted-foreground mt-2">
+                Your intelligent code review assistant.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <p className="text-lg text-muted-foreground">
@@ -115,7 +117,7 @@ export default function DashboardPage() {
                 <Link href="/analyze">Start Your First Analysis</Link>
               </Button>
             </CardContent>
-             <CardFooter className="justify-center">
+             <CardFooter className="justify-center pt-4">
                  <p className="text-xs text-muted-foreground">Empowering developers with AI-driven code intelligence.</p>
              </CardFooter>
           </Card>

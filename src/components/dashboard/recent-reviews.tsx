@@ -32,27 +32,31 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
           <ScrollArea className="h-[350px] pr-3"> 
             <div className="space-y-4">
               {reviews.map((review) => {
-                const owner = review.owner || 'unknown_owner';
-                const repo = review.repo || 'unknown_repo';
-                const prNumber = review.prNumber || 0;
+                // Ensure all parts for the link are present and valid
+                const owner = review.owner;
+                const repo = review.repo;
+                const prNumber = review.prNumber;
                 const analysisId = review.id;
-                const canLink = review.prNumber && review.owner && review.repo && review.id;
+                const canLink = owner && repo && prNumber && analysisId;
                 
+                const displayTitle = review.pullRequestTitle || `PR #${prNumber || 'N/A'}`;
+                const displayRepoName = review.repositoryName && review.repositoryName !== 'N/A' ? `in ${review.repositoryName}` : '';
+
                 return (
                   <div key={review.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-semibold text-md text-foreground truncate max-w-[200px] sm:max-w-xs" title={review.pullRequestTitle}>
+                        <h3 className="font-semibold text-md text-foreground truncate max-w-[200px] sm:max-w-xs" title={displayTitle}>
                           {canLink ? (
                              <Link href={`/analyze/${owner}/${repo}/${prNumber}/${analysisId}`} className="hover:underline">
-                               {review.pullRequestTitle || `Analysis ID: ${review.id.slice(-6)}`}
+                               {displayTitle}
                              </Link>
                           ) : (
-                            review.pullRequestTitle || `Analysis ID: ${review.id.slice(-6)}`
+                            displayTitle
                           )}
                         </h3>
                         <p className="text-xs text-muted-foreground">
-                          {review.repositoryName ? `in ${review.repositoryName}` : ''} {review.prNumber ? `#${review.prNumber}`: ''}
+                          {displayRepoName} {prNumber ? `#${prNumber}`: ''}
                         </p>
                       </div>
                       {canLink && (
@@ -85,5 +89,4 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
     </Card>
   );
 }
-
     

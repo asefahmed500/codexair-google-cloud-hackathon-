@@ -22,15 +22,16 @@ function getTopItems(
   const itemCounts: Record<string, TopIssueItem> = {};
 
   analyses.forEach(analysis => {
-    if (!analysis) return; // Guard against null analysis
+    if (!analysis) return; 
     const items = itemSelector(analysis) || [];
     items.forEach((item: SecurityIssue | Suggestion) => {
+      if (!item || !item.title) return; // Ensure item and title exist
       const title = titleExtractor(item);
       if (!itemCounts[title]) {
         itemCounts[title] = { title, count: 0 };
-        if (severityExtractor && 'severity' in item) itemCounts[title].severity = severityExtractor(item as SecurityIssue);
-        if (priorityExtractor && 'priority' in item) itemCounts[title].priority = priorityExtractor(item as Suggestion);
-        if (typeExtractor) itemCounts[title].type = typeExtractor(item);
+        if (severityExtractor && 'severity' in item && item.severity) itemCounts[title].severity = severityExtractor(item as SecurityIssue);
+        if (priorityExtractor && 'priority' in item && item.priority) itemCounts[title].priority = priorityExtractor(item as Suggestion);
+        if (typeExtractor && item.type) itemCounts[title].type = typeExtractor(item);
       }
       itemCounts[title].count++;
     });
@@ -56,17 +57,15 @@ export async function GET(request: NextRequest) {
     let relevantAnalyses: (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
 
     if (isAdmin) {
-      // console.log("Admin requesting dashboard, fetching all system-wide analysis data.");
       relevantAnalyses = await Analysis.find({})
         .populate<{ pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null }>({
           path: 'pullRequestId',
-          select: 'title repositoryId number author createdAt owner repoName', // Added owner and repoName
+          select: 'title repositoryId number author createdAt owner repoName state', // ensure owner, repoName, state are selected
           populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' } 
         })
         .sort({ createdAt: -1 }) 
         .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
     } else {
-      // console.log(`User ${userId} requesting dashboard, fetching their specific analysis data.`);
       const userPullRequestObjects = await PullRequest.find({ userId }).select('_id').lean();
       const userPullRequestIds = userPullRequestObjects.map(pr => pr._id);
       
@@ -85,7 +84,7 @@ export async function GET(request: NextRequest) {
       relevantAnalyses = await Analysis.find({ pullRequestId: { $in: userPullRequestIds } })
         .populate<{ pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null }>({
           path: 'pullRequestId',
-          select: 'title repositoryId number author createdAt owner repoName', // Added owner and repoName
+          select: 'title repositoryId number author createdAt owner repoName state', // ensure owner, repoName, state are selected
           populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' }
         })
         .sort({ createdAt: -1 }) 
@@ -120,25 +119,25 @@ export async function GET(request: NextRequest) {
     const recentAnalysesDocs = relevantAnalyses.slice(0, 5);
 
     const recentAnalyses: RecentAnalysisItem[] = recentAnalysesDocs.map((analysis) => {
-      if (!analysis || !analysis.pullRequestId) return null; // Guard clause
+      if (!analysis || !analysis.pullRequestId) return null; 
 
       let repoFullNameDisplay = 'N/A';
-      let ownerDisplay = analysis.pullRequestId.owner || 'N/A';
-      let actualRepoName = analysis.pullRequestId.repoName || 'N/A';
+      let ownerDisplay = analysis.pullRequestId.owner || 'N/A'; // From PR doc
+      let actualRepoName = analysis.pullRequestId.repoName || 'N/A'; // From PR doc
 
-      if (analysis.pullRequestId.repositoryId) {
-         const repoIdObj = analysis.pullRequestId.repositoryId;
-         if (typeof repoIdObj === 'object' && repoIdObj !== null) {
-            if (repoIdObj.fullName) repoFullNameDisplay = repoIdObj.fullName;
-            if (repoIdObj.owner) ownerDisplay = repoIdObj.owner; // Prioritize populated owner
-            if (repoIdObj.name) actualRepoName = repoIdObj.name; // Prioritize populated repo name
-         }
+      // If repositoryId is populated and an object, use its details
+      if (analysis.pullRequestId.repositoryId && typeof analysis.pullRequestId.repositoryId === 'object') {
+        const repoObj = analysis.pullRequestId.repositoryId as RepoType;
+        if (repoObj.fullName) repoFullNameDisplay = repoObj.fullName;
+        // If owner/repoName are directly on PR doc, they might be more reliable or up-to-date for the specific PR instance
+        // if (repoObj.owner) ownerDisplay = repoObj.owner; 
+        // if (repoObj.name) actualRepoName = repoObj.name;
       }
       
       return {
         id: analysis._id.toString(),
         pullRequestTitle: analysis.pullRequestId.title || 'N/A',
-        repositoryName: repoFullNameDisplay,
+        repositoryName: repoFullNameDisplay, // This is fullName, e.g., "owner/repo"
         prNumber: analysis.pullRequestId.number,
         owner: ownerDisplay, 
         repo: actualRepoName,
@@ -146,7 +145,7 @@ export async function GET(request: NextRequest) {
         securityIssues: (analysis.securityIssues || []).filter((si: SecurityIssue) => si.severity === 'critical' || si.severity === 'high').length,
         createdAt: analysis.createdAt,
       };
-    }).filter(Boolean) as RecentAnalysisItem[]; // Filter out any nulls
+    }).filter(Boolean) as RecentAnalysisItem[];
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -211,7 +210,7 @@ export async function GET(request: NextRequest) {
       if (!analysis) return;
       (analysis.fileAnalyses || []).forEach((file: FileAnalysisItem) => {
         if (!file.filename) return;
-        const uniqueKey = `${analysis.pullRequestId?._id?.toString() || 'unknown_pr'}-${file.filename}`; // More unique key if needed, but filename is primary
+        const uniqueKey = `${analysis.pullRequestId?._id?.toString() || 'unknown_pr'}-${file.filename}`; 
 
         if (!fileIssueCounts[file.filename]) {
           fileIssueCounts[file.filename] = {
@@ -297,5 +296,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-
-    
