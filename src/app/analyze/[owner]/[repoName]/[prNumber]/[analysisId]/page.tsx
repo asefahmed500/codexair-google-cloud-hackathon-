@@ -8,14 +8,14 @@ import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { CodeAnalysis, PullRequest as PRType, SecurityIssue, Suggestion, FileAnalysisItem } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import Navbar from '@/components/layout/navbar'; // Import the new Navbar
+import Navbar from '@/components/layout/navbar'; 
 
 export default function AnalysisDetailsPage() {
   const params = useParams();
@@ -99,11 +99,9 @@ export default function AnalysisDetailsPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <Navbar /> {/* Use the new Navbar */}
+      <Navbar /> 
       <main className="flex-1 container py-8">
         <div className="mb-6 flex justify-between items-center">
-             {/* Intentionally empty or add page-specific actions here */}
-             {/* The "Back to PRs" button could go here or be removed if Navbar is sufficient */}
              <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>Back to PRs for {owner}/{repoName}</Button>
         </div>
 
@@ -123,6 +121,14 @@ export default function AnalysisDetailsPage() {
                 </Link>
             </div>
           </CardHeader>
+           {analysis.aiInsights && (
+            <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-muted/30">
+                <h3 className="font-semibold text-lg flex items-center gap-2"><Lightbulb className="h-5 w-5 text-accent" />AI Review Summary:</h3>
+                <ScrollArea className="h-auto max-h-48 w-full rounded-md border p-4 bg-background shadow">
+                    <pre className="text-sm whitespace-pre-wrap text-foreground font-mono">{analysis.aiInsights}</pre>
+                </ScrollArea>
+            </CardFooter>
+          )}
         </Card>
 
         <Tabs defaultValue="overview" className="w-full">
@@ -130,28 +136,20 @@ export default function AnalysisDetailsPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="security">Security Issues ({analysis.securityIssues?.length || 0})</TabsTrigger>
             <TabsTrigger value="suggestions">Suggestions ({analysis.suggestions?.length || 0})</TabsTrigger>
-            <TabsTrigger value="file-details">File Details</TabsTrigger>
+            <TabsTrigger value="file-details">File Details ({analysis.fileAnalyses?.length || 0})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
             <Card>
-              <CardHeader><CardTitle>Analysis Overview</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Overall Analysis Metrics</CardTitle></CardHeader>
               <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <MetricCard Icon={Thermometer} title="Quality Score" value={analysis.qualityScore.toFixed(1)} unit="/ 10" />
                 <MetricCard Icon={Zap} title="Complexity Score" value={analysis.complexity.toFixed(1)} />
                 <MetricCard Icon={Activity} title="Maintainability Score" value={analysis.maintainability.toFixed(1)} />
                 <MetricCard Icon={ShieldCheck} title="Security Issues" value={analysis.securityIssues?.length || 0} />
                 <MetricCard Icon={Lightbulb} title="Suggestions" value={analysis.suggestions?.length || 0} />
-                <MetricCard Icon={FileText} title="Lines of Code" value={analysis.metrics?.linesOfCode || 0} />
+                <MetricCard Icon={FileText} title="Lines of Code Analyzed" value={analysis.metrics?.linesOfCode || 0} />
               </CardContent>
-              {analysis.aiInsights && (
-                <CardFooter className="flex-col items-start gap-2 pt-4 border-t">
-                    <h3 className="font-semibold text-lg">AI Insights:</h3>
-                    <ScrollArea className="h-40 w-full rounded-md border p-4 bg-secondary/30">
-                        <pre className="text-sm whitespace-pre-wrap text-foreground">{analysis.aiInsights}</pre>
-                    </ScrollArea>
-                </CardFooter>
-              )}
             </Card>
           </TabsContent>
 
@@ -175,8 +173,11 @@ export default function AnalysisDetailsPage() {
                         <AccordionContent className="p-4 bg-secondary/30 rounded-b-md">
                           <p className="text-sm mb-2"><strong className="text-foreground">Description:</strong> {issue.description}</p>
                           <p className="text-sm mb-2"><strong className="text-foreground">File:</strong> {issue.file} {issue.line && `(Line: ${issue.line})`}</p>
-                          <p className="text-sm mb-2"><strong className="text-foreground">Suggestion:</strong> {issue.suggestion}</p>
-                          {issue.cwe && <p className="text-sm"><strong className="text-foreground">CWE:</strong> {issue.cwe}</p>}
+                          <p className="text-sm font-medium text-foreground mb-1">Suggested Fix / Code:</p>
+                          <ScrollArea className="max-h-60 w-full rounded-md border bg-background p-2 shadow-inner">
+                              <pre className="text-xs font-code whitespace-pre-wrap">{issue.suggestion}</pre>
+                          </ScrollArea>
+                          {issue.cwe && <p className="text-sm mt-2"><strong className="text-foreground">CWE:</strong> <Badge variant="outline">{issue.cwe}</Badge></p>}
                         </AccordionContent>
                       </AccordionItem>
                     ))}
@@ -205,12 +206,12 @@ export default function AnalysisDetailsPage() {
                         </AccordionTrigger>
                         <AccordionContent className="p-4 bg-secondary/30 rounded-b-md">
                           <p className="text-sm mb-2"><strong className="text-foreground">Description:</strong> {suggestion.description}</p>
-                          <p className="text-sm mb-2"><strong className="text-foreground">Type:</strong> <Badge variant="outline">{suggestion.type}</Badge></p>
+                          <p className="text-sm mb-2"><strong className="text-foreground">Type:</strong> <Badge variant="outline" className="capitalize">{suggestion.type}</Badge></p>
                           <p className="text-sm mb-2"><strong className="text-foreground">File:</strong> {suggestion.file} {suggestion.line && `(Line: ${suggestion.line})`}</p>
                           {suggestion.codeExample && (
                             <>
                               <p className="text-sm font-medium text-foreground mb-1">Code Example:</p>
-                              <ScrollArea className="max-h-60 w-full rounded-md border bg-background p-2">
+                              <ScrollArea className="max-h-60 w-full rounded-md border bg-background p-2 shadow-inner">
                                 <pre className="text-xs font-code whitespace-pre-wrap">{suggestion.codeExample}</pre>
                               </ScrollArea>
                             </>
@@ -234,7 +235,10 @@ export default function AnalysisDetailsPage() {
                       <AccordionItem value={`file-${index}`} key={index}>
                         <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md">
                           <div className="flex items-center justify-between w-full">
-                            <span className="font-medium text-left">{file.filename}</span>
+                             <div className="flex items-center gap-2">
+                                <Code2 className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium text-left">{file.filename}</span>
+                             </div>
                             <Badge variant={file.qualityScore >= 7 ? "default" : file.qualityScore >=4 ? "outline" : "destructive"}>
                                 QS: {file.qualityScore.toFixed(1)}
                             </Badge>
@@ -245,7 +249,7 @@ export default function AnalysisDetailsPage() {
                             <p><strong className="text-foreground">Quality Score:</strong> {file.qualityScore.toFixed(1)}</p>
                             <p><strong className="text-foreground">Complexity:</strong> {file.complexity.toFixed(1)}</p>
                             <p><strong className="text-foreground">Maintainability:</strong> {file.maintainability.toFixed(1)}</p>
-                            <p><strong className="text-foreground">Lines of Code:</strong> {file.metrics.linesOfCode}</p>
+                            <p><strong className="text-foreground">Lines of Code Analyzed:</strong> {file.metrics.linesOfCode}</p>
                           </div>
                           <Separator/>
                           <div>
@@ -267,8 +271,8 @@ export default function AnalysisDetailsPage() {
                            {file.aiInsights && (
                             <div>
                                 <h4 className="font-semibold text-foreground mb-1">AI Insights for this file:</h4>
-                                <ScrollArea className="h-24 w-full rounded-md border bg-background p-2">
-                                    <pre className="text-xs whitespace-pre-wrap text-foreground">{file.aiInsights}</pre>
+                                <ScrollArea className="h-24 w-full rounded-md border bg-background p-2 shadow-inner">
+                                    <pre className="text-xs whitespace-pre-wrap text-foreground font-mono">{file.aiInsights}</pre>
                                 </ScrollArea>
                             </div>
                            )}
@@ -312,21 +316,25 @@ function MetricCard({ Icon, title, value, unit }: MetricCardProps) {
 function AnalysisDetailsLoadingSkeleton() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <Navbar /> {/* Using Navbar directly, assumes it handles its own loading state or matches this */}
+      <Navbar /> 
       <main className="flex-1 container py-8">
         <div className="mb-6 flex justify-between items-center">
-            <Skeleton className="h-9 w-40" /> {/* Back Button Skeleton */}
+            <Skeleton className="h-9 w-40" /> 
         </div>
         <Card className="mb-6">
             <CardHeader>
-                <Skeleton className="h-10 w-3/4 mb-2" /> {/* PR Title */}
-                <Skeleton className="h-5 w-1/2" /> {/* PR Description */}
+                <Skeleton className="h-10 w-3/4 mb-2" /> 
+                <Skeleton className="h-5 w-1/2" /> 
             </CardHeader>
+            <CardFooter className="pt-4 border-t">
+                <Skeleton className="h-6 w-1/4 mb-2" />
+                <Skeleton className="h-20 w-full" />
+            </CardFooter>
         </Card>
-        <Skeleton className="h-10 w-full mb-6" /> {/* Tabs List */}
+        <Skeleton className="h-10 w-full mb-6" /> 
         
         <Card>
-            <CardHeader><Skeleton className="h-8 w-1/3" /></CardHeader> {/* Tab Content Title */}
+            <CardHeader><Skeleton className="h-8 w-1/3" /></CardHeader> 
             <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[...Array(6)].map((_, i) => (
                     <Card key={i}>
@@ -335,10 +343,6 @@ function AnalysisDetailsLoadingSkeleton() {
                     </Card>
                 ))}
             </CardContent>
-            <CardFooter className="pt-4 border-t">
-                <Skeleton className="h-6 w-1/4 mb-2" /> {/* AI Insights Title */}
-                <Skeleton className="h-32 w-full" /> {/* AI Insights Content */}
-            </CardFooter>
         </Card>
       </main>
       <footer className="py-6 border-t bg-background">

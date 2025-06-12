@@ -49,7 +49,7 @@ export interface SecurityIssue {
   description: string;
   file: string;
   line?: number;
-  suggestion: string;
+  suggestion: string; // Can be used for the "fix" or code example
   cwe?: string;
 }
 
@@ -90,7 +90,7 @@ export interface CodeAnalysis {
   securityIssues: SecurityIssue[];
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics;
-  aiInsights: string;
+  aiInsights: string; // This field will store the auto-generated summary
   fileAnalyses?: FileAnalysisItem[];
   createdAt: Date;
 }
@@ -130,19 +130,19 @@ export interface SecurityHotspotItem {
   filename: string;
   criticalIssues: number;
   highIssues: number;
-  totalIssuesInFile: number; // Total issues in this file from all analyses
+  totalIssuesInFile: number;
   relatedPrIds: string[];
   lastOccurrence: Date;
 }
 
 export interface TeamMemberMetric {
-  userId: string; // This would ideally be a stable user ID from your User collection
-  userName: string; // PR Author login
-  userAvatar?: string; // PR Author avatar
-  totalAnalyses: number; // Count of PRs they authored that were analyzed
+  userId: string; 
+  userName: string; 
+  userAvatar?: string; 
+  totalAnalyses: number; 
   avgQualityScore: number;
-  totalCriticalIssues: number; // Total critical issues in PRs they authored
-  totalHighIssues: number; // Total high issues in PRs they authored
+  totalCriticalIssues: number; 
+  totalHighIssues: number; 
 }
 
 export interface DashboardData {
@@ -153,4 +153,20 @@ export interface DashboardData {
   topSuggestions: TopIssueItem[];
   securityHotspots: SecurityHotspotItem[];
   teamMetrics: TeamMemberMetric[];
+}
+
+// Type for vector search results
+export interface SimilarCodeResult {
+  originalDocId: string; // Analysis document ID
+  pullRequestId: string;
+  prInfo?: { // Populated by $lookup
+    title: string;
+    number: number;
+    authorLogin: string;
+    createdAt: Date;
+  };
+  filename: string;
+  qualityScore: number;
+  aiInsights: string; // For the specific file
+  score: number; // Vector search similarity score
 }

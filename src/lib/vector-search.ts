@@ -1,5 +1,6 @@
 
-import clientPromise, { connectMongoose, Analysis } from './mongodb'; // Assuming Analysis model might be used or relevant
+import clientPromise, { connectMongoose, Analysis, PullRequest } from './mongodb'; 
+import type { SimilarCodeResult } from '@/types';
 
 // This function is a placeholder for creating embeddings if not done by the main AI flow.
 // As of the latest changes, embeddings are generated in /api/analyze by a dedicated Genkit model.
@@ -11,7 +12,7 @@ export async function _placeholder_createCodeEmbedding(code: string): Promise<nu
   return placeholderVector;
 }
 
-export async function findSimilarCode(queryVector: number[], limit = 5, similarityThreshold = 0.85) {
+export async function findSimilarCode(queryVector: number[], limit = 5, similarityThreshold = 0.85): Promise<SimilarCodeResult[]> {
   await connectMongoose();
   const client = await clientPromise;
   const db = client.db(); 
@@ -21,54 +22,81 @@ export async function findSimilarCode(queryVector: number[], limit = 5, similari
     return [];
   }
 
-  // Ensure your MongoDB Atlas Search Index is named "idx_file_embeddings" (or adjust here)
-  // and targets the "fileAnalyses.vectorEmbedding" path in your "analyses" collection.
-  // Dimensions should be 768, and similarity metric 'cosine'.
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
   const pipeline = [
     {
       $vectorSearch: {
         index: "idx_file_embeddings", 
         path: "fileAnalyses.vectorEmbedding", 
         queryVector: queryVector,
-        numCandidates: limit * 15, // Number of candidates to consider
-        limit: limit, // Number of results to return
+        numCandidates: limit * 15, 
+        limit: limit, 
       }
     },
     {
-      $unwind: "$fileAnalyses" // Unwind the fileAnalyses array
+      $match: { // Initial match on vector search score
+        "$vectorSearchScore": { $gte: similarityThreshold }
+      }
+    },
+    {
+      $lookup: { // Join with PullRequests collection
+        from: "pullrequests", // Ensure this is your actual PullRequests collection name
+        localField: "pullRequestId",
+        foreignField: "_id", // Assuming pullRequestId in analyses collection is ObjectId of PR
+        as: "prDetails"
+      }
+    },
+    {
+      $unwind: "$prDetails" // Unwind the prDetails array (should be 1 item)
+    },
+    {
+      $match: { // Filter by PR date (last 6 months)
+        "prDetails.createdAt": { $gte: sixMonthsAgo }
+      }
+    },
+    {
+      $unwind: "$fileAnalyses" // Unwind the fileAnalyses array after PR join
     },
     { 
       $addFields: {
-        "searchScore": { $meta: "vectorSearchScore" } // Add the search score to the documents
+        "searchScoreFromMeta": { $meta: "vectorSearchScore" } 
       }
     },
     { 
-        $match: {
-            "searchScore": { $gte: similarityThreshold }, // Filter by similarity score
-            "fileAnalyses.vectorEmbedding": { $exists: true, $ne: null, $not: {$size: 0} } // Ensure embedding exists
+        $match: { // Re-ensure fileAnalyses with vectorEmbedding exist and match score
+            "searchScoreFromMeta": { $gte: similarityThreshold }, 
+            "fileAnalyses.vectorEmbedding": { $exists: true, $ne: null, $not: {$size: 0} } 
         }
     },
     { 
-      $project: { // Project desired fields
+      $project: { 
         _id: 0, 
-        pullRequestId: 1,
+        originalDocId: "$_id", 
+        pullRequestId: "$pullRequestId",
+        prInfo: {
+          title: "$prDetails.title",
+          number: "$prDetails.number",
+          authorLogin: "$prDetails.author.login",
+          createdAt: "$prDetails.createdAt",
+        },
         filename: "$fileAnalyses.filename",
-        originalDocId: "$_id", // ID of the parent Analysis document
         qualityScore: "$fileAnalyses.qualityScore",
         aiInsights: "$fileAnalyses.aiInsights",
-        score: "$searchScore"
+        score: "$searchScoreFromMeta"
       }
     },
-    { $sort: { score: -1 } }, // Sort by score descending
-    { $limit: limit } // Ensure final limit after filtering and unwinding
+    { $sort: { score: -1 } }, 
+    { $limit: limit } 
   ];
 
   try {
     const results = await db.collection('analyses').aggregate(pipeline).toArray();
-    return results;
+    return results as SimilarCodeResult[];
   } catch (error) {
     console.error("Error during Atlas Vector Search for semantic code matching:", error);
-    console.warn("Atlas Vector Search for semantic matching failed. Ensure your index 'idx_file_embeddings' is correctly configured on 'analyses' collection for path 'fileAnalyses.vectorEmbedding' (768 dimensions, cosine similarity recommended).");
+    console.warn("Atlas Vector Search for semantic matching failed. Ensure your index 'idx_file_embeddings' is correctly configured on 'analyses' collection for path 'fileAnalyses.vectorEmbedding' (768 dimensions, cosine similarity recommended). Also check collection names and field paths in the aggregation pipeline.");
     return [];
   }
 }
@@ -81,7 +109,7 @@ export async function setupVectorSearch() {
   console.log('3. Go to the "Search" tab and click "Create Search Index".');
   console.log('4. Choose "Atlas Vector Search" visual editor or JSON editor.');
   console.log('5. Configure the index for the "analyses" collection.');
-  console.log('   - Index Name: e.g., idx_file_embeddings (must match usage in `findSimilarCode`)');
+  console.log('   - Index Name: idx_file_embeddings (must match usage in `findSimilarCode`)');
   console.log('   - Target Field Path for vector: fileAnalyses.vectorEmbedding');
   console.log('   - Number of Dimensions: 768');
   console.log('   - Similarity Metric: cosine (recommended)');
@@ -94,28 +122,29 @@ export async function setupVectorSearch() {
  * This is a distinct approach from semantic vector search and aims to find
  * near-exact or structural duplicates.
  *
+ * A full implementation would involve:
+ * 1. Code Preprocessing: Normalize code (e.g., remove comments, whitespace, standardize variable names).
+ * 2. Shingling: Generate k-grams (shingles) from the preprocessed code.
+ * 3. MinHashing: Compute MinHash signatures from the set of shingles for efficient comparison.
+ *    - These signatures would need to be stored, likely alongside file metadata.
+ * 4. Locality Sensitive Hashing (LSH): Use LSH to index MinHash signatures.
+ *    - This allows for efficient querying of candidate similar items by hashing similar signatures to the same buckets.
+ * 5. Candidate Comparison: For candidates found via LSH, compute actual similarity (e.g., Jaccard Index on MinHash signatures or shingle sets).
+ * 6. Database Integration: Store and query these signatures and LSH bands in MongoDB or a specialized store.
+ *
  * @param {string} codeContent The code content to check for duplicates.
- * @param {string} fileId Optional identifier for the current file to avoid self-comparison.
- * @returns {Promise<Array<{fileId: string, similarity: number, duplicateFileId: string}>>} 
+ * @param {string} currentFileId Optional identifier for the current file to avoid self-comparison.
+ * @returns {Promise<Array<{fileId: string, similarity: number, duplicateFileId: string, detailsUrl?: string}>>} 
  *          A list of identified duplicates with their similarity scores.
  */
-export async function findDuplicateCodeBySignature(codeContent: string, fileId?: string): Promise<any[]> {
+export async function findDuplicateCodeBySignature(codeContent: string, currentFileId?: string): Promise<any[]> {
   console.warn(`[findDuplicateCodeBySignature] This feature (MinHash/LSH based duplicate detection) is a placeholder.
-    A full implementation would involve:
-    1. Code Preprocessing: Normalize code (e.g., remove comments, whitespace, standardize variable names).
-    2. Shingling: Generate k-grams (shingles) from the preprocessed code.
-    3. MinHashing: Compute MinHash signatures from the set of shingles for efficient comparison.
-       - These signatures would need to be stored, likely alongside file metadata.
-    4. Locality Sensitive Hashing (LSH): Use LSH to index MinHash signatures.
-       - This allows for efficient querying of candidate similar items by hashing similar signatures to the same buckets.
-    5. Candidate Comparison: For candidates found via LSH, compute actual similarity (e.g., Jaccard Index on MinHash signatures or shingle sets).
-    6. Database Integration: Store and query these signatures and LSH bands in MongoDB or a specialized store.
-    This function currently returns an empty array.`);
+    It requires a complex implementation of shingling, MinHashing, LSH, and database integration.
+    This function currently returns an empty array. The PRD use case is: "70% similarity with utils.js from 2 months ago"`);
   
-  // Example of what might be returned:
+  // Example of what might be returned if implemented:
   // return [
-  //   { fileId: "some/other/file.js", similarity: 0.75, details_url: "/path/to/comparison" },
-  //   { fileId: "another/duplicate.py", similarity: 0.92, details_url: "/path/to/comparison" }
+  //   { fileId: "utils.js", similarity: 0.70, duplicateFileId: "old_utils_version_xyz.js", detailsUrl: "/link/to/comparison/view" },
   // ];
   return [];
 }
@@ -126,7 +155,7 @@ export async function findDuplicateCodeBySignature(codeContent: string, fileId?:
  * Implementation would involve:
  * 1. Collecting and timestamping vector embeddings of code issues or PR characteristics.
  * 2. Applying time-series analysis and clustering algorithms (e.g., k-means on rolling windows, DBSCAN).
- * 3. Developing logic to interpret clusters as significant patterns or anomalies.
+ * 3. Developing logic to interpret clusters as significant patterns or anomalies (e.g., "This error pattern appeared in 5 past incidents").
  * 4. Storing and querying these patterns.
  * This is a complex data science task beyond simple API integration.
  */
@@ -155,46 +184,5 @@ export async function findTextSearchResults(queryText: string, limit = 10): Prom
   console.log("2. Implement the $search aggregation stage here using the 'queryText'.");
   console.log("3. Create API endpoints and UI components to use this search functionality.");
   
-  // Example $search pipeline (conceptual - adapt to your actual index and needs)
-  /*
-  const pipeline = [
-    {
-      $search: {
-        index: "idx_full_text_search", // Replace with your Atlas Search index name
-        text: {
-          query: queryText,
-          path: {
-            wildcard: "*" // Or specify fields like ["fileAnalyses.filename", "fileAnalyses.aiInsights"]
-          },
-          fuzzy: { // Optional
-            maxEdits: 1
-          }
-        }
-      }
-    },
-    {
-      $project: { // Customize projection as needed
-        _id: 1,
-        pullRequestId: 1, 
-        filename: "$fileAnalyses.filename", 
-        aiInsights: "$fileAnalyses.aiInsights",
-        score: { $meta: "searchScore" }
-      }
-    },
-    { $limit: limit }
-  ];
-
-  try {
-    // const results = await db.collection('analyses').aggregate(pipeline).toArray();
-    // return results;
-    return []; // Returning empty for placeholder
-  } catch (error) {
-    console.error("Error during Atlas Full-Text Search:", error);
-    return [];
-  }
-  */
   return []; // Return empty for placeholder
 }
-
-// setupVectorSearch(); // You might call this once when the app starts, or log it.
-

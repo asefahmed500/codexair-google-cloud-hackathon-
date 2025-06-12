@@ -33,7 +33,7 @@ const CodeAnalysisOutputSchema = z.object({
         description: z.string().describe('Detailed description of the security issue, explaining the vulnerability and potential impact.'),
         file: z.string().describe('File where the issue was found.'),
         line: z.number().optional().describe('Line number where the issue begins.'),
-        suggestion: z.string().describe('Actionable suggestion or code example on how to fix the issue.'),
+        suggestion: z.string().describe('Actionable suggestion, ideally with a corrected code example (the "fix") on how to resolve the issue. For example: "Use res.send(escape(req.query.name))" for an XSS.'),
         cwe: z.string().optional().describe('Common Weakness Enumeration (CWE) identifier (e.g., "CWE-79", "CWE-89"). If a CWE is identified, use the fetchCveDetails tool to get more information.'),
       })
     )
@@ -59,7 +59,7 @@ const CodeAnalysisOutputSchema = z.object({
       duplicateBlocks: z.number().describe('Number of detected duplicate code blocks.'),
     })
     .describe('Key code metrics.'),
-  aiInsights: z.string().describe('Overall insights, summarization of findings, and high-level recommendations from the AI. This should include a textual explanation for the quality score, e.g., "Quality: 8.2/10 - Excellent structure but needs error handling".'),
+  aiInsights: z.string().describe('Overall insights and summarization of findings. Format this like: "## AI Review Summary\n✅ [score]/10 quality score\n⚠️ [X] Critical Issues ([types])\n💡 [Y] Optimizations Available". Be concise and impactful.'),
 });
 export type CodeAnalysisOutput = z.infer<typeof CodeAnalysisOutputSchema>;
 
@@ -80,24 +80,29 @@ const analyzeCodePrompt = ai.definePrompt({
   \`\`\`
 
   Analysis Instructions:
-  1.  **Quality Score (1-10):** Provide an overall quality score. Your textual explanation for this score should be part of the 'aiInsights' field (e.g., "Quality: 8.2/10 - Excellent structure but needs error handling").
+  1.  **Quality Score (1-10):** Provide an overall quality score. This numerical score will be part of the 'qualityScore' field.
   2.  **Complexity & Maintainability:** Assess and provide numerical scores for these.
   3.  **Security Scanning (Security Issues):**
       *   Identify security flaws (e.g., XSS, SQL Injection, Auth Bypass, Info Leaks).
-      *   For each, specify: 'type' (e.g., 'vulnerability'), 'severity', 'title' (e.g., "SQLi detected in userController.js"), 'description', 'file', 'line' number.
-      *   Provide a 'suggestion' for a fix, ideally with a corrected code example in the 'suggestion' field.
-      *   Crucially, if you identify a specific Common Weakness Enumeration (CWE) ID (e.g., CWE-79, CWE-89), you MUST include it in the 'cwe' field. If you provide a CWE, consider using the 'fetchCveDetails' tool to get more information about it to enrich your analysis.
+      *   For each, specify: 'type', 'severity', 'title', 'description', 'file', 'line'.
+      *   **Crucially, for the 'suggestion' field, provide an actionable fix, ideally as a corrected code example. For example, if XSS is found from \`req.query.name\`, the suggestion might be \`Use res.send(escape(req.query.name))\`.**
+      *   If you identify a specific Common Weakness Enumeration (CWE) ID (e.g., CWE-79, CWE-89), you MUST include it in the 'cwe' field. If you provide a CWE, consider using the 'fetchCveDetails' tool to get more information to enrich your analysis.
   4.  **Improvement Suggestions (Performance, Code Smells, Style, etc.):**
-      *   **Performance Suggestions:** Identify performance bottlenecks. Set 'type' to 'performance' or 'optimization'. Example: 'title': "Inefficient Loop Detected", 'description': "Replace O(n²) loop with hashmap (O(n)) for better performance."
+      *   **Performance Suggestions:** Identify performance bottlenecks. Set 'type' to 'performance' or 'optimization'. Example: 'title': "Inefficient Loop Detected", 'description': "Replace O(n²) loop with hashmap (O(n)) for better performance." Include a 'codeExample' if applicable.
       *   **Code Smell Detection:** Identify issues like long methods, duplicated code, or overly complex logic. Set 'type' to 'code_smell'. Example: 'title': "Long Method Detected", 'description': "Method 'processData' is 42 lines long. Consider breaking it into smaller, more manageable functions."
-      *   **Other Suggestions:** Identify potential bugs, style issues, or feature enhancements. Set 'type' accordingly (e.g., 'bug', 'style', 'feature').
-      *   For each suggestion, specify: 'type', 'priority', 'title', 'description', 'file', 'line' number, and a 'codeExample' for the fix if applicable.
+      *   **Other Suggestions:** Identify potential bugs, style issues, or feature enhancements. Set 'type' accordingly (e.g., 'bug', 'style', 'feature'). Include 'codeExample' if applicable.
   5.  **Code Metrics:** Calculate lines of code, cyclomatic complexity, cognitive complexity, and number of duplicate code blocks.
-  6.  **AI Insights:** Provide a brief overall summary of your findings, including the textual explanation for the quality score.
+  6.  **AI Insights (Auto-Generated Summary):** Provide an overall summary of your findings. Format it exactly like this:
+      \`\`\`markdown
+      ## AI Review Summary
+      ✅ [qualityScore]/10 quality score
+      ⚠️ [Number] Critical/High Issues ([Comma-separated list of critical/high issue titles, if any, e.g., "SQLi, XSS"])
+      💡 [Number] Optimizations/Suggestions Available
+      \`\`\`
+      Replace bracketed placeholders with actual values. If no critical/high issues, state "0 Critical/High Issues". If no optimizations, state "0 Optimizations/Suggestions Available".
 
-  Do NOT generate vector embeddings; this will be handled by a separate process.
-  Respond strictly in the JSON format defined by the output schema. Ensure all fields are populated accurately based on your analysis.
   Filename context: {{{filename}}}
+  Respond strictly in the JSON format defined by the output schema. Ensure all fields are populated accurately based on your analysis.
   `,
 });
 
@@ -110,6 +115,25 @@ const analyzeCodeFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await analyzeCodePrompt(input);
+    // Post-process aiInsights to ensure the quality score from the dedicated field is used
+    if (output && output.aiInsights && typeof output.qualityScore === 'number') {
+        output.aiInsights = output.aiInsights.replace(/\[qualityScore\]\/10/g, `${output.qualityScore.toFixed(1)}/10`);
+
+        const criticalHighIssues = (output.securityIssues || []).filter(
+            (issue) => issue.severity === 'critical' || issue.severity === 'high'
+        );
+        output.aiInsights = output.aiInsights.replace(/\[Number\] Critical\/High Issues/g, `${criticalHighIssues.length} Critical/High Issues`);
+        if (criticalHighIssues.length > 0) {
+            const issueTitles = criticalHighIssues.map(issue => issue.title).join(', ');
+            output.aiInsights = output.aiInsights.replace(/\[Comma-separated list of critical\/high issue titles, if any, e.g., "SQLi, XSS"\]/g, `(${issueTitles})`);
+        } else {
+            output.aiInsights = output.aiInsights.replace(/\(\[Comma-separated list of critical\/high issue titles, if any, e.g., "SQLi, XSS"\]\)/g, '');
+        }
+
+        const totalSuggestions = (output.suggestions || []).length;
+        output.aiInsights = output.aiInsights.replace(/\[Number\] Optimizations\/Suggestions Available/g, `${totalSuggestions} Optimizations/Suggestions Available`);
+
+    }
     return output!;
   }
 );
