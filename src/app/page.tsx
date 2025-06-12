@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -5,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Github, Zap, ShieldCheck, LineChart } from 'lucide-react';
+import { Github, Zap, ShieldCheck, LineChart, Search, BarChartBig, Lightbulb, Users, Code, GitMerge } from 'lucide-react';
 import Image from 'next/image';
 
 // Google G logo SVG component
@@ -39,7 +40,6 @@ export default function HomePage() {
   }
 
   if (status === 'authenticated') {
-    // This will usually be handled by the useEffect redirect, but as a fallback:
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-xl font-semibold text-foreground">Redirecting to dashboard...</div>
@@ -50,39 +50,39 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <header className="text-center mb-12">
-        <Zap className="w-20 h-20 text-primary mx-auto mb-4" />
+        <BarChartBig className="w-20 h-20 text-primary mx-auto mb-4" />
         <h1 className="text-5xl font-bold text-foreground mb-2 font-headline">codexair</h1>
-        <p className="text-xl text-muted-foreground">
-          Intelligent Code Analysis & Review Platform.
+        <p className="text-2xl text-muted-foreground font-light">
+          GitHub → AI Analysis → Actionable Insights → Better Code. 🚀
         </p>
       </header>
 
-      <main className="w-full max-w-4xl">
+      <main className="w-full max-w-5xl"> {/* Increased max-width for new content */}
         <Card className="shadow-xl mb-12">
           <CardHeader>
-            <CardTitle className="text-center text-3xl font-headline">Unlock Deeper Code Insights</CardTitle>
-            <CardDescription className="text-center text-md">
-              Leverage AI to enhance your code quality, identify security vulnerabilities, and streamline your review process.
+            <CardTitle className="text-center text-3xl font-headline">Intelligent Code Review Automation</CardTitle>
+            <CardDescription className="text-center text-md max-w-2xl mx-auto">
+              Connect your GitHub repositories, let AI scan every pull request, get instant feedback, find similar code, and track quality trends all in one place.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid md:grid-cols-3 gap-6 text-center">
             <div className="flex flex-col items-center p-4 rounded-lg ">
               <Zap className="w-12 h-12 text-accent mb-3" />
-              <h3 className="text-lg font-semibold text-foreground mb-1">AI-Powered Analysis</h3>
-              <p className="text-sm text-muted-foreground">Automated code quality checks and smart suggestions.</p>
+              <h3 className="text-lg font-semibold text-foreground mb-1">AI Scans Every PR</h3>
+              <p className="text-sm text-muted-foreground">Detects security risks, quality issues, and optimizations automatically.</p>
             </div>
             <div className="flex flex-col items-center p-4 rounded-lg ">
-              <ShieldCheck className="w-12 h-12 text-accent mb-3" />
-              <h3 className="text-lg font-semibold text-foreground mb-1">Security Scanning</h3>
-              <p className="text-sm text-muted-foreground">Identify potential vulnerabilities before they become threats.</p>
+              <Lightbulb className="w-12 h-12 text-accent mb-3" />
+              <h3 className="text-lg font-semibold text-foreground mb-1">Instant Feedback & Scoring</h3>
+              <p className="text-sm text-muted-foreground">Get inline fixes, quality scores (1-10), and historical comparisons.</p>
             </div>
             <div className="flex flex-col items-center p-4 rounded-lg ">
               <LineChart className="w-12 h-12 text-accent mb-3" />
-              <h3 className="text-lg font-semibold text-foreground mb-1">Quality Trends</h3>
-              <p className="text-sm text-muted-foreground">Track improvements and maintain high standards.</p>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Track Progress & Trends</h3>
+              <p className="text-sm text-muted-foreground">Dashboards show team metrics, quality trends, and security hotspots.</p>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col sm:flex-row justify-center gap-4">
+          <CardFooter className="flex flex-col sm:flex-row justify-center gap-4 py-6">
             <Button 
               size="lg" 
               onClick={() => signIn('github', { callbackUrl: '/dashboard' })} 
@@ -102,36 +102,70 @@ export default function HomePage() {
           </CardFooter>
         </Card>
         
-        <section className="text-center">
-            <h2 className="text-2xl font-semibold text-foreground mb-6 font-headline">How It Works</h2>
+        <section className="text-center mb-16">
+            <h2 className="text-3xl font-semibold text-foreground mb-8 font-headline">How codexair Works</h2>
+            <div className="grid md:grid-cols-5 gap-6">
+                <FeatureStepCard
+                    icon={<Github className="w-10 h-10 text-primary mb-2" />}
+                    step="1. Login & Connect"
+                    description="Log in with GitHub & connect your repositories in one click."
+                    imageSrc="https://placehold.co/600x400.png"
+                    imageAlt="Login with GitHub and Connect Repositories"
+                    aiHint="github connect"
+                />
+                <FeatureStepCard
+                    icon={<Zap className="w-10 h-10 text-primary mb-2" />}
+                    step="2. AI Scans PRs"
+                    description="AI scans every PR, detecting security risks, quality issues, and optimizations."
+                    imageSrc="https://placehold.co/600x400.png"
+                    imageAlt="AI Scans Pull Requests"
+                    aiHint="ai scan"
+                />
+                <FeatureStepCard
+                    icon={<Lightbulb className="w-10 h-10 text-primary mb-2" />}
+                    step="3. Instant Feedback"
+                    description="Get instant feedback: inline fixes, scores (1-10), and historical comparisons."
+                    imageSrc="https://placehold.co/600x400.png"
+                    imageAlt="Instant Feedback on Code"
+                    aiHint="code feedback"
+                />
+                <FeatureStepCard
+                    icon={<Search className="w-10 h-10 text-primary mb-2" />}
+                    step="4. Vector Search"
+                    description="Search similar code: find duplicates or past fixes using vector search."
+                    imageSrc="https://placehold.co/600x400.png"
+                    imageAlt="Vector Search for Similar Code"
+                    aiHint="code search"
+                />
+                <FeatureStepCard
+                    icon={<LineChart className="w-10 h-10 text-primary mb-2" />}
+                    step="5. Track Progress"
+                    description="Track progress with dashboards showing team metrics, trends, and security hotspots."
+                    imageSrc="https://placehold.co/600x400.png"
+                    imageAlt="Track Progress with Dashboards"
+                    aiHint="dashboard metrics"
+                />
+            </div>
+        </section>
+
+        <section className="text-center mb-16">
+            <h2 className="text-3xl font-semibold text-foreground mb-8 font-headline">What You Can Achieve</h2>
             <div className="grid md:grid-cols-3 gap-8">
-                <Card>
-                    <CardHeader>
-                        <Image src="https://placehold.co/600x400.png?text=Connect+Repo" alt="Connect Repository" width={600} height={400} className="rounded-t-lg" data-ai-hint="connect repository"/>
-                    </CardHeader>
-                    <CardContent>
-                        <CardTitle className="text-xl mb-2">1. Connect</CardTitle>
-                        <CardDescription>Securely connect your GitHub repositories.</CardDescription>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader>
-                        <Image src="https://placehold.co/600x400.png?text=Analyze+PRs" alt="Analyze Pull Requests" width={600} height={400} className="rounded-t-lg" data-ai-hint="analyze code"/>
-                    </CardHeader>
-                    <CardContent>
-                        <CardTitle className="text-xl mb-2">2. Analyze</CardTitle>
-                        <CardDescription>Initiate AI-powered analysis on your pull requests.</CardDescription>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader>
-                        <Image src="https://placehold.co/600x400.png?text=Get+Insights" alt="Get Insights" width={600} height={400} className="rounded-t-lg" data-ai-hint="insights chart"/>
-                    </CardHeader>
-                    <CardContent>
-                        <CardTitle className="text-xl mb-2">3. Improve</CardTitle>
-                        <CardDescription>Receive actionable insights and suggestions to elevate your code.</CardDescription>
-                    </CardContent>
-                </Card>
+                <BenefitCard
+                    icon={<Code className="w-12 h-12 text-accent mb-4" />}
+                    title="Developers"
+                    description="Fix issues faster with AI-powered code reviews and actionable suggestions."
+                />
+                <BenefitCard
+                    icon={<Users className="w-12 h-12 text-accent mb-4" />}
+                    title="Team Leads"
+                    description="Monitor code health, track quality trends, and manage team performance via real-time analytics."
+                />
+                <BenefitCard
+                    icon={<ShieldCheck className="w-12 h-12 text-accent mb-4" />}
+                    title="Security Engineers"
+                    description="Catch vulnerabilities before they merge, ensuring robust application security."
+                />
             </div>
         </section>
 
@@ -144,3 +178,47 @@ export default function HomePage() {
     </div>
   );
 }
+
+interface FeatureStepCardProps {
+  icon: React.ReactNode;
+  step: string;
+  description: string;
+  imageSrc: string;
+  imageAlt: string;
+  aiHint: string;
+}
+
+function FeatureStepCard({ icon, step, description, imageSrc, imageAlt, aiHint }: FeatureStepCardProps) {
+  return (
+    <Card className="flex flex-col items-center text-center hover:shadow-lg transition-shadow">
+        <CardHeader className="items-center">
+            {icon}
+            <CardTitle className="text-lg">{step}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex-grow">
+            <Image src={imageSrc} alt={imageAlt} width={300} height={200} className="rounded-md mb-3 mx-auto" data-ai-hint={aiHint}/>
+            <CardDescription className="text-xs">{description}</CardDescription>
+        </CardContent>
+    </Card>
+  );
+}
+
+interface BenefitCardProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}
+
+function BenefitCard({ icon, title, description}: BenefitCardProps) {
+  return (
+    <Card className="p-6 hover:shadow-lg transition-shadow">
+        <div className="flex flex-col items-center text-center">
+            {icon}
+            <CardTitle className="text-xl mb-2">{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
+        </div>
+    </Card>
+  );
+}
+
+    
