@@ -8,11 +8,13 @@ import Navbar from '@/components/layout/navbar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input'; // Added Input
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Lightbulb, RefreshCw, AlertTriangle, Terminal } from 'lucide-react';
+import { Lightbulb, RefreshCw, AlertTriangle, Terminal, ScrollText } from 'lucide-react'; // Added ScrollText
 import { toast } from '@/hooks/use-toast';
 import type { ExplainCodeOutput } from '@/ai/flows/explain-code-flow';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const predefinedQuestions = [
   { value: "What does this code do?", label: "What does this code do?" },
@@ -20,6 +22,7 @@ const predefinedQuestions = [
   { value: "How can this code be improved for performance?", label: "How can this code be improved for performance?" },
   { value: "How can this code be improved for readability?", label: "How can this code be improved for readability?" },
   { value: "Explain the potential security risks in this code.", label: "Explain potential security risks." },
+  { value: "What is the time and space complexity of this code?", label: "What is the time and space complexity?"}
 ];
 
 export default function ExplainCodePage() {
@@ -27,8 +30,9 @@ export default function ExplainCodePage() {
   const router = useRouter();
 
   const [code, setCode] = useState('');
-  const [language, setLanguage] = useState(''); // Optional language input
+  const [language, setLanguage] = useState('');
   const [selectedQuestion, setSelectedQuestion] = useState(predefinedQuestions[0].value);
+  const [customQuestion, setCustomQuestion] = useState(''); // New state for custom question
   const [explanation, setExplanation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,8 +51,11 @@ export default function ExplainCodePage() {
       toast({ title: "Input Required", description: "Please enter some code to explain.", variant: "destructive" });
       return;
     }
-    if (!selectedQuestion) {
-      toast({ title: "Question Required", description: "Please select a question.", variant: "destructive" });
+
+    const finalQuestion = customQuestion.trim() !== '' ? customQuestion.trim() : selectedQuestion;
+
+    if (!finalQuestion) {
+      toast({ title: "Question Required", description: "Please select a predefined question or type your own.", variant: "destructive" });
       return;
     }
 
@@ -60,7 +67,7 @@ export default function ExplainCodePage() {
       const response = await fetch('/api/ai/explain-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language: language || undefined, question: selectedQuestion }),
+        body: JSON.stringify({ code, language: language || undefined, question: finalQuestion }),
       });
 
       const result = await response.json();
@@ -87,11 +94,11 @@ export default function ExplainCodePage() {
         <Card className="max-w-3xl mx-auto shadow-lg">
           <CardHeader>
             <CardTitle className="text-3xl font-bold font-headline flex items-center">
-              <Lightbulb className="mr-3 h-8 w-8 text-primary" />
+              <ScrollText className="mr-3 h-8 w-8 text-primary" />
               Explain My Code
             </CardTitle>
             <CardDescription>
-              Paste your code snippet, select a question, and let AI provide an explanation.
+              Paste your code snippet, select a language (optional), choose a question or type your own, and let AI provide an explanation.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -112,7 +119,7 @@ export default function ExplainCodePage() {
               <label htmlFor="language-input" className="block text-sm font-medium text-foreground mb-1">
                 Programming Language (Optional)
               </label>
-               <input
+               <Input
                 type="text"
                 id="language-input"
                 value={language}
@@ -123,11 +130,11 @@ export default function ExplainCodePage() {
             </div>
             <div>
               <label htmlFor="question-select" className="block text-sm font-medium text-foreground mb-1">
-                Your Question
+                Predefined Question
               </label>
-              <Select value={selectedQuestion} onValueChange={setSelectedQuestion}>
+              <Select value={selectedQuestion} onValueChange={setSelectedQuestion} disabled={customQuestion.trim() !== ''}>
                 <SelectTrigger id="question-select">
-                  <SelectValue placeholder="Select a question" />
+                  <SelectValue placeholder="Select a common question" />
                 </SelectTrigger>
                 <SelectContent>
                   {predefinedQuestions.map((q) => (
@@ -137,6 +144,24 @@ export default function ExplainCodePage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <label htmlFor="custom-question-input" className="block text-sm font-medium text-foreground mb-1">
+                Or Type Your Own Question
+              </label>
+              <Input
+                id="custom-question-input"
+                type="text"
+                value={customQuestion}
+                onChange={(e) => {
+                  setCustomQuestion(e.target.value);
+                  if (e.target.value.trim() !== '') {
+                    // Optionally clear predefined or just let logic handle precedence
+                  }
+                }}
+                placeholder="e.g., How does this function handle edge cases?"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
             </div>
             <Button onClick={handleSubmit} disabled={isLoading || !code.trim()} className="w-full shadow-md">
               {isLoading ? (
@@ -190,3 +215,4 @@ export default function ExplainCodePage() {
     </div>
   );
 }
+
