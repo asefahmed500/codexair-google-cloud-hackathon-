@@ -13,13 +13,14 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from '@/components/ui/skeleton';
 import Navbar from '@/components/layout/navbar';
-import { PullRequest as PRType, CodeAnalysis, SecurityIssue, Suggestion, CodeFile } from '@/types';
-import { ArrowLeftRight, Github, AlertTriangle, Lightbulb, FileText, CalendarDays, User, CheckCircle, XCircle } from 'lucide-react';
+import { PullRequest as PRType, CodeAnalysis, SecurityIssue, Suggestion, CodeFile, Repository as RepoType } from '@/types';
+import { ArrowLeftRight, Github, AlertTriangle, Lightbulb, FileText, CalendarDays, User, CheckCircle, XCircle, FileWarning } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
+import { toast } from '@/hooks/use-toast';
 
 interface FullPRData {
-  pullRequest: PRType;
-  analysis?: CodeAnalysis; // Analysis might be embedded or fetched separately
+  pullRequest: PRType & { repositoryId: string | RepoType }; // Ensure repositoryId is present
+  analysis?: CodeAnalysis;
 }
 
 export default function PRComparisonPage() {
@@ -45,14 +46,18 @@ export default function PRComparisonPage() {
     if (status === 'authenticated' && owner && repoName && prNumber1 && prNumber2) {
       const fetchPRData = async (prNumber: string): Promise<FullPRData | null> => {
         try {
+          // Ensure owner and repoName are correctly passed
           const res = await fetch(`/api/pullrequests/details/${owner}/${repoName}/${prNumber}`);
           if (!res.ok) {
             const errData = await res.json();
             throw new Error(`Failed to fetch PR #${prNumber}: ${errData.error || res.statusText}`);
           }
           const data = await res.json();
-          // The API populates 'analysis' field directly in pullRequest object
-          return { pullRequest: data.pullRequest, analysis: data.pullRequest.analysis as CodeAnalysis };
+          // API response structure: { pullRequest: { ...prData, analysis: { ...analysisData } | null } }
+          return { 
+            pullRequest: data.pullRequest, 
+            analysis: data.pullRequest.analysis || undefined // Ensure analysis is explicitly undefined if null/missing
+          };
         } catch (e: any) {
           console.error(`Error fetching PR #${prNumber}:`, e);
           setError(prev => `${prev ? prev + '; ' : ''}Error fetching PR #${prNumber}: ${e.message}`);
@@ -64,11 +69,8 @@ export default function PRComparisonPage() {
       setError(null);
       Promise.all([fetchPRData(prNumber1), fetchPRData(prNumber2)])
         .then(([data1, data2]) => {
-          if (data1) setPrData1(data1);
-          if (data2) setPrData2(data2);
-          if (!data1 || !data2) {
-             // Error already set by fetchPRData
-          }
+          if (data1) setPrData1(data1); else setError(prev => `${prev ? prev + '; ' : ''}Could not load data for PR #${prNumber1}.`);
+          if (data2) setPrData2(data2); else setError(prev => `${prev ? prev + '; ' : ''}Could not load data for PR #${prNumber2}.`);
         })
         .finally(() => setLoading(false));
     }
@@ -83,13 +85,15 @@ export default function PRComparisonPage() {
       <div className="flex flex-col min-h-screen">
         <Navbar />
         <main className="flex-1 container py-8">
-          <Button variant="outline" onClick={() => router.back()} className="mb-6">Back to Repository</Button>
+          <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)} className="mb-6">Back to {owner}/{repoName}</Button>
           <Card>
             <CardHeader>
               <CardTitle className="text-destructive">Error Loading Comparison Data</CardTitle>
             </CardHeader>
             <CardContent>
-              <p>{error || "Could not load data for one or both pull requests."}</p>
+              <p className="text-muted-foreground whitespace-pre-line">
+                {error || "Could not load data for one or both pull requests. Please ensure they exist and you have access."}
+              </p>
             </CardContent>
           </Card>
         </main>
@@ -121,7 +125,7 @@ export default function PRComparisonPage() {
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
       <main className="flex-1 container py-8">
-        <Button variant="outline" onClick={() => router.back()} className="mb-6">
+        <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)} className="mb-6">
           Back to {owner}/{repoName}
         </Button>
 
@@ -132,15 +136,14 @@ export default function PRComparisonPage() {
               Comparing Pull Requests in {owner}/{repoName}
             </CardTitle>
             <CardDescription>
-              Side-by-side details for PR #{prNumber1} and PR #{prNumber2}. 
-              <span className="block mt-1 text-xs italic">Full visual diff viewer coming soon!</span>
+              Side-by-side details for PR #{prNumber1} and PR #{prNumber2}.
             </CardDescription>
           </CardHeader>
         </Card>
 
         <div className="grid md:grid-cols-2 gap-6">
-          <PRDetailsColumn prData={prData1} prNumber={prNumber1} getSeverityBadgeVariant={getSeverityBadgeVariant} getPriorityBadgeVariant={getPriorityBadgeVariant} />
-          <PRDetailsColumn prData={prData2} prNumber={prNumber2} getSeverityBadgeVariant={getSeverityBadgeVariant} getPriorityBadgeVariant={getPriorityBadgeVariant} />
+          <PRDetailsColumn prData={prData1} owner={owner} repoName={repoName} prNumber={prNumber1} getSeverityBadgeVariant={getSeverityBadgeVariant} getPriorityBadgeVariant={getPriorityBadgeVariant} />
+          <PRDetailsColumn prData={prData2} owner={owner} repoName={repoName} prNumber={prNumber2} getSeverityBadgeVariant={getSeverityBadgeVariant} getPriorityBadgeVariant={getPriorityBadgeVariant} />
         </div>
       </main>
       <footer className="py-6 border-t bg-background">
@@ -154,23 +157,50 @@ export default function PRComparisonPage() {
 
 interface PRDetailsColumnProps {
   prData: FullPRData;
+  owner: string;
+  repoName: string;
   prNumber: string;
   getSeverityBadgeVariant: (severity: SecurityIssue['severity']) => "default" | "destructive" | "secondary" | "outline" | null | undefined;
   getPriorityBadgeVariant: (priority: Suggestion['priority']) => "default" | "destructive" | "secondary" | "outline" | null | undefined;
 }
 
-function PRDetailsColumn({ prData, prNumber, getSeverityBadgeVariant, getPriorityBadgeVariant }: PRDetailsColumnProps) {
+function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVariant, getPriorityBadgeVariant }: PRDetailsColumnProps) {
   const { pullRequest, analysis } = prData;
+  const router = useRouter(); // For the Analyze PR button if needed
+
+  const handleAnalyzePR = async (prNumToAnalyze: number) => {
+    // This function is similar to the one on the main repo page.
+    // It assumes the PR is open and not yet analyzed.
+    toast({ title: "Initiating Analysis...", description: `Analysis for PR #${prNumToAnalyze} will start.`});
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner, repoName, pullNumber: prNumToAnalyze }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Failed to start analysis');
+      }
+      const result = await response.json();
+      // Redirect to the new analysis page or refresh current page.
+      // For comparison, a refresh or re-fetch might be better.
+      router.push(`/analyze/${owner}/${repoName}/${prNumToAnalyze}/${result.analysis._id}`);
+    } catch (err: any) {
+      toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
+    }
+  };
+
 
   return (
-    <Card className="flex flex-col h-full">
+    <Card className="flex flex-col h-full shadow-md">
       <CardHeader>
         <div className="flex justify-between items-start">
             <CardTitle className="text-xl font-semibold">
                 PR #{prNumber}: <span className="font-normal">{pullRequest.title}</span>
             </CardTitle>
             <Button variant="outline" size="sm" asChild>
-                <Link href={`https://github.com/${pullRequest.repositoryId.replace('%2F', '/')}/pull/${prNumber}`} target="_blank" rel="noopener noreferrer">
+                <Link href={`https://github.com/${owner}/${repoName}/pull/${prNumber}`} target="_blank" rel="noopener noreferrer">
                    <Github className="h-3.5 w-3.5 mr-1.5" /> GitHub
                 </Link>
             </Button>
@@ -192,7 +222,7 @@ function PRDetailsColumn({ prData, prNumber, getSeverityBadgeVariant, getPriorit
             <TabsTrigger value="suggestions" className="py-1.5">Suggestions ({analysis?.suggestions?.length || 0})</TabsTrigger>
           </TabsList>
           
-          <ScrollArea className="h-[450px] pr-2"> {/* Adjust height as needed */}
+          <ScrollArea className="h-[450px] pr-2">
             <TabsContent value="overview">
               <h4 className="font-semibold mb-2 text-sm">PR Description:</h4>
               {pullRequest.body ? (
@@ -214,16 +244,25 @@ function PRDetailsColumn({ prData, prNumber, getSeverityBadgeVariant, getPriorit
                   <ScrollArea className="h-28 text-xs p-2 border rounded-md bg-muted/30">
                       <pre className="whitespace-pre-wrap font-sans">{analysis.aiInsights || "No AI insights generated."}</pre>
                   </ScrollArea>
+                   <Button variant="outline" size="sm" className="w-full mt-2" asChild>
+                        <Link href={`/analyze/${owner}/${repoName}/${prNumber}/${analysis._id}`}>View Full Analysis</Link>
+                   </Button>
                 </div>
               ) : (
-                <div className="mt-4 p-3 border border-dashed rounded-md text-center">
-                  <XCircle className="mx-auto h-8 w-8 text-muted-foreground mb-2"/>
-                  <p className="text-sm font-medium">No Analysis Data</p>
-                  <p className="text-xs text-muted-foreground">This PR has not been analyzed yet.</p>
-                  <Button size="sm" variant="link" className="mt-1 h-auto p-0 text-xs" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>
-                    Go to repository page to analyze
-                  </Button>
-                </div>
+                <Card className="mt-4 p-4 border-dashed text-center bg-muted/20">
+                  <CardHeader className="p-0 mb-2">
+                     <FileWarning className="mx-auto h-10 w-10 text-muted-foreground"/>
+                     <CardTitle className="text-md font-medium mt-1">No Analysis Data</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <p className="text-xs text-muted-foreground mb-3">This pull request has not been analyzed yet.</p>
+                    {pullRequest.state === 'open' && (
+                      <Button size="sm" variant="default" onClick={() => handleAnalyzePR(pullRequest.number)}>
+                        Analyze PR #{pullRequest.number}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
               )}
             </TabsContent>
 
@@ -286,7 +325,7 @@ function PRDetailsColumn({ prData, prNumber, getSeverityBadgeVariant, getPriorit
                         {suggestion.codeExample && (
                             <>
                             <p className="text-xs font-medium text-foreground mb-0.5">Code Example:</p>
-                            <ScrollArea className="max-h-32 w-full rounded-md border bg-background p-1.5">
+                            <ScrollArea className="max-h-32 w-full rounded-md border bg-background p-1.5 shadow-inner">
                                 <pre className="text-[10px] font-code whitespace-pre-wrap">{suggestion.codeExample}</pre>
                             </ScrollArea>
                             </>
@@ -310,7 +349,7 @@ function PRComparisonLoadingSkeleton({owner, repoName, prNumber1, prNumber2} : {
       <Navbar />
       <main className="flex-1 container py-8">
         <Skeleton className="h-9 w-48 mb-6" /> {/* Back Button Skeleton */}
-        <Card className="mb-8">
+        <Card className="mb-8 shadow-lg">
           <CardHeader>
             <Skeleton className="h-10 w-3/4 mb-2" /> {/* Page Title */}
             <Skeleton className="h-5 w-1/2" /> {/* Page Description */}
@@ -318,14 +357,22 @@ function PRComparisonLoadingSkeleton({owner, repoName, prNumber1, prNumber2} : {
         </Card>
         <div className="grid md:grid-cols-2 gap-6">
           {[prNumber1, prNumber2].map((prNum, idx) => (
-            <Card key={idx}>
+            <Card key={idx} className="shadow-md">
               <CardHeader>
                 <Skeleton className="h-7 w-2/3 mb-1" /> {/* PR Title in Column */}
-                <Skeleton className="h-4 w-1/2" /> {/* PR Meta in Column */}
+                <div className="space-y-1.5 mt-1">
+                    <Skeleton className="h-4 w-1/2" /> {/* PR Meta 1 */}
+                    <Skeleton className="h-4 w-1/3" /> {/* PR Meta 2 */}
+                    <Skeleton className="h-5 w-16 rounded-full" /> {/* Badge Skeleton */}
+                </div>
               </CardHeader>
               <CardContent>
                 <Skeleton className="h-9 w-full mb-4" /> {/* Tabs List Skeleton */}
-                <Skeleton className="h-40 w-full" /> {/* Tab Content Area Skeleton */}
+                <div className="space-y-3">
+                    <Skeleton className="h-6 w-1/3 mb-1" /> {/* Section Title Skel */}
+                    <Skeleton className="h-20 w-full" /> {/* Text Area Skel */}
+                    <Skeleton className="h-24 w-full" /> {/* Another Content Area Skel */}
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -337,6 +384,3 @@ function PRComparisonLoadingSkeleton({owner, repoName, prNumber1, prNumber2} : {
     </div>
   );
 }
-
-
-    

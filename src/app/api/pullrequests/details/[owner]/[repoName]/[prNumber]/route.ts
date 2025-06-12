@@ -47,10 +47,11 @@ export async function GET(
       number: prNumber,
     };
 
-    // Regular users can only access PRs linked to their userId
-    if (session.user.role !== 'admin') {
-      query.userId = session.user.id;
-    }
+    // Regular users can only access PRs linked to their userId, if such a check is desired on the PR document itself
+    // For now, access is controlled by whether they can access the parent repository.
+    // if (session.user.role !== 'admin' && localRepo.userId !== session.user.id) {
+    //   query.userId = session.user.id; // This line might be redundant if repo access is the main check
+    // }
 
     const pullRequest = await PullRequest.findOne(query)
       .populate('analysis') // Populate the analysis field
