@@ -227,7 +227,7 @@ export default function AnalysisDetailsPage() {
                                 onClick={() => handleFindSimilarCode(issue.file, issue.title, 'security')}
                                 disabled={isSearchingSimilarCode}
                               >
-                                {isSearchingSimilarCode && currentSearchContext?.title === issue.title ? 
+                                {isSearchingSimilarCode && currentSearchContext?.type === 'security' && currentSearchContext?.title === issue.title ? 
                                   <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> : 
                                   <><Search className="mr-1 h-3 w-3" />Find similar past issues</>
                                 }
@@ -279,7 +279,7 @@ export default function AnalysisDetailsPage() {
                                 onClick={() => handleFindSimilarCode(suggestion.file, suggestion.title, 'suggestion')}
                                 disabled={isSearchingSimilarCode}
                               >
-                                {isSearchingSimilarCode && currentSearchContext?.title === suggestion.title ? 
+                                {isSearchingSimilarCode && currentSearchContext?.type === 'suggestion' && currentSearchContext?.title === suggestion.title ? 
                                   <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> : 
                                   <><Search className="mr-1 h-3 w-3" />Find similar past issues</>
                                 }
@@ -451,35 +451,55 @@ function AnalysisDetailsLoadingSkeleton() {
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar /> 
       <main className="flex-1 container py-8">
+        {/* Header Section Skeleton */}
         <div className="mb-6 flex justify-between items-center">
-            <Skeleton className="h-9 w-40" /> 
+            <Skeleton className="h-10 w-48" /> {/* Back Button */}
         </div>
-        <Card className="mb-6">
+
+        {/* Main PR Info Card Skeleton */}
+        <Card className="mb-6 shadow-lg">
             <CardHeader>
-                <Skeleton className="h-10 w-3/4 mb-2" /> 
-                <Skeleton className="h-5 w-1/2" /> 
+                <div className="flex justify-between items-start">
+                    <div>
+                        <Skeleton className="h-9 w-3/4 mb-2" /> {/* PR Title */}
+                        <Skeleton className="h-5 w-1/2" /> {/* PR Description (owner/repo) */}
+                    </div>
+                    <Skeleton className="h-10 w-32" /> {/* GitHub Button */}
+                </div>
             </CardHeader>
-            <CardFooter className="pt-4 border-t">
-                <Skeleton className="h-6 w-1/4 mb-2" />
-                <Skeleton className="h-20 w-full" />
+            <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-muted/30">
+                <Skeleton className="h-6 w-1/4 mb-2" /> {/* AI Review Summary Title */}
+                <Skeleton className="h-24 w-full rounded-md border p-4" /> {/* AI Review Summary Content */}
             </CardFooter>
         </Card>
-        <Skeleton className="h-10 w-full mb-6" /> 
-        
-        <Card>
-            <CardHeader><Skeleton className="h-8 w-1/3" /></CardHeader> 
-            <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                    <Card key={i}>
-                        <CardHeader className="pb-2"><Skeleton className="h-5 w-2/3" /></CardHeader>
-                        <CardContent><Skeleton className="h-8 w-1/2" /></CardContent>
-                    </Card>
-                ))}
-            </CardContent>
-        </Card>
+
+        {/* Tabs Skeleton */}
+        <div className="w-full">
+            <Skeleton className="h-10 w-full grid grid-cols-4 mb-6 p-1 rounded-md bg-muted" /> {/* Tabs List */}
+            
+            {/* Tab Content Skeleton (Showing Overview as example) */}
+            <Card>
+                <CardHeader><Skeleton className="h-7 w-1/2" /></CardHeader> {/* Tab Card Title */}
+                <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[...Array(6)].map((_, i) => (
+                        <Card key={i} className="shadow-sm">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <Skeleton className="h-5 w-2/3" /> {/* Metric Title */}
+                                <Skeleton className="h-5 w-5" /> {/* Metric Icon */}
+                            </CardHeader>
+                            <CardContent>
+                                <Skeleton className="h-8 w-1/2" /> {/* Metric Value */}
+                            </CardContent>
+                        </Card>
+                    ))}
+                </CardContent>
+            </Card>
+        </div>
       </main>
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center"><Skeleton className="h-4 w-1/3 mx-auto" /></div>
+        <div className="container text-center text-sm text-muted-foreground">
+            <Skeleton className="h-4 w-1/3 mx-auto" />
+        </div>
       </footer>
     </div>
   );
