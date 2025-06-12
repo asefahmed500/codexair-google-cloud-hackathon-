@@ -50,29 +50,8 @@ export default function DashboardPage() {
   }
 
   if (status === 'loading' || (loading && !dashboardData && !error)) {
-    return (
-      <div className="flex flex-col min-h-screen">
-        <Navbar />
-        <main className="flex-1 container py-8">
-          <div className="grid gap-6 animate-pulse">
-            <div className="h-9 bg-muted rounded w-48 mb-8"></div>
-            <div className="h-40 bg-muted rounded-lg"></div> {/* Overview */}
-            <div className="grid md:grid-cols-2 gap-6"> {/* Recent Reviews & Quality Trends */}
-              <div className="h-96 bg-muted rounded-lg"></div>
-              <div className="h-96 bg-muted rounded-lg"></div>
-            </div>
-             <div className="grid md:grid-cols-2 gap-6"> {/* Top Issues & Suggestions */}
-              <div className="h-80 bg-muted rounded-lg"></div>
-              <div className="h-80 bg-muted rounded-lg"></div>
-            </div>
-            <div className="grid md:grid-cols-2 gap-6"> {/* Security Hotspots & Team Metrics */}
-              <div className="h-80 bg-muted rounded-lg"></div>
-              <div className="h-80 bg-muted rounded-lg"></div>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
+    // Use DashboardLoading component
+    return <DashboardLoadingPlaceholder />;
   }
 
   if (error) {
@@ -131,7 +110,7 @@ export default function DashboardPage() {
       <Navbar />
       <main className="flex-1 container py-8">
         <h1 className="text-3xl font-bold mb-8 text-foreground font-headline">codexair Dashboard</h1>
-        {dashboardData ? ( // dashboardData will exist here due to the check above
+        {dashboardData ? ( 
           <div className="grid gap-6">
             <AnalyticsOverview overview={dashboardData.overview} />
             <div className="grid md:grid-cols-2 gap-6">
@@ -147,7 +126,7 @@ export default function DashboardPage() {
               <TeamMetrics metrics={dashboardData.teamMetrics} />
             </div>
           </div>
-        ) : null } {/* Should not be reached if logic is correct, but good for type safety */}
+        ) : <DashboardLoadingPlaceholder /> } {/* Show loading if dashboardData is somehow null after checks */}
       </main>
        <footer className="py-6 border-t bg-background">
         <div className="container text-center text-sm text-muted-foreground">
@@ -157,3 +136,31 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+// Simplified placeholder for initial loading, actual is in loading.tsx
+function DashboardLoadingPlaceholder() {
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Navbar />
+      <main className="flex-1 container py-8">
+        <div className="grid gap-6 animate-pulse">
+          <div className="h-9 bg-muted rounded w-48 mb-8"></div>
+          <div className="h-40 bg-muted rounded-lg"></div> {/* Overview */}
+          <div className="grid md:grid-cols-2 gap-6"> {/* Recent Reviews & Quality Trends */}
+            <div className="h-96 bg-muted rounded-lg"></div>
+            <div className="h-96 bg-muted rounded-lg"></div>
+          </div>
+           <div className="grid md:grid-cols-2 gap-6"> {/* Top Issues & Suggestions */}
+            <div className="h-80 bg-muted rounded-lg"></div>
+            <div className="h-80 bg-muted rounded-lg"></div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-6"> {/* Security Hotspots & Team Metrics */}
+            <div className="h-80 bg-muted rounded-lg"></div>
+            <div className="h-80 bg-muted rounded-lg"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+

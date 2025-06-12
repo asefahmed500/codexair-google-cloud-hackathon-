@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
             highIssues: 0,
             totalIssuesInFile: 0,
             relatedPrIds: [],
-            lastOccurrence: new Date(analysis.createdAt),
+            lastOccurrence: new Date(0), // Initialize with a very old date
           };
         }
         let fileCritical = 0;
@@ -193,11 +193,14 @@ export async function GET(request: NextRequest) {
         fileIssueCounts[file.filename].criticalIssues += fileCritical;
         fileIssueCounts[file.filename].highIssues += fileHigh;
         fileIssueCounts[file.filename].totalIssuesInFile += (file.securityIssues || []).length;
+        
+        const currentAnalysisDate = new Date(analysis.createdAt);
+        if (!fileIssueCounts[file.filename].lastOccurrence || currentAnalysisDate > fileIssueCounts[file.filename].lastOccurrence) {
+            fileIssueCounts[file.filename].lastOccurrence = currentAnalysisDate;
+        }
+
         if (analysis.pullRequestId?._id && !fileIssueCounts[file.filename].relatedPrIds.includes(analysis.pullRequestId._id.toString())) {
              fileIssueCounts[file.filename].relatedPrIds.push(analysis.pullRequestId._id.toString());
-        }
-        if (new Date(analysis.createdAt) > fileIssueCounts[file.filename].lastOccurrence) {
-            fileIssueCounts[file.filename].lastOccurrence = new Date(analysis.createdAt);
         }
       });
     });
@@ -255,3 +258,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
+

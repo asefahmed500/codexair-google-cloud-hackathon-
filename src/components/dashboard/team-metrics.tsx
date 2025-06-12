@@ -18,16 +18,16 @@ export default function TeamMetrics({ metrics }: TeamMetricsProps) {
       <CardHeader>
         <CardTitle className="text-2xl font-semibold font-headline flex items-center">
           <Users className="mr-2 h-6 w-6 text-primary" />
-          Team Metrics
+          Contributor Metrics
         </CardTitle>
-        <CardDescription>Overview of team contributions and code quality.</CardDescription>
+        <CardDescription>Overview of contributor activity and code quality.</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
         {metrics.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Users className="w-16 h-16 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No team metrics available yet.</p>
-            <p className="text-xs text-muted-foreground mt-1">Analyze pull requests to see team data.</p>
+            <p className="text-muted-foreground">No contributor metrics available yet.</p>
+            <p className="text-xs text-muted-foreground mt-1">Analyze pull requests to see contributor data.</p>
           </div>
         ) : (
           <ScrollArea className="h-[320px]">
@@ -73,3 +73,4 @@ export default function TeamMetrics({ metrics }: TeamMetricsProps) {
     </Card>
   );
 }
+

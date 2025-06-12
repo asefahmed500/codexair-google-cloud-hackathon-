@@ -47,7 +47,7 @@ export default function SecurityHotspots({ hotspots }: SecurityHotspotsProps) {
                      <span>Total Issues in File: {hotspot.totalIssuesInFile}</span>
                      <div className="flex items-center gap-1" title={`Last issue detected in this file: ${new Date(hotspot.lastOccurrence).toLocaleDateString()}`}>
                         <CalendarDays className="h-3 w-3"/>
-                        {formatDistanceToNow(new Date(hotspot.lastOccurrence), { addSuffix: true })}
+                        {hotspot.lastOccurrence.getFullYear() > 1 ? formatDistanceToNow(new Date(hotspot.lastOccurrence), { addSuffix: true }) : 'N/A'}
                      </div>
                   </div>
                    <p className="text-xs text-muted-foreground mt-1">
@@ -62,3 +62,4 @@ export default function SecurityHotspots({ hotspots }: SecurityHotspotsProps) {
     </Card>
   );
 }
+

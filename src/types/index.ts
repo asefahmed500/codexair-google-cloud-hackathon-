@@ -179,3 +179,4 @@ export interface AdminUserView {
   createdAt: Date;
   updatedAt: Date;
 }
+
