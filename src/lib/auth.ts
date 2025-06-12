@@ -6,9 +6,14 @@ import { MongoDBAdapter } from '@next-auth/mongodb-adapter';
 import clientPromise from './mongodb'; // Ensures MONGODB_URI is checked by mongodb.ts
 import type { Adapter } from 'next-auth/adapters';
 
-// Check for NEXTAUTH_SECRET first, as it's critical
+// Check critical NextAuth environment variables first
+if (!process.env.NEXTAUTH_URL) {
+  console.error('CRITICAL ERROR: Missing NEXTAUTH_URL environment variable. This is required for NextAuth to function correctly. Set it to your application\'s deployed URL (e.g., https://myapp.vercel.app) or http://localhost:PORT for local development (e.g., http://localhost:9002).');
+  throw new Error('Missing NEXTAUTH_URL environment variable. Please define it in your .env file.');
+}
+
 if (!process.env.NEXTAUTH_SECRET) {
-  console.error('CRITICAL ERROR: Missing NEXTAUTH_SECRET environment variable. Authentication will not work.');
+  console.error('CRITICAL ERROR: Missing NEXTAUTH_SECRET environment variable. Authentication will not work securely. Generate a strong, random string for this value (e.g., using `openssl rand -base64 32` in your terminal).');
   throw new Error('Missing NEXTAUTH_SECRET environment variable. Please define it in your .env file.');
 }
 
@@ -46,8 +51,11 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
 }
 
 if (providers.length === 0) {
-  console.error('CRITICAL ERROR: No OAuth providers configured. Please provide credentials for at least one provider (e.g., Google or GitHub) in your .env file.');
-  throw new Error('No OAuth providers configured. Check .env file for GOOGLE_CLIENT_ID/SECRET or GITHUB_CLIENT_ID/SECRET.');
+  console.error('CRITICAL ERROR: No OAuth providers configured. Please provide credentials for at least one provider (e.g., Google or GitHub) in your .env file and ensure they are correctly named (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET).');
+  // Not throwing an error here to allow the app to potentially start if providers are optional,
+  // but it's a critical setup issue for login functionality.
+  // Depending on app requirements, you might want to throw an error.
+  // For now, a strong console error should suffice as login simply won't work.
 }
 
 export const authOptions: NextAuthOptions = {
@@ -88,6 +96,11 @@ export const authOptions: NextAuthOptions = {
     // newUser: null // Optional: Redirect new users to a specific page
   },
   secret: process.env.NEXTAUTH_SECRET,
+  // basePath should not be needed if NEXTAUTH_URL is set correctly and API route is at default /api/auth
+  // basePath: '/api/auth', 
+  
+  // Adding debug mode for NextAuth can be helpful during development
+  // debug: process.env.NODE_ENV === 'development',
 };
 
 const handler = NextAuth(authOptions);
