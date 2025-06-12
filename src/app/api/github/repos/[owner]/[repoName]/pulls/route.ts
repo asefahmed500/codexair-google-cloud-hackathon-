@@ -25,46 +25,47 @@ export async function GET(
     
     const repoFullName = `${owner}/${repoName}`;
 
-    // Find the local repository to ensure it's tracked by the user
     const localRepo = await Repository.findOne({ fullName: repoFullName, userId: session.user.id });
     if (!localRepo) {
         return NextResponse.json({ error: `Repository ${repoFullName} not associated with user or not found.` }, { status: 404 });
     }
 
+    const githubPRs = await getGitHubPullRequests(owner, repoName, 'open', 1, 50); 
 
-    // Fetch PRs from GitHub
-    const githubPRs = await getGitHubPullRequests(owner, repoName, 'open', 1, 50); // Fetch open PRs, up to 50
-
-    // Fetch corresponding PRs from local DB to check analysis status
     const prNumbersFromGithub = githubPRs.map(pr => pr.number);
     const localPRs = await LocalPullRequest.find({
       repositoryId: localRepo._id.toString(),
       number: { $in: prNumbersFromGithub },
-    }).populate('analysis', '_id qualityScore').lean(); // Only populate necessary fields
+    }).populate('analysis', '_id qualityScore').lean(); 
 
-    // Merge GitHub PR data with local analysis status
     const mergedPRs = githubPRs.map(ghPR => {
       const localMatch = localPRs.find(localDbPr => localDbPr.number === ghPR.number);
+      
+      let analysisStatus: 'analyzed' | 'pending' | 'failed' | 'not_started' = 'not_started';
+      if (localMatch?.analysis) {
+        analysisStatus = 'analyzed';
+      }
+      // Note: 'pending' and 'failed' statuses would typically be set by the analysis background job/process
+      // For this API, we primarily know if an analysis record exists ('analyzed') or not ('not_started').
+
       return {
-        // GitHub PR data
-        id: ghPR.id, // GitHub's global PR ID (distinct from our _id)
+        id: ghPR.id, 
         number: ghPR.number,
         title: ghPR.title,
         body: ghPR.body,
-        state: ghPR.state, // 'open', 'closed', etc.
+        state: ghPR.state, 
         html_url: ghPR.html_url,
         created_at: ghPR.created_at,
         updated_at: ghPR.updated_at,
-        user: { // Standardize user object
+        user: { 
             login: ghPR.user?.login || 'unknown',
             avatar_url: ghPR.user?.avatar_url || ''
         },
-        // Local DB info merged in
-        _id: localMatch?._id?.toString(), // Our local database document ID for this PR
-        author: localMatch?.author || { login: ghPR.user?.login || 'unknown', avatar: ghPR.user?.avatar_url || '' }, // ensure author from local if available
-        analysisStatus: localMatch?.analysis ? 'analyzed' : 'not_started',
+        _id: localMatch?._id?.toString(), 
+        author: localMatch?.author || { login: ghPR.user?.login || 'unknown', avatar: ghPR.user?.avatar_url || '' }, 
+        analysisStatus: analysisStatus,
         analysisId: localMatch?.analysis?._id?.toString() || (typeof localMatch?.analysis === 'string' ? localMatch.analysis : undefined),
-        qualityScore: (localMatch?.analysis as any)?.qualityScore, // if populated
+        qualityScore: (localMatch?.analysis as any)?.qualityScore, 
       };
     });
 
@@ -79,8 +80,10 @@ export async function GET(
   }
 }
 
-// Placeholder for fetching PRs from DB only (used by analyze/[owner]/[repoName]/page.tsx)
-export async function _getLocalPullRequests( // Renamed to avoid conflict if ever exported directly via route
+// This local DB fetch function might be used if you want to list PRs that are ONLY in your DB
+// (e.g., including closed ones for which you have analysis), separate from live GitHub state.
+// For the main PR listing, the above GET that merges with live GitHub data is preferred.
+export async function _getLocalPullRequests( 
   request: NextRequest,
   { params }: { params: { owner: string; repoName: string } }
 ) {
@@ -100,13 +103,14 @@ export async function _getLocalPullRequests( // Renamed to avoid conflict if eve
 
     const pullRequests = await LocalPullRequest.find({ repositoryId: localRepo._id.toString() })
       .sort({ number: -1 })
-      .populate('analysis', '_id') // Only populate analysis ID to check existence
+      .populate('analysis', '_id qualityScore') 
       .lean();
     
     const augmentedPRs = pullRequests.map(pr => ({
       ...pr,
       analysisStatus: pr.analysis ? 'analyzed' : 'not_started',
       analysisId: pr.analysis?._id?.toString() || (typeof pr.analysis === 'string' ? pr.analysis : undefined),
+      qualityScore: (pr.analysis as any)?.qualityScore, // if populated
     }));
 
     return NextResponse.json({ pullRequests: augmentedPRs });

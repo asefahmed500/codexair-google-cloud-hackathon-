@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { PullRequest as PRType } from '@/types';
-import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -18,9 +18,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 interface PullRequestWithAnalysisStatus extends PRType {
   id: number | string; // GitHub PR ID
   html_url?: string;
-  created_at: string; // Keep as string from API initially
-  updated_at: string; // Keep as string from API initially
-  user?: { login: string; avatar_url?: string }; // GitHub user object
+  created_at: string; 
+  updated_at: string; 
+  user?: { login: string; avatar_url?: string }; 
   analysisStatus?: 'analyzed' | 'pending' | 'failed' | 'not_started';
   analysisId?: string;
   qualityScore?: number;
@@ -43,10 +43,9 @@ export default function RepositoryAnalysisPage() {
 
   async function fetchPullRequests(showToast = false) {
     if (showToast) setIsRefreshing(true);
-    else setLoading(true); // Full loading only if not a manual refresh
+    else setLoading(true); 
     setError(null);
     try {
-      // Single API call to the enhanced endpoint
       const response = await fetch(`/api/github/repos/${owner}/${repoName}/pulls`);
       if (!response.ok) {
         const errorData = await response.json();
@@ -60,7 +59,7 @@ export default function RepositoryAnalysisPage() {
     } catch (err: any) {
       console.error(err);
       setError(err.message);
-      setPullRequests([]); // Clear PRs on error
+      setPullRequests([]); 
       if(showToast) toast({ title: "Refresh Error", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -82,6 +81,11 @@ export default function RepositoryAnalysisPage() {
       return;
     }
     setAnalyzingPR(pullNumber);
+    // Optimistically update local state to 'pending'
+    setPullRequests(prevPRs => 
+      prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'pending' } : pr)
+    );
+
     try {
       const response = await fetch('/api/analyze', {
         method: 'POST',
@@ -90,29 +94,36 @@ export default function RepositoryAnalysisPage() {
       });
       if (!response.ok) {
         const errorData = await response.json();
+        // Revert status if API call failed
+        setPullRequests(prevPRs => 
+          prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'not_started' } : pr) 
+        );
         throw new Error(errorData.details || errorData.error || 'Failed to start analysis');
       }
       const result = await response.json();
-      toast({ title: "Analysis Started", description: `Analysis for PR #${pullNumber} is in progress.` });
-      // Optimistically update the PR's status or re-fetch
-      // For now, we'll redirect, which will effectively refresh data on the target page
+      toast({ title: "Analysis Started", description: `Analysis for PR #${pullNumber} is in progress. Result page will open.` });
+      // Update status to analyzed and store analysisId
+      setPullRequests(prevPRs => 
+        prevPRs.map(pr => pr.number === pullNumber ? { 
+            ...pr, 
+            analysisStatus: 'analyzed', 
+            analysisId: result.analysis._id, 
+            qualityScore: result.analysis.qualityScore 
+        } : pr)
+      );
       router.push(`/analyze/${owner}/${repoName}/${pullNumber}/${result.analysis._id}`);
     } catch (err: any) {
-      setError(err.message); // This error might be better shown as a toast as well
+      setError(err.message); 
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
+       // Revert status if any error during process
+      setPullRequests(prevPRs => 
+        prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'not_started' } : pr)
+      );
     } finally {
       setAnalyzingPR(null);
     }
   };
   
-  const getStatusBadgeVariant = (prState: string) => {
-    switch (prState.toLowerCase()) {
-      case 'open': return 'default'; // Typically green or primary
-      case 'closed': return 'destructive';
-      case 'merged': return 'secondary'; // Or some other distinct color
-      default: return 'outline';
-    }
-  };
   const getStatusBadgeClasses = (prState: string) => {
     switch (prState.toLowerCase()) {
       case 'open': return 'bg-green-100 text-green-700 border-green-400';
@@ -121,6 +132,23 @@ export default function RepositoryAnalysisPage() {
       default: return 'border-muted-foreground';
     }
   }
+
+  const getAnalysisStatusContent = (pr: PullRequestWithAnalysisStatus) => {
+    switch (pr.analysisStatus) {
+      case 'analyzed':
+        return (
+          <span className="flex items-center gap-1 text-green-600" title={`Quality Score: ${pr.qualityScore?.toFixed(1) ?? 'N/A'}`}>
+            <CheckCircle className="h-4 w-4" /> Analysis complete
+          </span>
+        );
+      case 'pending':
+        return <span className="flex items-center gap-1 text-amber-600"><Clock className="h-4 w-4 animate-spin-slow" /> Analysis pending...</span>;
+      case 'failed':
+        return <span className="flex items-center gap-1 text-destructive"><ShieldAlert className="h-4 w-4" /> Analysis failed</span>;
+      default: // not_started
+        return <span className="flex items-center gap-1 text-muted-foreground"><XCircle className="h-4 w-4" /> Not analyzed</span>;
+    }
+  };
 
 
   if (status === 'loading' ) {
@@ -143,7 +171,7 @@ export default function RepositoryAnalysisPage() {
                     </CardTitle>
                     <CardDescription>Select a pull request to analyze or view existing analysis. Only open PRs can be analyzed.</CardDescription>
                 </div>
-                <Button variant="outline" className="mt-4 sm:mt-0" onClick={() => fetchPullRequests(true)} disabled={isRefreshing || loading}>
+                <Button variant="outline" className="mt-4 sm:mt-0" onClick={() => fetchPullRequests(true)} disabled={isRefreshing || loading || analyzingPR !== null}>
                     <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing && 'animate-spin'}`} />
                     {isRefreshing ? 'Refreshing...' : 'Refresh PRs'}
                 </Button>
@@ -157,7 +185,7 @@ export default function RepositoryAnalysisPage() {
             ) : error ? (
               <p className="text-destructive text-center py-8">{error}</p>
             ) : pullRequests.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No pull requests found for this repository matching the current filters (typically 'open' PRs).</p>
+              <p className="text-muted-foreground text-center py-8">No open pull requests found for this repository. Try refreshing or check GitHub.</p>
             ) : (
               <div className="space-y-4">
                 {pullRequests.map(pr => (
@@ -170,7 +198,7 @@ export default function RepositoryAnalysisPage() {
                             <span>#{pr.number}: {pr.title}</span>
                            </Link>
                         </CardTitle>
-                        <Badge variant={getStatusBadgeVariant(pr.state)} className={getStatusBadgeClasses(pr.state)}>
+                        <Badge variant={pr.state.toLowerCase() === 'open' ? 'default' : 'destructive'} className={getStatusBadgeClasses(pr.state)}>
                           {pr.state}
                         </Badge>
                       </div>
@@ -182,15 +210,9 @@ export default function RepositoryAnalysisPage() {
                     <CardContent className="pt-0 pb-3">
                       <p className="text-sm text-muted-foreground line-clamp-2">{pr.body || 'No description provided.'}</p>
                     </CardContent>
-                    <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-2">
                       <div className="text-xs text-muted-foreground">
-                        {pr.analysisStatus === 'analyzed' ? (
-                          <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-4 w-4" /> Analysis complete</span>
-                        ) : pr.analysisStatus === 'pending' ? (
-                          <span className="flex items-center gap-1 text-amber-600"><Clock className="h-4 w-4" /> Analysis pending...</span>
-                        ) : (
-                           <span className="flex items-center gap-1"><XCircle className="h-4 w-4" /> Not analyzed</span>
-                        )}
+                        {getAnalysisStatusContent(pr)}
                       </div>
                       <div className="flex gap-2 w-full sm:w-auto justify-end">
                         {pr.analysisStatus === 'analyzed' && pr.analysisId ? (
@@ -202,12 +224,12 @@ export default function RepositoryAnalysisPage() {
                         ) : (
                           <Button
                             onClick={() => handleAnalyzePR(pr.number)}
-                            disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open'}
-                            title={pr.state.toLowerCase() !== 'open' ? "Can only analyze open PRs" : `Analyze PR #${pr.number}`}
+                            disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open' || pr.analysisStatus === 'pending'}
+                            title={pr.state.toLowerCase() !== 'open' ? "Can only analyze open PRs" : (pr.analysisStatus === 'pending' ? "Analysis in progress..." : `Analyze PR #${pr.number}`)}
                             className="w-full sm:w-auto"
                           >
-                            {analyzingPR === pr.number ? (
-                              <><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
+                            {analyzingPR === pr.number || pr.analysisStatus === 'pending' ? (
+                              <><Clock className="mr-2 h-4 w-4 animate-spin-slow" /> Analyzing...</>
                             ) : (
                               <><GitPullRequest className="mr-2 h-4 w-4" /> Analyze PR</>
                             )}
@@ -235,20 +257,20 @@ function SkeletonPRCard() {
     return (
       <Card className="animate-pulse">
         <CardHeader className="pb-3">
-          <div className="flex justify-between items-start">
-            <div className="space-y-2">
-              <Skeleton className="h-6 w-3/4 " /> 
+          <div className="flex justify-between items-start gap-2">
+            <div className="space-y-2 w-3/4">
+              <Skeleton className="h-6 w-full " /> 
               <Skeleton className="h-4 w-1/2" /> 
             </div>
             <Skeleton className="h-6 w-16 rounded-full" /> 
           </div>
         </CardHeader>
-        <CardContent className="pt-0 pb-3">
-          <Skeleton className="h-4 w-full mb-1" />
+        <CardContent className="pt-0 pb-3 space-y-1.5">
+          <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-5/6" />
         </CardContent>
-        <CardFooter className="flex justify-between items-center">
-          <Skeleton className="h-5 w-24" />
+        <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <Skeleton className="h-5 w-28" />
           <Skeleton className="h-10 w-32" />
         </CardFooter>
       </Card>
