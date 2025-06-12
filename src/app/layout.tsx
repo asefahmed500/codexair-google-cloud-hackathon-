@@ -6,7 +6,7 @@ import './globals.css';
 import { authOptions } from '@/lib/auth'; // Ensure this path is correct
 
 export const metadata: Metadata = {
-  title: 'CodeReviewAI',
+  title: 'codexair',
   description: 'AI-Powered Code Review Intelligence Platform',
 };
 

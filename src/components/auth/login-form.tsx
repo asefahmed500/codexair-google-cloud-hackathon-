@@ -21,7 +21,7 @@ export default function LoginForm() {
     <Card className="w-full max-w-md shadow-xl">
       <CardHeader className="text-center">
         <Zap className="w-16 h-16 text-primary mx-auto mb-3" />
-        <CardTitle className="text-3xl font-bold font-headline">Welcome to CodeReviewAI</CardTitle>
+        <CardTitle className="text-3xl font-bold font-headline">Welcome to codexair</CardTitle>
         <CardDescription>Sign in to access your AI-powered code analysis dashboard.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

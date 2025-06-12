@@ -62,7 +62,7 @@ export default function DashboardPage() {
           <div className="container flex h-16 items-center justify-between">
             <Link href="/dashboard" className="flex items-center gap-2">
               <BarChartBig className="h-7 w-7 text-primary" />
-              <span className="font-bold text-xl text-foreground">CodeReviewAI</span>
+              <span className="font-bold text-xl text-foreground">codexair</span>
             </Link>
             <div className="w-10 h-10 bg-muted rounded-full animate-pulse"></div>
           </div>
@@ -104,7 +104,7 @@ export default function DashboardPage() {
         <div className="container flex h-16 items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2">
             <BarChartBig className="h-7 w-7 text-primary" />
-            <span className="font-bold text-xl text-foreground font-headline">CodeReviewAI</span>
+            <span className="font-bold text-xl text-foreground font-headline">codexair</span>
           </Link>
           <div className="flex items-center gap-4">
             <Button asChild variant="ghost" className="text-foreground hover:bg-accent/10">
@@ -171,7 +171,7 @@ export default function DashboardPage() {
       </main>
        <footer className="py-6 border-t bg-background">
         <div className="container text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} CodeReviewAI. Built with passion.
+          &copy; {new Date().getFullYear()} codexair. Built with passion.
         </div>
       </footer>
     </div>

@@ -51,7 +51,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <header className="text-center mb-12">
         <Zap className="w-20 h-20 text-primary mx-auto mb-4" />
-        <h1 className="text-5xl font-bold text-foreground mb-2 font-headline">CodeReviewAI</h1>
+        <h1 className="text-5xl font-bold text-foreground mb-2 font-headline">codexair</h1>
         <p className="text-xl text-muted-foreground">
           Intelligent Code Analysis & Review Platform.
         </p>
@@ -138,7 +138,7 @@ export default function HomePage() {
       </main>
 
       <footer className="mt-16 text-center text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} CodeReviewAI. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} codexair. All rights reserved.</p>
         <p>Powered by Next.js, GitHub, MongoDB, and Google Cloud AI.</p>
       </footer>
     </div>

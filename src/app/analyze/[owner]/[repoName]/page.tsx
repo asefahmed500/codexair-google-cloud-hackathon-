@@ -129,7 +129,7 @@ export default function RepositoryAnalysisPage() {
         <div className="container flex h-16 items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2">
             <BarChartBig className="h-7 w-7 text-primary" />
-            <span className="font-bold text-xl text-foreground font-headline">CodeReviewAI</span>
+            <span className="font-bold text-xl text-foreground font-headline">codexair</span>
           </Link>
           <div className="flex items-center gap-4">
              <Button variant="ghost" onClick={() => fetchPullRequests(true)} disabled={loading}>
@@ -236,7 +236,7 @@ export default function RepositoryAnalysisPage() {
       </main>
       <footer className="py-6 border-t bg-background">
         <div className="container text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} CodeReviewAI.
+          &copy; {new Date().getFullYear()} codexair.
         </div>
       </footer>
     </div>

@@ -10,7 +10,7 @@ export default function DashboardLoading() {
         <div className="container flex h-16 items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2">
             <BarChartBig className="h-7 w-7 text-primary" />
-            <span className="font-bold text-xl text-foreground font-headline">CodeReviewAI</span>
+            <span className="font-bold text-xl text-foreground font-headline">codexair</span>
           </Link>
           <Skeleton className="h-10 w-28 rounded-md" />
         </div>
