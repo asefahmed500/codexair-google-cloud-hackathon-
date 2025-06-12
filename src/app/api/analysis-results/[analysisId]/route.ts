@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
@@ -28,9 +29,6 @@ export async function GET(
     }
 
     // Find the associated PullRequest
-    // Ensure that this PR belongs to the logged-in user or a repo they have access to.
-    // For simplicity, we assume if they have analysisId, they have access.
-    // In a real app, you might want to check `PullRequest.userId` or `Repository.userId`.
     const pullRequest = await PullRequest.findById(analysis.pullRequestId).lean();
 
     if (!pullRequest) {
@@ -38,15 +36,12 @@ export async function GET(
       return NextResponse.json({ error: 'Associated Pull Request not found' }, { status: 404 });
     }
     
-    // Check if the PR belongs to the user
-    if (pullRequest.userId !== session.user.id) {
-        // This check might be too restrictive if PRs can be shared or are from public repos
-        // that the user is analyzing. For now, let's assume PRs are user-specific.
-        // return NextResponse.json({ error: 'Access to this pull request analysis is denied' }, { status: 403 });
-        // Allowing access if analysis exists, as user might be viewing a shared analysis or public one.
-        // A more robust permission model would be needed for complex scenarios.
+    // Check if the user has permission to view this analysis
+    // Admins can view any analysis.
+    // Regular users can only view analyses for PRs linked to their userId.
+    if (session.user.role !== 'admin' && pullRequest.userId !== session.user.id) {
+        return NextResponse.json({ error: 'Access to this pull request analysis is denied' }, { status: 403 });
     }
-
 
     return NextResponse.json({ analysis, pullRequest });
 
@@ -55,3 +50,4 @@ export async function GET(
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
+
