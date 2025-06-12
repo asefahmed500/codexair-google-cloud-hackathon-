@@ -1,25 +1,35 @@
-import NextAuth, { type NextAuthOptions } from 'next-auth';
+
+import NextAuth, { type NextAuthOptions, type AuthProvider } from 'next-auth';
 import GithubProvider from 'next-auth/providers/github';
 import GoogleProvider from 'next-auth/providers/google';
 import { MongoDBAdapter } from '@next-auth/mongodb-adapter';
-import clientPromise from './mongodb';
+import clientPromise from './mongodb'; // Ensures MONGODB_URI is checked by mongodb.ts
 import type { Adapter } from 'next-auth/adapters';
 
-if (
-  !process.env.GITHUB_CLIENT_ID ||
-  !process.env.GITHUB_CLIENT_SECRET ||
-  !process.env.GOOGLE_CLIENT_ID ||
-  !process.env.GOOGLE_CLIENT_SECRET
-) {
-  throw new Error('Missing OAuth environment variables. Ensure GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GOOGLE_CLIENT_ID, and GOOGLE_CLIENT_SECRET are set.');
-}
+// Check for NEXTAUTH_SECRET first, as it's critical
 if (!process.env.NEXTAUTH_SECRET) {
-  throw new Error('Missing NEXTAUTH_SECRET environment variable');
+  console.error('CRITICAL ERROR: Missing NEXTAUTH_SECRET environment variable. Authentication will not work.');
+  throw new Error('Missing NEXTAUTH_SECRET environment variable. Please define it in your .env file.');
 }
 
-export const authOptions: NextAuthOptions = {
-  adapter: MongoDBAdapter(clientPromise) as Adapter,
-  providers: [
+const providers: AuthProvider[] = [];
+
+// Conditionally add GoogleProvider
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    })
+  );
+  console.log("Google OAuth Provider configured.");
+} else {
+  console.warn("Google OAuth credentials (GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET) not found in .env. Google login will be disabled.");
+}
+
+// Conditionally add GithubProvider
+if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  providers.push(
     GithubProvider({
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
@@ -28,12 +38,21 @@ export const authOptions: NextAuthOptions = {
           scope: 'repo read:user user:email', // Request necessary scopes
         },
       },
-    }),
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }),
-  ],
+    })
+  );
+  console.log("GitHub OAuth Provider configured.");
+} else {
+  console.warn("GitHub OAuth credentials (GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET) not found in .env. GitHub login will be disabled.");
+}
+
+if (providers.length === 0) {
+  console.error('CRITICAL ERROR: No OAuth providers configured. Please provide credentials for at least one provider (e.g., Google or GitHub) in your .env file.');
+  throw new Error('No OAuth providers configured. Check .env file for GOOGLE_CLIENT_ID/SECRET or GITHUB_CLIENT_ID/SECRET.');
+}
+
+export const authOptions: NextAuthOptions = {
+  adapter: MongoDBAdapter(clientPromise) as Adapter,
+  providers: providers,
   session: {
     strategy: 'jwt', // Using JWT for session strategy
   },
@@ -71,7 +90,5 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
 };
 
-// The handler default export is not directly used by route.ts in app router,
-// but defining it here is fine. Route handlers will call NextAuth(authOptions).
 const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };
