@@ -1,0 +1,79 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { BarChartBig } from "lucide-react";
+import Link from "next/link";
+
+export default function DashboardLoading() {
+  return (
+    <div className="flex flex-col min-h-screen bg-secondary/50">
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <BarChartBig className="h-7 w-7 text-primary" />
+            <span className="font-bold text-xl text-foreground font-headline">CodeReviewAI</span>
+          </Link>
+          <Skeleton className="h-10 w-28 rounded-md" />
+        </div>
+      </header>
+
+      <main className="flex-1 container py-8">
+        <Skeleton className="h-9 w-48 mb-8" /> {/* Dashboard Title Skeleton */}
+        
+        {/* Analytics Overview Skeleton */}
+        <Card className="mb-6">
+          <CardHeader>
+            <Skeleton className="h-6 w-1/3 mb-2" /> {/* Card Title Skeleton */}
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-4 w-2/3" /> {/* Stat Title Skeleton */}
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-1/2" /> {/* Stat Value Skeleton */}
+                  <Skeleton className="h-3 w-1/3 mt-1" /> {/* Stat Description Skeleton */}
+                </CardContent>
+              </Card>
+            ))}
+          </CardContent>
+        </Card>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Recent Reviews Skeleton */}
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-1/2 mb-2" /> {/* Card Title Skeleton */}
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between p-2 rounded-md border">
+                  <div>
+                    <Skeleton className="h-5 w-32 mb-1" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-8 w-16" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Quality Trends Skeleton */}
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-1/2 mb-2" /> {/* Card Title Skeleton */}
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-64 w-full" /> {/* Chart Skeleton */}
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+      <footer className="py-6 border-t bg-background">
+        <div className="container text-center text-sm text-muted-foreground">
+            <Skeleton className="h-4 w-1/3 mx-auto" />
+        </div>
+      </footer>
+    </div>
+  );
+}
