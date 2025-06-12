@@ -5,7 +5,7 @@
  * @fileOverview This file defines a Genkit flow for analyzing code quality, security vulnerabilities, and style issues.
  *
  * It exports:
- * - `analyzeCode` - An asynchronous function that takes code as input and returns an analysis of its quality, security, and style, including a vector embedding.
+ * - `analyzeCode` - An asynchronous function that takes code as input and returns an analysis of its quality, security, and style.
  * - `CodeAnalysisInput` - The TypeScript type definition for the input to the `analyzeCode` function.
  * - `CodeAnalysisOutput` - The TypeScript type definition for the output of the `analyzeCode` function.
  */
@@ -20,6 +20,7 @@ const CodeAnalysisInputSchema = z.object({
 });
 export type CodeAnalysisInput = z.infer<typeof CodeAnalysisInputSchema>;
 
+// Removed vectorEmbedding from this output schema. It will be generated separately.
 const CodeAnalysisOutputSchema = z.object({
   qualityScore: z.number().min(1).max(10).describe('Overall code quality score (1-10), considering readability, structure, and best practices.'),
   complexity: z.number().describe('Cyclomatic complexity or a similar cognitive complexity score for the code.'),
@@ -60,7 +61,6 @@ const CodeAnalysisOutputSchema = z.object({
     })
     .describe('Key code metrics.'),
   aiInsights: z.string().describe('Overall insights, summarization of findings, and high-level recommendations from the AI.'),
-  vectorEmbedding: z.array(z.number()).optional().describe('A 768-dimension vector embedding of the code snippet, if successfully generated.'),
 });
 export type CodeAnalysisOutput = z.infer<typeof CodeAnalysisOutputSchema>;
 
@@ -93,7 +93,8 @@ const analyzeCodePrompt = ai.definePrompt({
       *   For each, specify: type, priority, title, description, file, line number, and a code example for the fix if applicable.
   5.  **Code Metrics:** Calculate lines of code, cyclomatic complexity, cognitive complexity, and duplicate blocks.
   6.  **AI Insights:** Provide a brief overall summary of your findings.
-  7.  **Vector Embedding:** Generate a 768-dimension vector embedding for the provided code snippet. If you cannot generate a meaningful embedding, omit the 'vectorEmbedding' field or set it to null.
+  
+  Do NOT generate vector embeddings. This will be handled by a separate process.
 
   Respond strictly in the JSON format defined by the output schema. Ensure all fields are populated accurately based on your analysis.
   Filename context: {{{filename}}}
@@ -105,10 +106,11 @@ const analyzeCodeFlow = ai.defineFlow(
     name: 'analyzeCodeFlow',
     inputSchema: CodeAnalysisInputSchema,
     outputSchema: CodeAnalysisOutputSchema,
-    tools: [fetchCveDetailsTool], // Also declare tool for the flow if it's to be managed by flow state (optional here as prompt handles it)
+    tools: [fetchCveDetailsTool], 
   },
   async input => {
     const {output} = await analyzeCodePrompt(input);
     return output!;
   }
 );
+

@@ -5,9 +5,11 @@ import { authOptions } from '@/lib/auth';
 import { getPullRequestDetails, getPullRequestFiles, getFileContent, getRepositoryDetails } from '@/lib/github';
 import { analyzeCode } from '@/ai/flows/code-quality-analysis'; 
 import { PullRequest, Analysis, Repository, connectMongoose } from '@/lib/mongodb';
-import type { CodeAnalysisOutput, FileAnalysisItem, PullRequest as PRType, CodeFile as CodeFileType } from '@/types';
+import type { CodeAnalysisOutput as AIAnalysisOutput, FileAnalysisItem, PullRequest as PRType, CodeFile as CodeFileType } from '@/types';
+import { ai } from '@/ai/genkit'; // Import the Genkit ai instance
 
 const MAX_FILES_TO_ANALYZE = 10; 
+const EMBEDDING_DIMENSIONS = 768; // As specified in PRD
 
 export async function POST(request: NextRequest) {
   try {
@@ -82,7 +84,47 @@ export async function POST(request: NextRequest) {
              contentToAnalyze = contentToAnalyze.substring(0, 50000);
           }
 
-          const aiResponse: CodeAnalysisOutput = await analyzeCode({ code: contentToAnalyze, filename: file.filename });
+          // Get AI analysis (without embedding from this flow)
+          const aiResponse: AIAnalysisOutput = await analyzeCode({ code: contentToAnalyze, filename: file.filename });
+          
+          // Generate embedding separately using a dedicated model
+          let fileEmbedding: number[] | undefined = undefined;
+          if (contentToAnalyze) {
+            try {
+              // Use 'googleai/text-embedding-004' or 'embedding-001' as per PRD/availability
+              // Genkit v1.x uses 'model' in ai.generate for embeddings too
+              const embeddingResult = await ai.generate({
+                model: 'googleai/text-embedding-004', // Dedicated embedding model
+                prompt: contentToAnalyze,
+              });
+
+              // The structure of embeddingResult.output depends on the model and Genkit plugin.
+              // Common patterns:
+              // 1. embeddingResult.output is directly the array of numbers.
+              // 2. embeddingResult.output is an object like { embedding: [...] } or { vector: [...] }
+              if (embeddingResult.output && Array.isArray(embeddingResult.output) && embeddingResult.output.every(n => typeof n === 'number')) {
+                  fileEmbedding = embeddingResult.output as number[];
+              } else if (embeddingResult.output && typeof embeddingResult.output === 'object') {
+                  const outputObj = embeddingResult.output as any;
+                  if (outputObj.embedding && Array.isArray(outputObj.embedding) && outputObj.embedding.every((n:any) => typeof n === 'number')) {
+                      fileEmbedding = outputObj.embedding;
+                  } else if (outputObj.vector && Array.isArray(outputObj.vector) && outputObj.vector.every((n:any) => typeof n === 'number')) {
+                      fileEmbedding = outputObj.vector;
+                  }
+              }
+
+              if (!fileEmbedding) {
+                 console.warn(`Unexpected or missing embedding format for ${file.filename} from embedding model. Output:`, embeddingResult.output);
+              } else if (fileEmbedding.length !== EMBEDDING_DIMENSIONS) {
+                console.warn(`Generated embedding for ${file.filename} has ${fileEmbedding.length} dimensions, expected ${EMBEDDING_DIMENSIONS}. Embedding will not be stored.`);
+                fileEmbedding = undefined;
+              }
+
+            } catch (embeddingError: any) {
+              console.error(`Error generating embedding for file ${file.filename}:`, embeddingError.message, embeddingError.stack);
+            }
+          }
+
           return {
             filename: file.filename,
             qualityScore: aiResponse.qualityScore,
@@ -92,7 +134,7 @@ export async function POST(request: NextRequest) {
             suggestions: aiResponse.suggestions || [],
             metrics: aiResponse.metrics || { linesOfCode: 0, cyclomaticComplexity: 0, cognitiveComplexity: 0, duplicateBlocks: 0 },
             aiInsights: aiResponse.aiInsights || '',
-            vectorEmbedding: aiResponse.vectorEmbedding || undefined, // Store the embedding
+            vectorEmbedding: fileEmbedding, // Store the new embedding
           };
         } catch (error: any) {
           console.error(`Error analyzing file ${file.filename}:`, error.message);
@@ -103,7 +145,7 @@ export async function POST(request: NextRequest) {
     const fileAnalysesResults = (await Promise.all(fileAnalysesPromises)).filter(Boolean) as FileAnalysisItem[];
 
     const totalAnalyzedFiles = fileAnalysesResults.length;
-    const aggregatedAnalysis: Omit<CodeAnalysisOutput, '_id' | 'pullRequestId' | 'createdAt' | 'vectorEmbedding'> & { fileAnalyses?: FileAnalysisItem[] } = {
+    const aggregatedAnalysis: Omit<AIAnalysisOutput, '_id' | 'pullRequestId' | 'createdAt' | 'vectorEmbedding'> & { fileAnalyses?: FileAnalysisItem[] } = {
       qualityScore: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.qualityScore, 0) / totalAnalyzedFiles : 0,
       complexity: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.complexity, 0) / totalAnalyzedFiles : 0,
       maintainability: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.maintainability, 0) / totalAnalyzedFiles : 0,
