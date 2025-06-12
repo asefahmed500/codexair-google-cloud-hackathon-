@@ -177,7 +177,8 @@ export interface AdminUserView {
   _id: string;
   name?: string | null;
   email?: string | null;
-  role: string;
+  role: 'user' | 'admin';
+  status: 'active' | 'suspended';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -194,4 +195,3 @@ export interface AnalysisReportItem {
   highIssuesCount: number;
   analysisId?: string; 
 }
-

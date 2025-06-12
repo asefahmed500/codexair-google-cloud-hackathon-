@@ -67,35 +67,31 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user, account }) {
-      await connectMongoose(); // Ensure DB connection for all JWT operations involving DB
+      await connectMongoose(); 
 
-      // Persist the OAuth access_token and provider to the token right after signin
       if (account) {
         token.accessToken = account.access_token;
-        token.provider = account.provider; // e.g. "github" or "google"
+        token.provider = account.provider;
       }
 
-      // If user object exists (typically on initial sign-in), set token.id
       if (user?.id) {
         token.id = user.id;
       }
 
-      // Always refresh the role from the database if token.id exists
-      // This ensures that role changes are reflected in the session promptly.
       if (token.id) {
-        const dbUser = await UserModel.findById(token.id).select('role email').lean();
+        const dbUser = await UserModel.findById(token.id).select('role email status').lean();
         if (dbUser) {
-          token.role = dbUser.role || 'user'; // Default to 'user' if not set
+          token.role = dbUser.role || 'user';
+          token.status = dbUser.status || 'active'; // Add status to token
 
-          // First user admin assignment logic - only relevant if it's a new user context
-          // Check if it's the user's initial sign-in or if we need to check user count
-          if (user) { // `user` is present on initial sign-in or account linking
+          if (user) { 
             const userCount = await UserModel.countDocuments();
             if (userCount === 1 && token.role !== 'admin') {
               console.log(`INFO: First user detected (Email: ${dbUser.email}, ID: ${token.id}). Promoting to admin.`);
               try {
-                await UserModel.updateOne({ _id: token.id }, { $set: { role: 'admin' } });
-                token.role = 'admin'; // Update token immediately
+                await UserModel.updateOne({ _id: token.id }, { $set: { role: 'admin', status: 'active' } }); // Ensure first admin is active
+                token.role = 'admin';
+                token.status = 'active';
                 console.log(`INFO: User ${token.id} successfully promoted to admin.`);
               } catch (e: any) {
                 console.error(`ERROR: Failed to promote first user ${token.id} to admin: ${e.message}`);
@@ -103,15 +99,14 @@ export const authOptions: NextAuthOptions = {
             }
           }
         } else {
-          // User not found in DB, potentially an issue. Clear role or handle as error.
           console.warn(`User with ID ${token.id} not found in database during JWT callback.`);
-          delete token.role; // Or set to a default guest role if applicable
+          delete token.role;
+          delete token.status;
         }
       }
       return token;
     },
     async session({ session, token }) {
-      // Send properties to the client, like an access_token, user id, and role from JWT.
       if (token.accessToken && session) {
         session.accessToken = token.accessToken as string;
       }
@@ -121,21 +116,31 @@ export const authOptions: NextAuthOptions = {
       if (token.role && session.user) {
         session.user.role = token.role as string;
       }
+      if (token.status && session.user) {
+        session.user.status = token.status as 'active' | 'suspended'; // Add status to session
+      }
       return session;
     },
+    async signIn({ user, account, profile }) {
+        await connectMongoose();
+        const dbUser = await UserModel.findById(user.id).select('status').lean();
+        if (dbUser?.status === 'suspended') {
+          // Prevent sign-in for suspended users
+          // You can redirect to an 'account suspended' page or simply return false
+          console.log(`Sign-in attempt denied for suspended user: ${user.email}`);
+          return '/auth/signin?error=suspended'; // Or return false to show generic error
+        }
+        return true; // Allow sign-in
+    }
   },
   pages: {
     signIn: '/auth/signin',
-    // signOut: '/auth/signout', // Optional: Custom sign out page
-    // error: '/auth/error', // Optional: Custom error page
-    // verifyRequest: '/auth/verify-request', // Optional: Custom verify request page
-    // newUser: null // Optional: Redirect new users to a specific page
+    // signOut: '/auth/signout', 
+    // error: '/auth/error', 
+    // verifyRequest: '/auth/verify-request', 
+    // newUser: null 
   },
   secret: process.env.NEXTAUTH_SECRET,
-  // basePath should not be needed if NEXTAUTH_URL is set correctly and API route is at default /api/auth
-  // basePath: '/api/auth', 
-  
-  // Adding debug mode for NextAuth can be helpful during development
   debug: process.env.NODE_ENV === 'development',
 };
 

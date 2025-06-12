@@ -53,6 +53,7 @@ const userSchema = new mongoose.Schema({
   emailVerified: Date,
   image: String,
   role: { type: String, default: 'user', enum: ['user', 'admin'] },
+  status: { type: String, enum: ['active', 'suspended'], default: 'active', required: true },
   accounts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Account' }],
   sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Session' }],
 }, { timestamps: true });
