@@ -25,7 +25,7 @@ export interface CodeFile {
 
 export interface PullRequest {
   _id: string;
-  repositoryId: string; // Could be ObjectId if referencing local Repository collection
+  repositoryId: string; 
   githubId: number;
   number: number;
   title: string;
@@ -36,10 +36,10 @@ export interface PullRequest {
     avatar: string;
   };
   files: CodeFile[];
-  createdAt: Date; // GitHub's created_at
-  updatedAt: Date; // GitHub's updated_at
-  analysis?: CodeAnalysis | string; // string for ObjectId if populated, CodeAnalysis if fully populated
-  userId?: string; // Added to associate PR with user if needed
+  createdAt: Date; 
+  updatedAt: Date; 
+  analysis?: CodeAnalysis | string; 
+  userId?: string; 
 }
 
 export interface SecurityIssue {
@@ -78,11 +78,12 @@ export interface FileAnalysisItem {
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics;
   aiInsights: string;
+  vectorEmbedding?: number[]; // Added for per-file embedding
 }
 
 export interface CodeAnalysis {
   _id: string;
-  pullRequestId: string; // ObjectId referencing PullRequest
+  pullRequestId: string; 
   qualityScore: number;
   complexity: number;
   maintainability: number;
@@ -90,14 +91,22 @@ export interface CodeAnalysis {
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics;
   aiInsights: string;
-  fileAnalyses?: FileAnalysisItem[]; // Store individual file results if needed
+  fileAnalyses?: FileAnalysisItem[]; 
   createdAt: Date;
+}
+
+export interface TopIssueItem {
+  title: string;
+  count: number;
+  severity?: SecurityIssue['severity']; // Optional, for security issues
+  priority?: Suggestion['priority']; // Optional, for suggestions
+  type?: Suggestion['type'] | SecurityIssue['type'];
 }
 
 export interface DashboardOverview {
   totalAnalyses: number;
   avgQualityScore: number;
-  securityIssuesCount: number;
+  securityIssuesCount: number; // Total critical/high issues
   trendsUp: boolean;
 }
 
@@ -105,19 +114,22 @@ export interface RecentAnalysisItem {
   id: string;
   pullRequestTitle?: string;
   repositoryName?: string;
+  prNumber?: number; // Added prNumber
   qualityScore: number;
-  securityIssues: number;
+  securityIssues: number; // Count of issues for this specific analysis
   createdAt: Date;
 }
 
 export interface QualityTrendItem {
-  date: string;
+  date: string; // Format: YYYY-MM-DD
   quality: number;
-  count: number;
+  count: number; // Number of analyses on that date
 }
 
 export interface DashboardData {
   overview: DashboardOverview;
   recentAnalyses: RecentAnalysisItem[];
   qualityTrends: QualityTrendItem[];
+  topSecurityIssues: TopIssueItem[];
+  topSuggestions: TopIssueItem[];
 }

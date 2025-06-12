@@ -1,10 +1,11 @@
+
 'use server';
 
 /**
  * @fileOverview This file defines a Genkit flow for analyzing code quality, security vulnerabilities, and style issues.
  *
  * It exports:
- * - `analyzeCode` - An asynchronous function that takes code as input and returns an analysis of its quality, security, and style.
+ * - `analyzeCode` - An asynchronous function that takes code as input and returns an analysis of its quality, security, and style, including a vector embedding.
  * - `CodeAnalysisInput` - The TypeScript type definition for the input to the `analyzeCode` function.
  * - `CodeAnalysisOutput` - The TypeScript type definition for the output of the `analyzeCode` function.
  */
@@ -58,6 +59,7 @@ const CodeAnalysisOutputSchema = z.object({
     })
     .describe('Code metrics.'),
   aiInsights: z.string().describe('Overall insights and recommendations from the AI.'),
+  vectorEmbedding: z.array(z.number()).optional().describe('A 768-dimension vector embedding of the code, if generated.'),
 });
 export type CodeAnalysisOutput = z.infer<typeof CodeAnalysisOutputSchema>;
 
@@ -74,47 +76,21 @@ const analyzeCodePrompt = ai.definePrompt({
   Provide an overall quality score from 1-10.
   Identify specific security vulnerabilities, performance issues, code style problems, and maintainability concerns.
   Provide actionable suggestions for improvement with code examples where applicable.
+  Also, generate a 768-dimension vector embedding for the provided code snippet. If you cannot generate a meaningful embedding, omit the 'vectorEmbedding' field or set it to null.
 
   File: {{{filename}}}
   Code:
-  \`\`\`\n  {{{code}}}
+  \`\`\`
+  {{{code}}}
   \`\`\`
   
-  Response should be in JSON format:
-  {
-    "qualityScore": number,
-    "complexity": number,
-    "maintainability": number,
-    "securityIssues": [
-      {
-        "type": "vulnerability",
-        "severity": "high",
-        "title": "Issue title",
-        "description": "Detailed description",
-        "file": "file.js",
-        "line": 10,
-        "suggestion": "How to fix"
-      }
-    ],
-    "suggestions": [
-      {
-        "type": "performance",
-        "priority": "medium",
-        "title": "Suggestion title",
-        "description": "Detailed suggestion",
-        "file": "file.js",
-        "line": 15,
-        "codeExample": "Improved code example"
-      }
-    ],
-    "metrics": {
-      "linesOfCode": number,
-      "cyclomaticComplexity": number,
-      "cognitiveComplexity": number,
-      "duplicateBlocks": number
-    },
-    "aiInsights": "Overall insights and recommendations"
-  }
+  Response should be in JSON format as specified by the output schema. Key fields include:
+  qualityScore (number), complexity (number), maintainability (number), 
+  securityIssues (array of objects with type, severity, title, description, file, line, suggestion, cwe),
+  suggestions (array of objects with type, priority, title, description, file, line, codeExample),
+  metrics (object with linesOfCode, cyclomaticComplexity, cognitiveComplexity, duplicateBlocks),
+  aiInsights (string),
+  vectorEmbedding (array of 768 numbers, optional).
   `,
 });
 
@@ -129,4 +105,3 @@ const analyzeCodeFlow = ai.defineFlow(
     return output!;
   }
 );
-

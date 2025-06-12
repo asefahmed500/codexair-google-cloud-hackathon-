@@ -1,12 +1,13 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getPullRequestDetails, getPullRequestFiles, getFileContent, getRepositoryDetails } from '@/lib/github';
-import { analyzeCode } from '@/ai/flows/code-quality-analysis'; // Using Genkit AI flow
+import { analyzeCode } from '@/ai/flows/code-quality-analysis'; 
 import { PullRequest, Analysis, Repository, connectMongoose } from '@/lib/mongodb';
-import type { CodeAnalysisOutput, FileAnalysisItem, CodeAnalysisMetrics, PullRequest as PRType, CodeFile as CodeFileType } from '@/types';
+import type { CodeAnalysisOutput, FileAnalysisItem, PullRequest as PRType, CodeFile as CodeFileType } from '@/types';
 
-const MAX_FILES_TO_ANALYZE = 10; // Limit number of files analyzed for performance
+const MAX_FILES_TO_ANALYZE = 10; 
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,10 +27,8 @@ export async function POST(request: NextRequest) {
     
     const repoFullName = `${owner}/${repoName}`;
 
-    // Find the local repository to link the PR
     let localRepo = await Repository.findOne({ fullName: repoFullName, userId: session.user.id });
     if (!localRepo) {
-      // If not found, try to fetch and save it
       const ghRepo = await getRepositoryDetails(owner, repoName);
       localRepo = await Repository.findOneAndUpdate(
         { githubId: ghRepo.id, userId: session.user.id },
@@ -50,10 +49,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `Repository ${repoFullName} not found or could not be synced.` }, { status: 404 });
     }
 
-
-    // Check if analysis already exists for this PR in MongoDB
     const existingPR = await PullRequest.findOne({
-      repositoryId: localRepo._id.toString(), // Use local repo ID
+      repositoryId: localRepo._id.toString(), 
       number: pullNumber,
     }).populate('analysis');
 
@@ -61,7 +58,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ analysis: existingPR.analysis, pullRequest: existingPR });
     }
 
-    // Fetch PR data from GitHub
     const ghPullRequest = await getPullRequestDetails(owner, repoName, pullNumber);
     if (!ghPullRequest) {
       return NextResponse.json({ error: 'Pull request not found on GitHub' }, { status: 404 });
@@ -70,23 +66,18 @@ export async function POST(request: NextRequest) {
     const ghFiles = await getPullRequestFiles(owner, repoName, pullNumber);
 
     const fileAnalysesPromises = ghFiles
-      .filter(file => file.status !== 'removed' && file.patch && (file.filename?.match(/\.(js|ts|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i))) // Basic filter for code-like files
+      .filter(file => file.status !== 'removed' && file.patch && (file.filename?.match(/\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i)))
       .slice(0, MAX_FILES_TO_ANALYZE)
       .map(async (file): Promise<FileAnalysisItem | null> => {
         try {
-          // Attempt to get full file content. Fallback to patch if content is unavailable or too large.
           let contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
           
           if (!contentToAnalyze) {
-            // If full content isn't available (e.g. large file, binary, submodule), use patch.
-            // The AI might not be as effective with just a patch.
-            // contentToAnalyze = file.patch; // Or decide to skip
             console.warn(`Could not get content for ${file.filename}, skipping its analysis.`);
             return null; 
           }
           
-          // Limit content size to avoid overly long AI requests
-          if (contentToAnalyze.length > 50000) { // 50k char limit
+          if (contentToAnalyze.length > 50000) { 
              console.warn(`File ${file.filename} is too large (${contentToAnalyze.length} chars), truncating.`);
              contentToAnalyze = contentToAnalyze.substring(0, 50000);
           }
@@ -101,25 +92,25 @@ export async function POST(request: NextRequest) {
             suggestions: aiResponse.suggestions || [],
             metrics: aiResponse.metrics || { linesOfCode: 0, cyclomaticComplexity: 0, cognitiveComplexity: 0, duplicateBlocks: 0 },
             aiInsights: aiResponse.aiInsights || '',
+            vectorEmbedding: aiResponse.vectorEmbedding || undefined, // Store the embedding
           };
         } catch (error: any) {
           console.error(`Error analyzing file ${file.filename}:`, error.message);
-          return null; // Skip this file on error
+          return null; 
         }
       });
 
     const fileAnalysesResults = (await Promise.all(fileAnalysesPromises)).filter(Boolean) as FileAnalysisItem[];
 
-    // Aggregate analysis results
     const totalAnalyzedFiles = fileAnalysesResults.length;
-    const aggregatedAnalysis: Omit<CodeAnalysisOutput, '_id' | 'pullRequestId' | 'createdAt'> & { fileAnalyses?: FileAnalysisItem[] } = {
+    const aggregatedAnalysis: Omit<CodeAnalysisOutput, '_id' | 'pullRequestId' | 'createdAt' | 'vectorEmbedding'> & { fileAnalyses?: FileAnalysisItem[] } = {
       qualityScore: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.qualityScore, 0) / totalAnalyzedFiles : 0,
       complexity: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.complexity, 0) / totalAnalyzedFiles : 0,
       maintainability: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.maintainability, 0) / totalAnalyzedFiles : 0,
       securityIssues: fileAnalysesResults.flatMap(a => a.securityIssues || []),
       suggestions: fileAnalysesResults.flatMap(a => a.suggestions || []),
       metrics: {
-        linesOfCode: ghFiles.reduce((sum, f) => sum + (f.additions || 0), 0), // Total additions in PR
+        linesOfCode: ghFiles.reduce((sum, f) => sum + (f.additions || 0), 0), 
         cyclomaticComplexity: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.cyclomaticComplexity || 0), 0) / totalAnalyzedFiles : 0,
         cognitiveComplexity: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.cognitiveComplexity || 0), 0) / totalAnalyzedFiles : 0,
         duplicateBlocks: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.duplicateBlocks || 0), 0) : 0,
@@ -137,12 +128,11 @@ export async function POST(request: NextRequest) {
         patch: f.patch || '',
       }));
 
-    // Save PullRequest and Analysis to MongoDB
     let savedPR = existingPR;
     if (!savedPR) {
       savedPR = new PullRequest({
         repositoryId: localRepo._id.toString(),
-        githubId: ghPullRequest.id, // Store GitHub's global PR ID
+        githubId: ghPullRequest.id, 
         number: pullNumber,
         title: ghPullRequest.title,
         body: ghPullRequest.body,
@@ -153,12 +143,10 @@ export async function POST(request: NextRequest) {
         },
         files: prFiles,
         userId: session.user.id,
-        // timestamps from GitHub
         createdAt: new Date(ghPullRequest.created_at), 
         updatedAt: new Date(ghPullRequest.updated_at),
       });
     } else {
-      // Update existing PR data if fetched again
       savedPR.title = ghPullRequest.title;
       savedPR.body = ghPullRequest.body;
       savedPR.state = ghPullRequest.state as PRType['state'];
@@ -166,7 +154,6 @@ export async function POST(request: NextRequest) {
       savedPR.updatedAt = new Date(ghPullRequest.updated_at);
     }
     await savedPR.save();
-
 
     const analysisDoc = new Analysis({
       pullRequestId: savedPR._id,
