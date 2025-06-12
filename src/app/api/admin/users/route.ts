@@ -91,18 +91,21 @@ export async function PATCH(request: NextRequest) {
     const originalStatus = targetUser.status;
 
     if (newRole) {
+      // Check if demoting an admin user
       if (targetUser.role === 'admin' && newRole === 'user') {
-        const adminCount = await User.countDocuments({ role: 'admin' });
-        if (adminCount <= 1) {
-          return NextResponse.json({ error: 'Cannot demote the last admin account.' }, { status: 400 });
-        }
-      }
-      
-      if (targetUser._id.toString() === session.user.id && targetUser.role === 'admin' && newRole === 'user') {
-          const adminCount = await User.countDocuments({ role: 'admin' });
-          if (adminCount <= 1) {
+        // Prevent demoting self if current user is the last admin
+        if (targetUser._id.toString() === session.user.id) {
+            const adminCount = await User.countDocuments({ role: 'admin' });
+            if (adminCount <= 1) {
               return NextResponse.json({ error: 'As the sole admin, you cannot change your own role to user.' }, { status: 400 });
-          }
+            }
+        } else {
+            // Prevent demoting another admin if they are the last one
+            const adminCount = await User.countDocuments({ role: 'admin' });
+            if (adminCount <= 1) {
+                return NextResponse.json({ error: 'Cannot demote the last admin account.' }, { status: 400 });
+            }
+        }
       }
       targetUser.role = newRole;
       message = 'User role updated successfully.';
@@ -112,16 +115,20 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (newStatus) {
-      if (targetUser._id.toString() === session.user.id && newStatus === 'suspended') {
-        const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
-        if (activeAdminCount <= 1) {
-          return NextResponse.json({ error: 'Cannot suspend your own account as the last active admin.' }, { status: 400 });
-        }
-      }
+      // Check if suspending an active admin user
       if (targetUser.role === 'admin' && targetUser.status === 'active' && newStatus === 'suspended') {
-        const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
-        if (activeAdminCount <= 1) {
-             return NextResponse.json({ error: 'Cannot suspend the last active admin account.' }, { status: 400 });
+        // Prevent suspending self if current user is the last active admin
+        if (targetUser._id.toString() === session.user.id) {
+            const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
+            if (activeAdminCount <= 1) {
+              return NextResponse.json({ error: 'Cannot suspend your own account as the last active admin.' }, { status: 400 });
+            }
+        } else {
+            // Prevent suspending another admin if they are the last active one
+            const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
+            if (activeAdminCount <= 1) {
+                 return NextResponse.json({ error: 'Cannot suspend the last active admin account.' }, { status: 400 });
+            }
         }
       }
       targetUser.status = newStatus;
