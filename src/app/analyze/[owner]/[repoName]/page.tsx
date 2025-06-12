@@ -8,15 +8,22 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { PullRequest as PRType } from '@/types';
-import { Github, GitPullRequest, Eye, RefreshCw } from 'lucide-react';
+import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import Navbar from '@/components/layout/navbar'; // Import the new Navbar
+import Navbar from '@/components/layout/navbar'; 
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface PullRequestWithAnalysisStatus extends PRType {
+  id: number | string; // GitHub PR ID
+  html_url?: string;
+  created_at: string; // Keep as string from API initially
+  updated_at: string; // Keep as string from API initially
+  user?: { login: string; avatar_url?: string }; // GitHub user object
   analysisStatus?: 'analyzed' | 'pending' | 'failed' | 'not_started';
   analysisId?: string;
+  qualityScore?: number;
 }
 
 export default function RepositoryAnalysisPage() {
@@ -36,36 +43,25 @@ export default function RepositoryAnalysisPage() {
 
   async function fetchPullRequests(showToast = false) {
     if (showToast) setIsRefreshing(true);
-    setLoading(true);
+    else setLoading(true); // Full loading only if not a manual refresh
     setError(null);
     try {
-      const githubRes = await fetch(`/api/github/repos/${owner}/${repoName}/pulls`);
-      if (!githubRes.ok) throw new Error(`Failed to fetch PRs from GitHub: ${githubRes.statusText}`);
-      const githubPRsData = await githubRes.json();
+      // Single API call to the enhanced endpoint
+      const response = await fetch(`/api/github/repos/${owner}/${repoName}/pulls`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to fetch PRs: ${response.statusText}`);
+      }
+      const data = await response.json();
       
-      const dbRes = await fetch(`/api/repositories/${owner}/${repoName}/pulls`);
-      if (!dbRes.ok) throw new Error(`Failed to fetch PRs from DB: ${dbRes.statusText}`);
-      const dbPRsData = await dbRes.json();
-
-      const mergedPRs = githubPRsData.pull_requests.map((ghPr: any) => {
-        const dbPr = dbPRsData.pullRequests.find((pr: PRType) => pr.number === ghPr.number);
-        return {
-          ...ghPr,
-          _id: dbPr?._id,
-          githubId: ghPr.id,
-          author: { login: ghPr.user.login, avatar: ghPr.user.avatar_url },
-          analysisStatus: dbPr?.analysis ? 'analyzed' : 'not_started',
-          analysisId: dbPr?.analysis?._id || dbPr?.analysis,
-        };
-      });
-      
-      setPullRequests(mergedPRs);
+      setPullRequests(data.pull_requests || []);
       if (showToast) toast({ title: "Pull Requests Refreshed", description: "Fetched latest pull requests." });
 
     } catch (err: any) {
       console.error(err);
       setError(err.message);
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      setPullRequests([]); // Clear PRs on error
+      if(showToast) toast({ title: "Refresh Error", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
       if (showToast) setIsRefreshing(false);
@@ -78,7 +74,7 @@ export default function RepositoryAnalysisPage() {
     } else if (status === 'authenticated' && owner && repoName) {
       fetchPullRequests();
     }
-  }, [status, router, owner, repoName]); // Removed fetchPullRequests from dep array to avoid loop, call it directly
+  }, [status, router, owner, repoName]);
 
   const handleAnalyzePR = async (pullNumber: number) => {
     if (!owner || !repoName) {
@@ -98,16 +94,36 @@ export default function RepositoryAnalysisPage() {
       }
       const result = await response.json();
       toast({ title: "Analysis Started", description: `Analysis for PR #${pullNumber} is in progress.` });
+      // Optimistically update the PR's status or re-fetch
+      // For now, we'll redirect, which will effectively refresh data on the target page
       router.push(`/analyze/${owner}/${repoName}/${pullNumber}/${result.analysis._id}`);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message); // This error might be better shown as a toast as well
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
     } finally {
       setAnalyzingPR(null);
     }
   };
   
-  if (status === 'loading') {
+  const getStatusBadgeVariant = (prState: string) => {
+    switch (prState.toLowerCase()) {
+      case 'open': return 'default'; // Typically green or primary
+      case 'closed': return 'destructive';
+      case 'merged': return 'secondary'; // Or some other distinct color
+      default: return 'outline';
+    }
+  };
+  const getStatusBadgeClasses = (prState: string) => {
+    switch (prState.toLowerCase()) {
+      case 'open': return 'bg-green-100 text-green-700 border-green-400';
+      case 'closed': return 'bg-red-100 text-red-700 border-red-400';
+      case 'merged': return 'bg-purple-100 text-purple-700 border-purple-400';
+      default: return 'border-muted-foreground';
+    }
+  }
+
+
+  if (status === 'loading' ) {
      return <div className="flex flex-col min-h-screen"><Navbar /><div className="flex-1 flex items-center justify-center">Loading session...</div></div>;
   }
   if (!session) return null;
@@ -115,7 +131,7 @@ export default function RepositoryAnalysisPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <Navbar /> {/* Use the new Navbar */}
+      <Navbar /> 
       <main className="flex-1 container py-8">
         <Card className="shadow-lg">
           <CardHeader>
@@ -125,7 +141,7 @@ export default function RepositoryAnalysisPage() {
                     <GitPullRequest className="h-8 w-8 text-primary" /> 
                     Pull Requests for {owner}/{repoName}
                     </CardTitle>
-                    <CardDescription>Select a pull request to analyze or view existing analysis.</CardDescription>
+                    <CardDescription>Select a pull request to analyze or view existing analysis. Only open PRs can be analyzed.</CardDescription>
                 </div>
                 <Button variant="outline" className="mt-4 sm:mt-0" onClick={() => fetchPullRequests(true)} disabled={isRefreshing || loading}>
                     <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing && 'animate-spin'}`} />
@@ -134,57 +150,70 @@ export default function RepositoryAnalysisPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {loading && !pullRequests.length ? (
+            {loading && !isRefreshing && !pullRequests.length ? (
               <div className="space-y-4">
                 {[...Array(3)].map((_, i) => <SkeletonPRCard key={i} />)}
               </div>
             ) : error ? (
-              <p className="text-destructive text-center">{error}</p>
+              <p className="text-destructive text-center py-8">{error}</p>
             ) : pullRequests.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No open pull requests found for this repository.</p>
+              <p className="text-muted-foreground text-center py-8">No pull requests found for this repository matching the current filters (typically 'open' PRs).</p>
             ) : (
               <div className="space-y-4">
                 {pullRequests.map(pr => (
-                  <Card key={pr.id || pr._id} className="hover:shadow-md transition-shadow">
-                    <CardHeader className="flex flex-row items-start justify-between gap-4">
-                      <div>
+                  <Card key={pr.id} className="hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-3">
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
                         <CardTitle className="text-xl hover:text-primary transition-colors">
-                           <Link href={pr.html_url || '#'} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                            #{pr.number}: {pr.title} <Github className="h-4 w-4 opacity-70"/>
+                           <Link href={pr.html_url || '#'} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2">
+                            <Github className="h-4 w-4 mt-1 opacity-70 flex-shrink-0"/>
+                            <span>#{pr.number}: {pr.title}</span>
                            </Link>
                         </CardTitle>
-                        <CardDescription className="mt-1 text-xs">
-                          Opened by <span className="font-medium">{pr.author?.login}</span>{' '}
-                          {formatDistanceToNow(new Date(pr.created_at), { addSuffix: true })}
-                        </CardDescription>
+                        <Badge variant={getStatusBadgeVariant(pr.state)} className={getStatusBadgeClasses(pr.state)}>
+                          {pr.state}
+                        </Badge>
                       </div>
-                      <Badge variant={pr.state === 'open' ? 'default' : 'secondary'} className={pr.state === 'open' ? 'bg-green-500/20 text-green-700 border-green-400' : 'bg-red-500/20 text-red-700 border-red-400'}>
-                        {pr.state}
-                      </Badge>
+                      <CardDescription className="mt-1 text-xs">
+                        Opened by <span className="font-medium">{pr.user?.login || pr.author?.login}</span>{' '}
+                        {formatDistanceToNow(new Date(pr.created_at), { addSuffix: true })}
+                      </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="pt-0 pb-3">
                       <p className="text-sm text-muted-foreground line-clamp-2">{pr.body || 'No description provided.'}</p>
                     </CardContent>
-                    <CardFooter className="flex justify-end gap-2">
-                      {pr.analysisStatus === 'analyzed' && pr.analysisId ? (
-                        <Button asChild variant="outline">
-                          <Link href={`/analyze/${owner}/${repoName}/${pr.number}/${pr.analysisId}`}>
-                            <Eye className="mr-2 h-4 w-4" /> View Analysis
-                          </Link>
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={() => handleAnalyzePR(pr.number)}
-                          disabled={analyzingPR === pr.number || pr.state !== 'open'}
-                          title={pr.state !== 'open' ? "Can only analyze open PRs" : ""}
-                        >
-                          {analyzingPR === pr.number ? (
-                            <><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
-                          ) : (
-                            <><GitPullRequest className="mr-2 h-4 w-4" /> Analyze PR</>
-                          )}
-                        </Button>
-                      )}
+                    <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                      <div className="text-xs text-muted-foreground">
+                        {pr.analysisStatus === 'analyzed' ? (
+                          <span className="flex items-center gap-1 text-green-600"><CheckCircle className="h-4 w-4" /> Analysis complete</span>
+                        ) : pr.analysisStatus === 'pending' ? (
+                          <span className="flex items-center gap-1 text-amber-600"><Clock className="h-4 w-4" /> Analysis pending...</span>
+                        ) : (
+                           <span className="flex items-center gap-1"><XCircle className="h-4 w-4" /> Not analyzed</span>
+                        )}
+                      </div>
+                      <div className="flex gap-2 w-full sm:w-auto justify-end">
+                        {pr.analysisStatus === 'analyzed' && pr.analysisId ? (
+                          <Button asChild variant="outline" className="w-full sm:w-auto">
+                            <Link href={`/analyze/${owner}/${repoName}/${pr.number}/${pr.analysisId}`}>
+                              <Eye className="mr-2 h-4 w-4" /> View Analysis
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => handleAnalyzePR(pr.number)}
+                            disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open'}
+                            title={pr.state.toLowerCase() !== 'open' ? "Can only analyze open PRs" : `Analyze PR #${pr.number}`}
+                            className="w-full sm:w-auto"
+                          >
+                            {analyzingPR === pr.number ? (
+                              <><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
+                            ) : (
+                              <><GitPullRequest className="mr-2 h-4 w-4" /> Analyze PR</>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </CardFooter>
                   </Card>
                 ))}
@@ -204,17 +233,23 @@ export default function RepositoryAnalysisPage() {
 
 function SkeletonPRCard() {
     return (
-      <Card>
-        <CardHeader>
-          <div className="h-6 bg-muted rounded w-3/4 mb-2 animate-pulse"></div>
-          <div className="h-4 bg-muted rounded w-1/4 animate-pulse"></div>
+      <Card className="animate-pulse">
+        <CardHeader className="pb-3">
+          <div className="flex justify-between items-start">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-3/4 " /> 
+              <Skeleton className="h-4 w-1/2" /> 
+            </div>
+            <Skeleton className="h-6 w-16 rounded-full" /> 
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="h-4 bg-muted rounded w-full mb-1 animate-pulse"></div>
-          <div className="h-4 bg-muted rounded w-5/6 animate-pulse"></div>
+        <CardContent className="pt-0 pb-3">
+          <Skeleton className="h-4 w-full mb-1" />
+          <Skeleton className="h-4 w-5/6" />
         </CardContent>
-        <CardFooter className="flex justify-end">
-          <div className="h-10 bg-muted rounded w-32 animate-pulse"></div>
+        <CardFooter className="flex justify-between items-center">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-10 w-32" />
         </CardFooter>
       </Card>
     )

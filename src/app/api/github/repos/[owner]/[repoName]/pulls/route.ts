@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
@@ -45,11 +46,12 @@ export async function GET(
     const mergedPRs = githubPRs.map(ghPR => {
       const localMatch = localPRs.find(localDbPr => localDbPr.number === ghPR.number);
       return {
-        id: ghPR.id, // GitHub's global PR ID
+        // GitHub PR data
+        id: ghPR.id, // GitHub's global PR ID (distinct from our _id)
         number: ghPR.number,
         title: ghPR.title,
         body: ghPR.body,
-        state: ghPR.state,
+        state: ghPR.state, // 'open', 'closed', etc.
         html_url: ghPR.html_url,
         created_at: ghPR.created_at,
         updated_at: ghPR.updated_at,
@@ -57,8 +59,9 @@ export async function GET(
             login: ghPR.user?.login || 'unknown',
             avatar_url: ghPR.user?.avatar_url || ''
         },
-        // Local DB info
-        _id: localMatch?._id?.toString(), // Local DB document ID
+        // Local DB info merged in
+        _id: localMatch?._id?.toString(), // Our local database document ID for this PR
+        author: localMatch?.author || { login: ghPR.user?.login || 'unknown', avatar: ghPR.user?.avatar_url || '' }, // ensure author from local if available
         analysisStatus: localMatch?.analysis ? 'analyzed' : 'not_started',
         analysisId: localMatch?.analysis?._id?.toString() || (typeof localMatch?.analysis === 'string' ? localMatch.analysis : undefined),
         qualityScore: (localMatch?.analysis as any)?.qualityScore, // if populated
