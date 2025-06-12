@@ -180,3 +180,15 @@ export interface AdminUserView {
   updatedAt: Date;
 }
 
+export interface AnalysisReportItem {
+  prId: string;
+  prNumber: number;
+  prTitle: string;
+  repositoryFullName: string;
+  prAuthor: string;
+  analysisDate: Date;
+  qualityScore: number | null;
+  criticalIssuesCount: number;
+  highIssuesCount: number;
+  analysisId?: string; 
+}

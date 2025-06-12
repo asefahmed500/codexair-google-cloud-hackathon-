@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users } from 'lucide-react'; // Added FileText, Users
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -34,9 +34,6 @@ export default function Navbar() {
     );
   }
 
-  // This component is intended for use on authenticated pages.
-  // If a page using this Navbar is somehow accessed without a session,
-  // it might be better to handle redirection at the page level.
   if (!session) {
      return (
        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -45,7 +42,6 @@ export default function Navbar() {
             <BarChartBig className="h-7 w-7 text-primary" />
             <span className="font-bold text-xl text-foreground font-headline">codexair</span>
           </Link>
-           {/* Optionally, a login button if this were used on public pages */}
         </div>
       </header>
      );
@@ -82,6 +78,21 @@ export default function Navbar() {
               <DropdownMenuItem onClick={() => router.push('/dashboard')}>
                 <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
               </DropdownMenuItem>
+              
+              {session.user.role === 'admin' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Admin</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => router.push('/admin')}>
+                    <Users className="mr-2 h-4 w-4" /> User Management
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push('/admin/reports')}>
+                    <FileText className="mr-2 h-4 w-4" /> Reports
+                  </DropdownMenuItem>
+                </>
+              )}
+
+              <DropdownMenuSeparator />
               <DropdownMenuItem disabled>
                 <UserCircle className="mr-2 h-4 w-4" />
                 <span>Profile</span>
