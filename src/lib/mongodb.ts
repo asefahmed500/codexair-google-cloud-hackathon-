@@ -3,7 +3,10 @@ import { MongoClient } from 'mongodb';
 import mongoose from 'mongoose';
 import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType, FileAnalysisItem, AdminUserView as AdminUserViewType } from '@/types';
 
-const MONGODB_URI = process.env.MONGODB_URI;
+const RAW_MONGODB_URI_FROM_ENV = process.env.MONGODB_URI;
+console.log(`[MongoDB Setup] Attempting to use MONGODB_URI. Value read from environment: "${RAW_MONGODB_URI_FROM_ENV}"`);
+
+const MONGODB_URI = RAW_MONGODB_URI_FROM_ENV;
 
 // IMPORTANT: If you see the error below in your console, it means you MUST set your MONGODB_URI in the .env file.
 // The .env file is in the root of your project. Open it and replace the placeholder value.
@@ -14,10 +17,14 @@ if (!MONGODB_URI || MONGODB_URI.trim() === "" || !(MONGODB_URI.startsWith("mongo
   console.error('------------------------------------------------------------------------------------------');
   console.error('Please ensure your .env file (in the project root) contains a valid MONGODB_URI.');
   console.error('It must start with "mongodb://" or "mongodb+srv://".');
-  console.error(`Current value found: "${MONGODB_URI}"`);
+  console.error(`Current value being checked: "${MONGODB_URI}" (Raw value from env: "${RAW_MONGODB_URI_FROM_ENV}")`);
   console.error('The application cannot start without a valid MongoDB connection string.');
   console.error('Example: MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/yourDatabaseName');
   console.error('------------------------------------------------------------------------------------------');
+  console.error('[MongoDB Setup] VALIDATION FAILED. Details:');
+  console.error(`  - Condition 1 (!MONGODB_URI): ${!MONGODB_URI}`);
+  console.error(`  - Condition 2 (MONGODB_URI.trim() === ""): ${MONGODB_URI ? MONGODB_URI.trim() === "" : 'N/A (URI is falsy)'}`);
+  console.error(`  - Condition 3 (!(MONGODB_URI.startsWith("mongodb://") || MONGODB_URI.startsWith("mongodb+srv://"))): ${MONGODB_URI ? !(MONGODB_URI.startsWith("mongodb://") || MONGODB_URI.startsWith("mongodb+srv://")) : 'N/A (URI is falsy)'}`);
   throw new Error('CRITICAL CONFIGURATION ERROR: Invalid or missing MONGODB_URI. Check console & .env file.');
 }
 
@@ -221,10 +228,10 @@ export const connectMongoose = async () => {
   }
   
   global._mongooseConnection = mongoose.connect(MONGODB_URI!).then((m) => {
-    console.log('Mongoose connected.');
+    console.log('[MongoDB Setup] Mongoose connected successfully.');
     return m;
   }).catch(err => {
-    console.error('Mongoose connection error:', err);
+    console.error('[MongoDB Setup] Mongoose connection error:', err);
     global._mongooseConnection = null; 
     throw err;
   });
