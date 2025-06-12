@@ -6,10 +6,28 @@ import { getPullRequestDetails, getPullRequestFiles, getFileContent, getReposito
 import { analyzeCode } from '@/ai/flows/code-quality-analysis'; 
 import { PullRequest, Analysis, Repository, connectMongoose } from '@/lib/mongodb';
 import type { CodeAnalysisOutput as AIAnalysisOutput, FileAnalysisItem, PullRequest as PRType, CodeFile as CodeFileType } from '@/types';
-import { ai } from '@/ai/genkit'; // Import the Genkit ai instance
+import { ai } from '@/ai/genkit';
 
 const MAX_FILES_TO_ANALYZE = 10; 
-const EMBEDDING_DIMENSIONS = 768; // As specified in PRD
+const EMBEDDING_DIMENSIONS = 768;
+
+/**
+ * Extracts added lines from a git patch string.
+ * @param patch The patch string.
+ * @returns A string containing only the added lines, or an empty string if no added lines are found.
+ */
+function extractAddedLinesFromPatch(patch?: string): string {
+  if (!patch) return '';
+  const lines = patch.split('\n');
+  const addedLines: string[] = [];
+  for (const line of lines) {
+    // Line is an addition if it starts with '+' but not '+++' (which is a diff header)
+    if (line.startsWith('+') && !line.startsWith('+++')) {
+      addedLines.push(line.substring(1)); // Remove the leading '+'
+    }
+  }
+  return addedLines.join('\n');
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,41 +85,59 @@ export async function POST(request: NextRequest) {
 
     const ghFiles = await getPullRequestFiles(owner, repoName, pullNumber);
 
-    const fileAnalysesPromises = ghFiles
-      .filter(file => file.status !== 'removed' && file.patch && (file.filename?.match(/\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i)))
-      .slice(0, MAX_FILES_TO_ANALYZE)
-      .map(async (file): Promise<FileAnalysisItem | null> => {
+    const filesToConsider = ghFiles
+      .filter(file => 
+        (file.status === 'added' || file.status === 'modified' || file.status === 'renamed') &&
+        file.filename?.match(/\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i)
+      )
+      .slice(0, MAX_FILES_TO_ANALYZE);
+
+    const fileAnalysesPromises = filesToConsider.map(async (file): Promise<FileAnalysisItem | null> => {
         try {
-          let contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
+          let contentToAnalyze: string | null = null;
+          let analysisContext = "full file"; // For logging
+
+          if (file.status === 'added') {
+            contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
+            analysisContext = "full file (added)";
+          } else if ((file.status === 'modified' || file.status === 'renamed') && file.patch) {
+            const addedLines = extractAddedLinesFromPatch(file.patch);
+            if (addedLines.trim() !== '') {
+              contentToAnalyze = addedLines;
+              analysisContext = "diff (added lines)";
+            } else {
+              console.warn(`Patch for ${file.filename} (status: ${file.status}) yielded no added lines. Analyzing full content.`);
+              contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
+              analysisContext = "full file (fallback from diff)";
+            }
+          } else {
+            // Fallback for other scenarios if any, or if conditions aren't met
+             console.warn(`Unhandled file status or condition for ${file.filename} (status: ${file.status}). Analyzing full content as fallback.`);
+            contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
+            analysisContext = "full file (general fallback)";
+          }
           
           if (!contentToAnalyze) {
-            console.warn(`Could not get content for ${file.filename}, skipping its analysis.`);
+            console.warn(`Could not get content for ${file.filename} (status: ${file.status}) using ${analysisContext}, skipping its analysis.`);
             return null; 
           }
           
-          if (contentToAnalyze.length > 50000) { 
-             console.warn(`File ${file.filename} is too large (${contentToAnalyze.length} chars), truncating.`);
-             contentToAnalyze = contentToAnalyze.substring(0, 50000);
+          console.log(`Analyzing ${file.filename} (context: ${analysisContext})`);
+
+          if (contentToAnalyze.length > 70000) { // Increased limit slightly for diffs that might be larger than individual small files
+             console.warn(`Content for ${file.filename} is too large (${contentToAnalyze.length} chars), truncating.`);
+             contentToAnalyze = contentToAnalyze.substring(0, 70000);
           }
 
-          // Get AI analysis (without embedding from this flow)
           const aiResponse: AIAnalysisOutput = await analyzeCode({ code: contentToAnalyze, filename: file.filename });
           
-          // Generate embedding separately using a dedicated model
           let fileEmbedding: number[] | undefined = undefined;
-          if (contentToAnalyze) {
+          if (contentToAnalyze) { // Use the same content (diff or full file) for embedding
             try {
-              // Use 'googleai/text-embedding-004' or 'embedding-001' as per PRD/availability
-              // Genkit v1.x uses 'model' in ai.generate for embeddings too
               const embeddingResult = await ai.generate({
-                model: 'googleai/text-embedding-004', // Dedicated embedding model
+                model: 'googleai/text-embedding-004',
                 prompt: contentToAnalyze,
               });
-
-              // The structure of embeddingResult.output depends on the model and Genkit plugin.
-              // Common patterns:
-              // 1. embeddingResult.output is directly the array of numbers.
-              // 2. embeddingResult.output is an object like { embedding: [...] } or { vector: [...] }
               if (embeddingResult.output && Array.isArray(embeddingResult.output) && embeddingResult.output.every(n => typeof n === 'number')) {
                   fileEmbedding = embeddingResult.output as number[];
               } else if (embeddingResult.output && typeof embeddingResult.output === 'object') {
@@ -119,9 +155,8 @@ export async function POST(request: NextRequest) {
                 console.warn(`Generated embedding for ${file.filename} has ${fileEmbedding.length} dimensions, expected ${EMBEDDING_DIMENSIONS}. Embedding will not be stored.`);
                 fileEmbedding = undefined;
               }
-
             } catch (embeddingError: any) {
-              console.error(`Error generating embedding for file ${file.filename}:`, embeddingError.message, embeddingError.stack);
+              console.error(`Error generating embedding for file ${file.filename}:`, embeddingError.message);
             }
           }
 
@@ -134,10 +169,10 @@ export async function POST(request: NextRequest) {
             suggestions: aiResponse.suggestions || [],
             metrics: aiResponse.metrics || { linesOfCode: 0, cyclomaticComplexity: 0, cognitiveComplexity: 0, duplicateBlocks: 0 },
             aiInsights: aiResponse.aiInsights || '',
-            vectorEmbedding: fileEmbedding, // Store the new embedding
+            vectorEmbedding: fileEmbedding,
           };
         } catch (error: any) {
-          console.error(`Error analyzing file ${file.filename}:`, error.message);
+          console.error(`Error analyzing file ${file.filename}:`, error.message, error.stack);
           return null; 
         }
       });
@@ -152,12 +187,12 @@ export async function POST(request: NextRequest) {
       securityIssues: fileAnalysesResults.flatMap(a => a.securityIssues || []),
       suggestions: fileAnalysesResults.flatMap(a => a.suggestions || []),
       metrics: {
-        linesOfCode: ghFiles.reduce((sum, f) => sum + (f.additions || 0), 0), 
+        linesOfCode: fileAnalysesResults.reduce((sum, fa) => sum + (fa.metrics?.linesOfCode || 0), 0), // Sum lines from analyzed content
         cyclomaticComplexity: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.cyclomaticComplexity || 0), 0) / totalAnalyzedFiles : 0,
         cognitiveComplexity: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.cognitiveComplexity || 0), 0) / totalAnalyzedFiles : 0,
         duplicateBlocks: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.duplicateBlocks || 0), 0) : 0,
       },
-      aiInsights: fileAnalysesResults.map(a => `${a.filename}:\n${a.aiInsights}`).join('\n\n---\n\n') || 'No AI insights generated.',
+      aiInsights: fileAnalysesResults.map(a => `${a.filename} (Analyzed: ${a.metrics?.linesOfCode || 'N/A'} lines):\n${a.aiInsights}`).join('\n\n---\n\n') || 'No AI insights generated.',
       fileAnalyses: fileAnalysesResults,
     };
     
@@ -192,7 +227,7 @@ export async function POST(request: NextRequest) {
       savedPR.title = ghPullRequest.title;
       savedPR.body = ghPullRequest.body;
       savedPR.state = ghPullRequest.state as PRType['state'];
-      savedPR.files = prFiles;
+      savedPR.files = prFiles; // Update files in case PR changed
       savedPR.updatedAt = new Date(ghPullRequest.updated_at);
     }
     await savedPR.save();
