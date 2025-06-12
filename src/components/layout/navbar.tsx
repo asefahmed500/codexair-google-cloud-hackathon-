@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users } from 'lucide-react'; // Added FileText, Users
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb } from 'lucide-react'; // Added Lightbulb
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -55,6 +55,12 @@ export default function Navbar() {
           <span className="font-bold text-xl text-foreground font-headline">codexair</span>
         </Link>
         <div className="flex items-center gap-4">
+          <Button asChild variant="ghost" className="text-foreground hover:bg-accent/10">
+            <Link href="/explain">
+              <Lightbulb className="mr-2 h-4 w-4" />
+              Explain Code
+            </Link>
+          </Button>
           <Button asChild variant="ghost" className="text-foreground hover:bg-accent/10">
             <Link href="/analyze">
               <GitFork className="mr-2 h-4 w-4" />
@@ -113,3 +119,4 @@ export default function Navbar() {
     </header>
   );
 }
+
