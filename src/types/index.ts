@@ -161,14 +161,14 @@ export interface DashboardData {
 
 export interface SimilarCodeResult {
   analysisId: string; // _id of the Analysis document where similar code was found
-  owner: string;
-  repoName: string;
-  prNumber: number;
-  prTitle: string;
-  prAuthorLogin: string;
-  prCreatedAt: Date;
+  owner: string; // From populated PR details
+  repoName: string; // From populated PR details
+  prNumber: number; // From populated PR details
+  prTitle: string; // From populated PR details
+  prAuthorLogin: string; // From populated PR details author.login
+  prCreatedAt: Date; // From populated PR details createdAt
   filename: string; // Filename within that PR's analysis
-  aiInsights: string; // AI insights for that specific file
+  aiInsights: string; // AI insights for that specific file in the historical analysis
   score: number; // Similarity score from vector search
 }
 
@@ -195,3 +195,4 @@ export interface AnalysisReportItem {
   highIssuesCount: number;
   analysisId?: string; 
 }
+

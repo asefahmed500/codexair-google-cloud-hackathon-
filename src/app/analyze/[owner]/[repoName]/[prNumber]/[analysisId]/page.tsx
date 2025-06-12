@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { CodeAnalysis, PullRequest as PRType, SecurityIssue, Suggestion, FileAnalysisItem, SimilarCodeResult } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -227,7 +227,10 @@ export default function AnalysisDetailsPage() {
                                 onClick={() => handleFindSimilarCode(issue.file, issue.title, 'security')}
                                 disabled={isSearchingSimilarCode}
                               >
-                                <Search className="mr-1 h-3 w-3" /> {isSearchingSimilarCode ? 'Searching...' : 'Find similar past issues'}
+                                {isSearchingSimilarCode && currentSearchContext?.title === issue.title ? 
+                                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> : 
+                                  <><Search className="mr-1 h-3 w-3" />Find similar past issues</>
+                                }
                               </Button>
                             </DialogTrigger>
                           </AccordionContent>
@@ -276,7 +279,10 @@ export default function AnalysisDetailsPage() {
                                 onClick={() => handleFindSimilarCode(suggestion.file, suggestion.title, 'suggestion')}
                                 disabled={isSearchingSimilarCode}
                               >
-                                <Search className="mr-1 h-3 w-3" /> {isSearchingSimilarCode ? 'Searching...' : 'Find similar past issues'}
+                                {isSearchingSimilarCode && currentSearchContext?.title === suggestion.title ? 
+                                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> : 
+                                  <><Search className="mr-1 h-3 w-3" />Find similar past issues</>
+                                }
                               </Button>
                             </DialogTrigger>
                           </AccordionContent>
@@ -351,17 +357,22 @@ export default function AnalysisDetailsPage() {
           
           <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Similar Code Found</DialogTitle>
+              <DialogTitle>Similar Code Found for: <span className="text-primary">{currentSearchContext?.title || "Selected Issue"}</span></DialogTitle>
               <DialogDescription>
-                Showing code snippets from past analyses related to: <span className="font-semibold">{currentSearchContext?.title || "selected issue"}</span>.
+                Showing code snippets from past analyses that are semantically similar to the context of <span className="font-semibold">"{currentSearchContext?.title || "the selected issue/suggestion"}"</span>.
               </DialogDescription>
             </DialogHeader>
-            {isSearchingSimilarCode && <div className="flex items-center justify-center py-10"><RefreshCw className="h-6 w-6 animate-spin text-primary" /> <span className="ml-2">Searching...</span></div>}
+            {isSearchingSimilarCode && 
+                <div className="flex items-center justify-center py-10">
+                    <RefreshCw className="h-6 w-6 animate-spin text-primary" /> 
+                    <span className="ml-2">Searching for similar patterns...</span>
+                </div>
+            }
             {searchError && <p className="text-destructive text-center py-4">Error: {searchError}</p>}
             {!isSearchingSimilarCode && !searchError && similarCodeResults.length === 0 && (
               <div className="text-center py-10 text-muted-foreground">
                 <Info className="mx-auto h-8 w-8 mb-2" />
-                No significantly similar code snippets found from recent analyses.
+                No significantly similar code snippets found in recent analyses.
               </div>
             )}
             {!isSearchingSimilarCode && !searchError && similarCodeResults.length > 0 && (
@@ -375,17 +386,20 @@ export default function AnalysisDetailsPage() {
                                 href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`} 
                                 className="text-primary hover:underline"
                                 target="_blank" rel="noopener noreferrer"
+                                title={`View Analysis: ${result.prTitle}`}
                                 >
                                 PR #{result.prNumber}: {result.prTitle}
                             </Link>
                         </CardTitle>
                         <CardDescription className="text-xs">
-                          In <code className="bg-background px-1 py-0.5 rounded text-xs">{result.filename}</code> by {result.prAuthorLogin} on {format(new Date(result.prCreatedAt), 'MMM d, yyyy')}
+                          Found in <code className="bg-background px-1 py-0.5 rounded text-xs">{result.filename}</code> (repo: {result.owner}/{result.repoName})
+                          <br/>
+                          By: {result.prAuthorLogin || 'N/A'} on {format(new Date(result.prCreatedAt), 'MMM d, yyyy')}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <p className="text-xs text-muted-foreground mb-1">Similarity Score: <Badge variant="secondary">{(result.score * 100).toFixed(1)}%</Badge></p>
-                        <p className="text-sm font-semibold text-foreground">AI Insights Snippet:</p>
+                        <p className="text-sm font-semibold text-foreground">AI Insights for this file (from past analysis):</p>
                         <ScrollArea className="max-h-28 w-full rounded-md border bg-background p-2 shadow-inner">
                             <pre className="text-xs whitespace-pre-wrap text-muted-foreground font-mono">{result.aiInsights || "No specific AI insight for this file."}</pre>
                         </ScrollArea>
@@ -470,3 +484,4 @@ function AnalysisDetailsLoadingSkeleton() {
     </div>
   );
 }
+

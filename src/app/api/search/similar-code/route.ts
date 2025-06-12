@@ -64,3 +64,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error during similarity search', details: error.message }, { status: 500 });
   }
 }
+
