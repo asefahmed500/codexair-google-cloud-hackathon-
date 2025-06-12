@@ -15,7 +15,7 @@ export interface Repository {
 
 export interface CodeFile {
   filename: string;
-  status: 'added' | 'modified' | 'removed';
+  status: 'added' | 'modified' | 'removed' | 'renamed' | 'copied' | 'changed' | 'unchanged'; // GitHub uses more statuses
   additions: number;
   deletions: number;
   changes: number;
@@ -26,6 +26,8 @@ export interface CodeFile {
 export interface PullRequest {
   _id: string;
   repositoryId: string; // This should refer to the _id of the Repository document
+  owner: string; // For easier linking and display
+  repoName: string; // For easier linking and display
   githubId: number;
   number: number;
   title: string;
@@ -156,18 +158,16 @@ export interface DashboardData {
 }
 
 export interface SimilarCodeResult {
-  originalDocId: string; 
-  pullRequestId: string;
-  prInfo?: { 
-    title: string;
-    number: number;
-    authorLogin: string;
-    createdAt: Date;
-  };
-  filename: string;
-  qualityScore: number;
-  aiInsights: string; 
-  score: number; 
+  analysisId: string; // _id of the Analysis document where similar code was found
+  owner: string;
+  repoName: string;
+  prNumber: number;
+  prTitle: string;
+  prAuthorLogin: string;
+  prCreatedAt: Date;
+  filename: string; // Filename within that PR's analysis
+  aiInsights: string; // AI insights for that specific file
+  score: number; // Similarity score from vector search
 }
 
 // Type for user data displayed in admin panel

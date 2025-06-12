@@ -4,13 +4,23 @@ import mongoose from 'mongoose';
 import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType, FileAnalysisItem, AdminUserView as AdminUserViewType } from '@/types';
 
 const MONGODB_URI = process.env.MONGODB_URI;
-console.log('DEBUG: MONGODB_URI being used by mongodb.ts:', MONGODB_URI); 
 
 // IMPORTANT: If you see the error below in your console, it means you MUST set your MONGODB_URI in the .env file.
 // The .env file is in the root of your project. Open it and replace the placeholder value.
+// THE ERROR: "CRITICAL CONFIGURATION ERROR: The MONGODB_URI environment variable is not defined..."
 if (!MONGODB_URI || MONGODB_URI.trim() === "" || !(MONGODB_URI.startsWith("mongodb://") || MONGODB_URI.startsWith("mongodb+srv://"))) {
-  throw new Error('CRITICAL CONFIGURATION ERROR: The MONGODB_URI environment variable is not defined, is empty, or has an invalid scheme. Please define it in your .env (or .env.local) file with your actual MongoDB connection string. It must start with "mongodb://" or "mongodb+srv://". Current value: "' + MONGODB_URI + '". The application cannot start without this.');
+  console.error('------------------------------------------------------------------------------------------');
+  console.error('CRITICAL CONFIGURATION ERROR: MONGODB_URI IS MISSING OR INVALID IN YOUR .env FILE!');
+  console.error('------------------------------------------------------------------------------------------');
+  console.error('Please ensure your .env file (in the project root) contains a valid MONGODB_URI.');
+  console.error('It must start with "mongodb://" or "mongodb+srv://".');
+  console.error(`Current value found: "${MONGODB_URI}"`);
+  console.error('The application cannot start without a valid MongoDB connection string.');
+  console.error('Example: MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/yourDatabaseName');
+  console.error('------------------------------------------------------------------------------------------');
+  throw new Error('CRITICAL CONFIGURATION ERROR: Invalid or missing MONGODB_URI. Check console & .env file.');
 }
+
 
 let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
@@ -78,9 +88,9 @@ verificationTokenSchema.index({ identifier: 1, token: 1 }, { unique: true });
 
 
 const repositorySchema = new mongoose.Schema<RepoType>({
-  name: String,
-  fullName: String,
-  owner: String,
+  name: { type: String, required: true },
+  fullName: { type: String, required: true },
+  owner: { type: String, required: true },
   githubId: { type: Number, unique: true, required: true },
   language: String,
   stars: Number,
@@ -153,7 +163,9 @@ const analysisSchema = new mongoose.Schema<AnalysisType>({
 
 
 const pullRequestSchema = new mongoose.Schema<PRType>({
-  repositoryId: { type: String, required: true }, 
+  repositoryId: { type: String, required: true }, // Refers to Repository._id
+  owner: { type: String, required: true }, // Added for easier linking from search results
+  repoName: { type: String, required: true }, // Added for easier linking from search results
   githubId: { type: Number, required: true },
   number: { type: Number, required: true },
   title: String,

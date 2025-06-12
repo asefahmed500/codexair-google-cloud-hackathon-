@@ -49,24 +49,27 @@ export async function POST(request: NextRequest) {
 
     let localRepo = await Repository.findOne({ fullName: repoFullName, userId: session.user.id });
     if (!localRepo) {
-      const ghRepo = await getRepositoryDetails(owner, repoName);
+      const ghRepoDetails = await getRepositoryDetails(owner, repoName); // Renamed to avoid conflict
+      if (!ghRepoDetails) {
+        return NextResponse.json({ error: `GitHub repository ${repoFullName} not found or inaccessible.` }, { status: 404 });
+      }
       localRepo = await Repository.findOneAndUpdate(
-        { githubId: ghRepo.id, userId: session.user.id },
+        { githubId: ghRepoDetails.id, userId: session.user.id },
         {
-          name: ghRepo.name,
-          fullName: ghRepo.full_name,
-          owner: ghRepo.owner.login,
-          githubId: ghRepo.id,
-          language: ghRepo.language || 'N/A',
-          stars: ghRepo.stargazers_count || 0,
-          isPrivate: ghRepo.private,
+          name: ghRepoDetails.name,
+          fullName: ghRepoDetails.full_name,
+          owner: ghRepoDetails.owner.login,
+          githubId: ghRepoDetails.id,
+          language: ghRepoDetails.language || 'N/A',
+          stars: ghRepoDetails.stargazers_count || 0,
+          isPrivate: ghRepoDetails.private,
           userId: session.user.id,
         },
         { upsert: true, new: true }
       );
     }
     if (!localRepo) {
-        return NextResponse.json({ error: `Repository ${repoFullName} not found or could not be synced.` }, { status: 404 });
+        return NextResponse.json({ error: `Repository ${repoFullName} not found locally or could not be synced.` }, { status: 404 });
     }
 
     const existingPR = await PullRequest.findOne({
@@ -75,7 +78,9 @@ export async function POST(request: NextRequest) {
     }).populate('analysis');
 
     if (existingPR && existingPR.analysis) {
-      return NextResponse.json({ analysis: existingPR.analysis, pullRequest: existingPR });
+      console.log(`Analysis already exists for PR #${pullNumber} in ${repoFullName}. Returning existing analysis.`);
+      const populatedPR = await PullRequest.findById(existingPR._id).populate('analysis').lean();
+      return NextResponse.json({ analysis: populatedPR.analysis, pullRequest: populatedPR });
     }
 
     const ghPullRequest = await getPullRequestDetails(owner, repoName, pullNumber);
@@ -95,7 +100,7 @@ export async function POST(request: NextRequest) {
     const fileAnalysesPromises = filesToConsider.map(async (file): Promise<FileAnalysisItem | null> => {
         try {
           let contentToAnalyze: string | null = null;
-          let analysisContext = "full file"; // For logging
+          let analysisContext = "full file"; 
 
           if (file.status === 'added') {
             contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
@@ -111,7 +116,6 @@ export async function POST(request: NextRequest) {
               analysisContext = "full file (fallback from diff)";
             }
           } else {
-            // Fallback for other scenarios if any, or if conditions aren't met
              console.warn(`Unhandled file status or condition for ${file.filename} (status: ${file.status}). Analyzing full content as fallback.`);
             contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
             analysisContext = "full file (general fallback)";
@@ -124,7 +128,7 @@ export async function POST(request: NextRequest) {
           
           console.log(`Analyzing ${file.filename} (context: ${analysisContext})`);
 
-          if (contentToAnalyze.length > 70000) { // Increased limit slightly for diffs that might be larger than individual small files
+          if (contentToAnalyze.length > 70000) { 
              console.warn(`Content for ${file.filename} is too large (${contentToAnalyze.length} chars), truncating.`);
              contentToAnalyze = contentToAnalyze.substring(0, 70000);
           }
@@ -132,25 +136,26 @@ export async function POST(request: NextRequest) {
           const aiResponse: AIAnalysisOutput = await analyzeCode({ code: contentToAnalyze, filename: file.filename });
           
           let fileEmbedding: number[] | undefined = undefined;
-          if (contentToAnalyze) { // Use the same content (diff or full file) for embedding
+          if (contentToAnalyze) { 
             try {
               const embeddingResult = await ai.generate({
                 model: 'googleai/text-embedding-004',
                 prompt: contentToAnalyze,
               });
-              if (embeddingResult.output && Array.isArray(embeddingResult.output) && embeddingResult.output.every(n => typeof n === 'number')) {
-                  fileEmbedding = embeddingResult.output as number[];
-              } else if (embeddingResult.output && typeof embeddingResult.output === 'object') {
-                  const outputObj = embeddingResult.output as any;
-                  if (outputObj.embedding && Array.isArray(outputObj.embedding) && outputObj.embedding.every((n:any) => typeof n === 'number')) {
-                      fileEmbedding = outputObj.embedding;
-                  } else if (outputObj.vector && Array.isArray(outputObj.vector) && outputObj.vector.every((n:any) => typeof n === 'number')) {
-                      fileEmbedding = outputObj.vector;
-                  }
+              // Standardize access to the embedding output
+              let rawEmbedding = embeddingResult.output;
+              if (rawEmbedding && typeof rawEmbedding === 'object' && 'embedding' in rawEmbedding && Array.isArray(rawEmbedding.embedding)) {
+                  fileEmbedding = rawEmbedding.embedding;
+              } else if (rawEmbedding && typeof rawEmbedding === 'object' && 'vector' in rawEmbedding && Array.isArray(rawEmbedding.vector)) {
+                  fileEmbedding = rawEmbedding.vector;
+              } else if (Array.isArray(rawEmbedding)) {
+                  fileEmbedding = rawEmbedding;
               }
 
-              if (!fileEmbedding) {
+
+              if (!fileEmbedding || !fileEmbedding.every(n => typeof n === 'number')) {
                  console.warn(`Unexpected or missing embedding format for ${file.filename} from embedding model. Output:`, embeddingResult.output);
+                 fileEmbedding = undefined;
               } else if (fileEmbedding.length !== EMBEDDING_DIMENSIONS) {
                 console.warn(`Generated embedding for ${file.filename} has ${fileEmbedding.length} dimensions, expected ${EMBEDDING_DIMENSIONS}. Embedding will not be stored.`);
                 fileEmbedding = undefined;
@@ -187,12 +192,12 @@ export async function POST(request: NextRequest) {
       securityIssues: fileAnalysesResults.flatMap(a => a.securityIssues || []),
       suggestions: fileAnalysesResults.flatMap(a => a.suggestions || []),
       metrics: {
-        linesOfCode: fileAnalysesResults.reduce((sum, fa) => sum + (fa.metrics?.linesOfCode || 0), 0), // Sum lines from analyzed content
+        linesOfCode: fileAnalysesResults.reduce((sum, fa) => sum + (fa.metrics?.linesOfCode || 0), 0),
         cyclomaticComplexity: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.cyclomaticComplexity || 0), 0) / totalAnalyzedFiles : 0,
         cognitiveComplexity: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.cognitiveComplexity || 0), 0) / totalAnalyzedFiles : 0,
         duplicateBlocks: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.duplicateBlocks || 0), 0) : 0,
       },
-      aiInsights: fileAnalysesResults.map(a => `${a.filename} (Analyzed: ${a.metrics?.linesOfCode || 'N/A'} lines):\n${a.aiInsights}`).join('\n\n---\n\n') || 'No AI insights generated.',
+      aiInsights: fileAnalysesResults.map(a => `${a.filename} (Analyzed: ${a.metrics?.linesOfCode || 'N/A'} lines):\n${a.aiInsights}`).join('\n\n---\n\n') || 'No AI insights generated for individual files.',
       fileAnalyses: fileAnalysesResults,
     };
     
@@ -209,6 +214,8 @@ export async function POST(request: NextRequest) {
     if (!savedPR) {
       savedPR = new PullRequest({
         repositoryId: localRepo._id.toString(),
+        owner: owner, // Populate owner
+        repoName: repoName, // Populate repoName
         githubId: ghPullRequest.id, 
         number: pullNumber,
         title: ghPullRequest.title,
@@ -227,7 +234,9 @@ export async function POST(request: NextRequest) {
       savedPR.title = ghPullRequest.title;
       savedPR.body = ghPullRequest.body;
       savedPR.state = ghPullRequest.state as PRType['state'];
-      savedPR.files = prFiles; // Update files in case PR changed
+      savedPR.files = prFiles; 
+      savedPR.owner = owner; // Ensure owner/repoName are updated if PR moves
+      savedPR.repoName = repoName;
       savedPR.updatedAt = new Date(ghPullRequest.updated_at);
     }
     await savedPR.save();
@@ -247,6 +256,14 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Error analyzing pull request:', error, error.stack);
-    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
+    // Check if it's a GitHub API error
+    if (error.status && (error.status === 401 || error.status === 403 || error.status === 404)) {
+        return NextResponse.json({ error: `GitHub API error: ${error.message}`, details: error.response?.data }, { status: error.status });
+    }
+    // Check for Genkit/AI errors
+    if (error.message.toLowerCase().includes('genkit') || error.message.toLowerCase().includes('ai model')) {
+        return NextResponse.json({ error: `AI processing error: ${error.message}` }, { status: 500 });
+    }
+    return NextResponse.json({ error: 'Internal server error during analysis', details: error.message }, { status: 500 });
   }
 }
