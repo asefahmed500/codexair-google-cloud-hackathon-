@@ -3,12 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { Analysis, PullRequest, connectMongoose } from '@/lib/mongodb';
-import type { DashboardData, RecentAnalysisItem, QualityTrendItem, DashboardOverview, TopIssueItem, SecurityIssue, Suggestion } from '@/types';
+import type { DashboardData, RecentAnalysisItem, QualityTrendItem, DashboardOverview, TopIssueItem, SecurityIssue, Suggestion, SecurityHotspotItem, TeamMemberMetric, FileAnalysisItem } from '@/types';
 
 const MAX_TOP_ISSUES = 5;
+const MAX_HOTSPOTS = 5;
+const MAX_TEAM_MEMBERS = 10;
 
 function getTopItems(
-  analyses: any[], 
+  analyses: any[],
   itemSelector: (analysis: any) => (SecurityIssue[] | Suggestion[]),
   titleExtractor: (item: SecurityIssue | Suggestion) => string,
   severityExtractor?: (item: SecurityIssue) => SecurityIssue['severity'],
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
     await connectMongoose();
     const userId = session.user.id;
 
-    const userPullRequests = await PullRequest.find({ userId }).select('_id').lean();
+    const userPullRequests = await PullRequest.find({ userId }).select('_id author').lean(); // Select author for team metrics
     const userPullRequestIds = userPullRequests.map(pr => pr._id);
 
     if (userPullRequestIds.length === 0) {
@@ -57,22 +59,24 @@ export async function GET(request: NextRequest) {
             qualityTrends: [],
             topSecurityIssues: [],
             topSuggestions: [],
+            securityHotspots: [],
+            teamMetrics: [],
         } as DashboardData);
     }
-    
-    // Fetch all analyses for the user to calculate top issues, then filter for recent/trends
+
+    // Fetch all analyses for the user to calculate various metrics
     const allUserAnalyses = await Analysis.find({ pullRequestId: { $in: userPullRequestIds } })
-      .populate({ 
-        path: 'pullRequestId', 
-        select: 'title repositoryId number',
-        populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' } // Assuming repositoryId in PR is actual ID
+      .populate({
+        path: 'pullRequestId',
+        select: 'title repositoryId number author', // Ensure author is selected for team metrics
+        populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' }
       })
       .lean();
 
 
     const totalAnalyses = allUserAnalyses.length;
 
-    const avgQualityScore = totalAnalyses > 0 
+    const avgQualityScore = totalAnalyses > 0
       ? allUserAnalyses.reduce((sum, a) => sum + (a.qualityScore || 0), 0) / totalAnalyses
       : 0;
 
@@ -80,7 +84,7 @@ export async function GET(request: NextRequest) {
         const criticalHigh = (a.securityIssues || []).filter(si => si.severity === 'critical' || si.severity === 'high');
         return sum + criticalHigh.length;
     }, 0);
-    
+
 
     const recentAnalysesDocs = allUserAnalyses
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -89,11 +93,9 @@ export async function GET(request: NextRequest) {
     const recentAnalyses: RecentAnalysisItem[] = recentAnalysesDocs.map((analysis: any) => {
       let repoNameDisplay = 'N/A';
       if (analysis.pullRequestId?.repositoryId) {
-        // If repositoryId is a string like 'owner/repo-name'
         if (typeof analysis.pullRequestId.repositoryId === 'string') {
             repoNameDisplay = analysis.pullRequestId.repositoryId;
-        } 
-        // If repositoryId is an object (populated from a ref to Repository collection)
+        }
         else if (typeof analysis.pullRequestId.repositoryId === 'object' && analysis.pullRequestId.repositoryId.fullName) {
             repoNameDisplay = analysis.pullRequestId.repositoryId.fullName;
         }
@@ -105,11 +107,11 @@ export async function GET(request: NextRequest) {
         repositoryName: repoNameDisplay,
         prNumber: analysis.pullRequestId?.number,
         qualityScore: analysis.qualityScore || 0,
-        securityIssues: analysis.securityIssues?.length || 0,
+        securityIssues: (analysis.securityIssues || []).filter((si: SecurityIssue) => si.severity === 'critical' || si.severity === 'high').length,
         createdAt: analysis.createdAt,
       };
     });
-    
+
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -132,14 +134,14 @@ export async function GET(request: NextRequest) {
             count: data.count,
         }))
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
+
     let trendsUp = true;
     if (qualityTrends.length >= 2) {
         const lastScore = qualityTrends[qualityTrends.length -1].quality;
         const secondLastScore = qualityTrends[qualityTrends.length -2].quality;
         trendsUp = lastScore >= secondLastScore;
     } else if (qualityTrends.length === 1){
-        trendsUp = qualityTrends[0].quality >= 7; 
+        trendsUp = qualityTrends[0].quality >= 7;
     }
 
     const overview: DashboardOverview = {
@@ -154,7 +156,7 @@ export async function GET(request: NextRequest) {
       a => a.securityIssues,
       item => item.title,
       item => item.severity,
-      undefined, // no priority for security issues
+      undefined,
       item => item.type
     );
 
@@ -162,10 +164,80 @@ export async function GET(request: NextRequest) {
       allUserAnalyses,
       a => a.suggestions,
       item => item.title,
-      undefined, // no severity for suggestions
+      undefined,
       item => item.priority,
       item => item.type
     );
+
+    // Calculate Security Hotspots
+    const fileIssueCounts: Record<string, SecurityHotspotItem> = {};
+    allUserAnalyses.forEach((analysis: any) => {
+      (analysis.fileAnalyses || []).forEach((file: FileAnalysisItem) => {
+        if (!file.filename) return;
+        if (!fileIssueCounts[file.filename]) {
+          fileIssueCounts[file.filename] = {
+            filename: file.filename,
+            criticalIssues: 0,
+            highIssues: 0,
+            totalIssuesInFile: 0,
+            relatedPrIds: [],
+            lastOccurrence: new Date(analysis.createdAt),
+          };
+        }
+        let fileCritical = 0;
+        let fileHigh = 0;
+        (file.securityIssues || []).forEach(issue => {
+          if (issue.severity === 'critical') fileCritical++;
+          if (issue.severity === 'high') fileHigh++;
+        });
+        fileIssueCounts[file.filename].criticalIssues += fileCritical;
+        fileIssueCounts[file.filename].highIssues += fileHigh;
+        fileIssueCounts[file.filename].totalIssuesInFile += (file.securityIssues || []).length;
+        if (analysis.pullRequestId?._id && !fileIssueCounts[file.filename].relatedPrIds.includes(analysis.pullRequestId._id.toString())) {
+             fileIssueCounts[file.filename].relatedPrIds.push(analysis.pullRequestId._id.toString());
+        }
+        if (new Date(analysis.createdAt) > fileIssueCounts[file.filename].lastOccurrence) {
+            fileIssueCounts[file.filename].lastOccurrence = new Date(analysis.createdAt);
+        }
+      });
+    });
+    const securityHotspots = Object.values(fileIssueCounts)
+      .filter(f => f.criticalIssues > 0 || f.highIssues > 0)
+      .sort((a, b) => b.criticalIssues - a.criticalIssues || b.highIssues - a.highIssues || b.totalIssuesInFile - a.totalIssuesInFile)
+      .slice(0, MAX_HOTSPOTS);
+
+    // Calculate Team Metrics
+    const memberMetrics: Record<string, TeamMemberMetric> = {};
+    allUserAnalyses.forEach((analysis: any) => {
+        const authorLogin = analysis.pullRequestId?.author?.login;
+        if (!authorLogin) return;
+
+        if (!memberMetrics[authorLogin]) {
+            memberMetrics[authorLogin] = {
+                userId: authorLogin, // Using login as ID, ideally map to a User._id if available
+                userName: authorLogin,
+                userAvatar: analysis.pullRequestId?.author?.avatar,
+                totalAnalyses: 0,
+                avgQualityScore: 0,
+                totalCriticalIssues: 0,
+                totalHighIssues: 0,
+            };
+        }
+        memberMetrics[authorLogin].totalAnalyses++;
+        memberMetrics[authorLogin].avgQualityScore += (analysis.qualityScore || 0);
+        (analysis.securityIssues || []).forEach((si: SecurityIssue) => {
+            if (si.severity === 'critical') memberMetrics[authorLogin].totalCriticalIssues++;
+            if (si.severity === 'high') memberMetrics[authorLogin].totalHighIssues++;
+        });
+    });
+
+    const teamMetrics = Object.values(memberMetrics).map(member => ({
+        ...member,
+        avgQualityScore: member.totalAnalyses > 0 ? parseFloat((member.avgQualityScore / member.totalAnalyses).toFixed(1)) : 0,
+    }))
+    .sort((a,b) => b.totalAnalyses - a.totalAnalyses || b.avgQualityScore - a.avgQualityScore) // Example sort
+    .slice(0, MAX_TEAM_MEMBERS);
+
 
     const dashboardData: DashboardData = {
       overview,
@@ -173,6 +245,8 @@ export async function GET(request: NextRequest) {
       qualityTrends,
       topSecurityIssues,
       topSuggestions,
+      securityHotspots,
+      teamMetrics,
     };
 
     return NextResponse.json(dashboardData);

@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button';
 import AnalyticsOverview from '@/components/dashboard/analytics-overview';
 import RecentReviews from '@/components/dashboard/recent-reviews';
 import QualityTrends from '@/components/dashboard/quality-trends';
-import TopIssues from '@/components/dashboard/top-issues'; // New component
+import TopIssues from '@/components/dashboard/top-issues';
+import SecurityHotspots from '@/components/dashboard/security-hotspots'; // New
+import TeamMetrics from '@/components/dashboard/team-metrics'; // New
 import { DashboardData } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
-import Navbar from '@/components/layout/navbar'; 
+import Navbar from '@/components/layout/navbar';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -46,22 +48,26 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }
-  
-  if (status === 'loading' || (loading && !dashboardData && !error)) { 
+
+  if (status === 'loading' || (loading && !dashboardData && !error)) {
     return (
       <div className="flex flex-col min-h-screen">
-        <Navbar /> 
+        <Navbar />
         <main className="flex-1 container py-8">
           <div className="grid gap-6 animate-pulse">
-            <div className="h-9 bg-muted rounded w-48 mb-8"></div> 
-            <div className="h-40 bg-muted rounded-lg"></div>
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="h-9 bg-muted rounded w-48 mb-8"></div>
+            <div className="h-40 bg-muted rounded-lg"></div> {/* Overview */}
+            <div className="grid md:grid-cols-2 gap-6"> {/* Recent Reviews & Quality Trends */}
+              <div className="h-96 bg-muted rounded-lg"></div>
+              <div className="h-96 bg-muted rounded-lg"></div>
+            </div>
+             <div className="grid md:grid-cols-2 gap-6"> {/* Top Issues & Suggestions */}
               <div className="h-80 bg-muted rounded-lg"></div>
               <div className="h-80 bg-muted rounded-lg"></div>
             </div>
-             <div className="grid md:grid-cols-2 gap-6">
-              <div className="h-60 bg-muted rounded-lg"></div>
-              <div className="h-60 bg-muted rounded-lg"></div>
+            <div className="grid md:grid-cols-2 gap-6"> {/* Security Hotspots & Team Metrics */}
+              <div className="h-80 bg-muted rounded-lg"></div>
+              <div className="h-80 bg-muted rounded-lg"></div>
             </div>
           </div>
         </main>
@@ -87,12 +93,12 @@ export default function DashboardPage() {
       </div>
     );
   }
-  
-  if (!session) return null; 
+
+  if (!session) return null;
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <Navbar /> 
+      <Navbar />
       <main className="flex-1 container py-8">
         <h1 className="text-3xl font-bold mb-8 text-foreground font-headline">codexair Dashboard</h1>
         {dashboardData ? (
@@ -105,6 +111,10 @@ export default function DashboardPage() {
             <div className="grid md:grid-cols-2 gap-6">
               <TopIssues title="Top Security Issues" issues={dashboardData.topSecurityIssues} issueType="security" />
               <TopIssues title="Top Improvement Suggestions" issues={dashboardData.topSuggestions} issueType="suggestion" />
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              <SecurityHotspots hotspots={dashboardData.securityHotspots} />
+              <TeamMetrics metrics={dashboardData.teamMetrics} />
             </div>
           </div>
         ) : (!loading && !error && (
