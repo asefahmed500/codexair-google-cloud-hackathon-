@@ -22,10 +22,10 @@ import {
   HelpCircle,
   Workflow,
   Settings,
-  Bell,
-  BarChartHorizontalBig,
-  Siren,
-  Briefcase
+  Bell, // Added for Admin features (Notifications)
+  BarChartHorizontalBig, // Added for Admin features (Monitoring)
+  Siren, // Added for Admin features (Emergency)
+  Briefcase, // Added for Admin features (Business Intelligence)
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -479,3 +479,6 @@ function AdminFeatureCard({ icon, title, items }: AdminFeatureCardProps) {
     </Card>
   );
 }
+
+
+    
