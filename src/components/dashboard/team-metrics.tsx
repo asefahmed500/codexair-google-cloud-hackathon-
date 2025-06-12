@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TeamMemberMetric } from "@/types";
-import { Users, TrendingUp, AlertCircle } from "lucide-react";
+import { Users, TrendingUp, AlertCircle, CheckCircle2 } from "lucide-react"; // Added CheckCircle2
 
 interface TeamMetricsProps {
   metrics: TeamMemberMetric[];
@@ -46,8 +46,8 @@ export default function TeamMetrics({ metrics }: TeamMetricsProps) {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={member.userAvatar} alt={member.userName} />
-                          <AvatarFallback>{member.userName.charAt(0).toUpperCase()}</AvatarFallback>
+                          <AvatarImage src={member.userAvatar || undefined} alt={member.userName} />
+                          <AvatarFallback>{member.userName ? member.userName.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
                         </Avatar>
                         <span className="font-medium truncate" title={member.userName}>{member.userName}</span>
                       </div>
@@ -59,7 +59,11 @@ export default function TeamMetrics({ metrics }: TeamMetricsProps) {
                       </span>
                     </TableCell>
                     <TableCell className="text-center">
-                        <span className={`${(member.totalCriticalIssues + member.totalHighIssues) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                        <span className={`flex items-center justify-center gap-1 font-semibold ${(member.totalCriticalIssues + member.totalHighIssues) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                            {(member.totalCriticalIssues + member.totalHighIssues) > 0 ? 
+                                <AlertCircle className="h-4 w-4" /> : 
+                                <CheckCircle2 className="h-4 w-4" />
+                            }
                             {member.totalCriticalIssues + member.totalHighIssues}
                         </span>
                     </TableCell>
@@ -74,3 +78,4 @@ export default function TeamMetrics({ metrics }: TeamMetricsProps) {
   );
 }
 
+    

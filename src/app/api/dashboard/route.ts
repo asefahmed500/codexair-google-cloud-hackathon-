@@ -17,11 +17,12 @@ function getTopItems(
   titleExtractor: (item: SecurityIssue | Suggestion) => string,
   severityExtractor?: (item: SecurityIssue) => SecurityIssue['severity'],
   priorityExtractor?: (item: Suggestion) => Suggestion['priority'],
-  typeExtractor?: (item: SecurityIssue | Suggestion) => SecurityIssue['type'] | Suggestion['type']
+  typeExtractor?: (item: SecurityIssue | Suggestion) => Suggestion['type'] | Suggestion['type']
 ): TopIssueItem[] {
   const itemCounts: Record<string, TopIssueItem> = {};
 
   analyses.forEach(analysis => {
+    if (!analysis) return; // Guard against null analysis
     const items = itemSelector(analysis) || [];
     items.forEach((item: SecurityIssue | Suggestion) => {
       const title = titleExtractor(item);
@@ -55,17 +56,17 @@ export async function GET(request: NextRequest) {
     let relevantAnalyses: (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
 
     if (isAdmin) {
-      console.log("Admin requesting dashboard, fetching all system-wide analysis data.");
+      // console.log("Admin requesting dashboard, fetching all system-wide analysis data.");
       relevantAnalyses = await Analysis.find({})
         .populate<{ pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null }>({
           path: 'pullRequestId',
-          select: 'title repositoryId number author createdAt', // Ensure author is populated for teamMetrics
+          select: 'title repositoryId number author createdAt owner repoName', // Added owner and repoName
           populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' } 
         })
-        .sort({ createdAt: -1 }) // Sort all analyses by date for recent items
+        .sort({ createdAt: -1 }) 
         .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
     } else {
-      console.log(`User ${userId} requesting dashboard, fetching their specific analysis data.`);
+      // console.log(`User ${userId} requesting dashboard, fetching their specific analysis data.`);
       const userPullRequestObjects = await PullRequest.find({ userId }).select('_id').lean();
       const userPullRequestIds = userPullRequestObjects.map(pr => pr._id);
       
@@ -84,14 +85,14 @@ export async function GET(request: NextRequest) {
       relevantAnalyses = await Analysis.find({ pullRequestId: { $in: userPullRequestIds } })
         .populate<{ pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null }>({
           path: 'pullRequestId',
-          select: 'title repositoryId number author createdAt',
+          select: 'title repositoryId number author createdAt owner repoName', // Added owner and repoName
           populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' }
         })
-        .sort({ createdAt: -1 }) // Sort user's analyses by date
+        .sort({ createdAt: -1 }) 
         .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
     }
     
-    if (relevantAnalyses.length === 0 && !isAdmin) { // If user has PR IDs but no analyses yet.
+    if (relevantAnalyses.length === 0 && !isAdmin) { 
         return NextResponse.json({
             overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
             recentAnalyses: [],
@@ -107,57 +108,54 @@ export async function GET(request: NextRequest) {
     const totalAnalyses = relevantAnalyses.length;
 
     const avgQualityScore = totalAnalyses > 0
-      ? relevantAnalyses.reduce((sum, a) => sum + (a.qualityScore || 0), 0) / totalAnalyses
+      ? relevantAnalyses.reduce((sum, a) => sum + (a?.qualityScore || 0), 0) / totalAnalyses
       : 0;
 
     const securityIssuesCount = relevantAnalyses.reduce((sum, a) => {
+        if (!a) return sum;
         const criticalHigh = (a.securityIssues || []).filter(si => si.severity === 'critical' || si.severity === 'high');
         return sum + criticalHigh.length;
     }, 0);
 
-    // Recent analyses will take from the already sorted `relevantAnalyses`
     const recentAnalysesDocs = relevantAnalyses.slice(0, 5);
 
     const recentAnalyses: RecentAnalysisItem[] = recentAnalysesDocs.map((analysis) => {
-      let repoNameDisplay = 'N/A';
-      let ownerDisplay = 'N/A';
-      let actualRepoName = 'N/A';
+      if (!analysis || !analysis.pullRequestId) return null; // Guard clause
 
-      if (analysis.pullRequestId?.repositoryId) {
-         const repoId = analysis.pullRequestId.repositoryId;
-         if (typeof repoId === 'object' && repoId !== null && 'fullName' in repoId && repoId.fullName) {
-            repoNameDisplay = repoId.fullName;
-            ownerDisplay = repoId.owner;
-            actualRepoName = repoId.name;
-         } else if (typeof repoId === 'string') {
-            // This case might occur if population didn't fully complete or schema is different
-            // For now, we'll just use the string if it's the ID, though fullName is preferred.
-            // A better approach might be another lookup if `fullName` is critical here.
-            repoNameDisplay = "Populated ID: " + repoId; 
+      let repoFullNameDisplay = 'N/A';
+      let ownerDisplay = analysis.pullRequestId.owner || 'N/A';
+      let actualRepoName = analysis.pullRequestId.repoName || 'N/A';
+
+      if (analysis.pullRequestId.repositoryId) {
+         const repoIdObj = analysis.pullRequestId.repositoryId;
+         if (typeof repoIdObj === 'object' && repoIdObj !== null) {
+            if (repoIdObj.fullName) repoFullNameDisplay = repoIdObj.fullName;
+            if (repoIdObj.owner) ownerDisplay = repoIdObj.owner; // Prioritize populated owner
+            if (repoIdObj.name) actualRepoName = repoIdObj.name; // Prioritize populated repo name
          }
       }
       
       return {
         id: analysis._id.toString(),
-        pullRequestTitle: analysis.pullRequestId?.title || 'N/A',
-        repositoryName: repoNameDisplay, // This is fullName
-        prNumber: analysis.pullRequestId?.number,
-        // For link construction, ensure owner and actual repoName are available
+        pullRequestTitle: analysis.pullRequestId.title || 'N/A',
+        repositoryName: repoFullNameDisplay,
+        prNumber: analysis.pullRequestId.number,
         owner: ownerDisplay, 
         repo: actualRepoName,
         qualityScore: analysis.qualityScore || 0,
         securityIssues: (analysis.securityIssues || []).filter((si: SecurityIssue) => si.severity === 'critical' || si.severity === 'high').length,
         createdAt: analysis.createdAt,
       };
-    });
+    }).filter(Boolean) as RecentAnalysisItem[]; // Filter out any nulls
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const qualityTrendsData = relevantAnalyses.filter(a => new Date(a.createdAt) >= thirtyDaysAgo);
+    const qualityTrendsData = relevantAnalyses.filter(a => a && new Date(a.createdAt) >= thirtyDaysAgo);
     const qualityTrendsAggMap: Record<string, { totalQuality: number, count: number }> = {};
 
     qualityTrendsData.forEach((analysis) => {
+        if (!analysis) return;
         const dateStr = new Date(analysis.createdAt).toISOString().split('T')[0]; // YYYY-MM-DD
         if (!qualityTrendsAggMap[dateStr]) {
             qualityTrendsAggMap[dateStr] = { totalQuality: 0, count: 0 };
@@ -180,7 +178,7 @@ export async function GET(request: NextRequest) {
         const secondLastScore = qualityTrends[qualityTrends.length -2].quality;
         trendsUp = lastScore >= secondLastScore;
     } else if (qualityTrends.length === 1){
-        trendsUp = qualityTrends[0].quality >= 7; // Arbitrary: trend is "up" if single point is good
+        trendsUp = qualityTrends[0].quality >= 7; 
     }
 
     const overview: DashboardOverview = {
@@ -192,7 +190,7 @@ export async function GET(request: NextRequest) {
 
     const topSecurityIssues = getTopItems(
       relevantAnalyses,
-      a => a.securityIssues,
+      a => a?.securityIssues,
       item => item.title,
       item => item.severity,
       undefined,
@@ -201,7 +199,7 @@ export async function GET(request: NextRequest) {
 
     const topSuggestions = getTopItems(
       relevantAnalyses,
-      a => a.suggestions,
+      a => a?.suggestions,
       item => item.title,
       undefined,
       item => item.priority,
@@ -210,8 +208,11 @@ export async function GET(request: NextRequest) {
 
     const fileIssueCounts: Record<string, SecurityHotspotItem> = {};
     relevantAnalyses.forEach((analysis) => {
+      if (!analysis) return;
       (analysis.fileAnalyses || []).forEach((file: FileAnalysisItem) => {
         if (!file.filename) return;
+        const uniqueKey = `${analysis.pullRequestId?._id?.toString() || 'unknown_pr'}-${file.filename}`; // More unique key if needed, but filename is primary
+
         if (!fileIssueCounts[file.filename]) {
           fileIssueCounts[file.filename] = {
             filename: file.filename,
@@ -249,14 +250,15 @@ export async function GET(request: NextRequest) {
 
     const memberMetrics: Record<string, TeamMemberMetric> = {};
     relevantAnalyses.forEach((analysis) => {
-        const authorLogin = analysis.pullRequestId?.author?.login;
+        if (!analysis || !analysis.pullRequestId) return;
+        const authorLogin = analysis.pullRequestId.author?.login;
         if (!authorLogin) return;
 
         if (!memberMetrics[authorLogin]) {
             memberMetrics[authorLogin] = {
                 userId: authorLogin, 
                 userName: authorLogin,
-                userAvatar: analysis.pullRequestId?.author?.avatar,
+                userAvatar: analysis.pullRequestId.author?.avatar,
                 totalAnalyses: 0,
                 avgQualityScore: 0,
                 totalCriticalIssues: 0,
@@ -276,7 +278,7 @@ export async function GET(request: NextRequest) {
         avgQualityScore: member.totalAnalyses > 0 ? parseFloat((member.avgQualityScore / member.totalAnalyses).toFixed(1)) : 0,
     }))
     .sort((a,b) => b.totalAnalyses - a.totalAnalyses || b.avgQualityScore - a.avgQualityScore)
-    .slice(0, isAdmin ? MAX_TEAM_MEMBERS * 2 : MAX_TEAM_MEMBERS); // Admin might see more contributors
+    .slice(0, isAdmin ? MAX_TEAM_MEMBERS * 2 : MAX_TEAM_MEMBERS); 
 
 
     const dashboardData: DashboardData = {
@@ -296,3 +298,4 @@ export async function GET(request: NextRequest) {
   }
 }
 
+    

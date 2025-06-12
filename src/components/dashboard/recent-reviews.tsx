@@ -29,27 +29,35 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
             </Button>
           </div>
         ) : (
-          <ScrollArea className="h-[350px] pr-3"> {/* Adjusted height */}
+          <ScrollArea className="h-[350px] pr-3"> 
             <div className="space-y-4">
               {reviews.map((review) => {
-                // Use the explicitly provided owner and repo from RecentAnalysisItem
-                const owner = review.owner || 'owner'; // Fallback if not provided
-                const repo = review.repo || 'repo';   // Fallback if not provided
+                const owner = review.owner || 'unknown_owner';
+                const repo = review.repo || 'unknown_repo';
+                const prNumber = review.prNumber || 0;
+                const analysisId = review.id;
+                const canLink = review.prNumber && review.owner && review.repo && review.id;
                 
                 return (
                   <div key={review.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="font-semibold text-md text-foreground truncate max-w-[200px] sm:max-w-xs" title={review.pullRequestTitle}>
-                          {review.pullRequestTitle || `Analysis ID: ${review.id.slice(-6)}`}
+                          {canLink ? (
+                             <Link href={`/analyze/${owner}/${repo}/${prNumber}/${analysisId}`} className="hover:underline">
+                               {review.pullRequestTitle || `Analysis ID: ${review.id.slice(-6)}`}
+                             </Link>
+                          ) : (
+                            review.pullRequestTitle || `Analysis ID: ${review.id.slice(-6)}`
+                          )}
                         </h3>
                         <p className="text-xs text-muted-foreground">
                           {review.repositoryName ? `in ${review.repositoryName}` : ''} {review.prNumber ? `#${review.prNumber}`: ''}
                         </p>
                       </div>
-                      {review.prNumber && review.repositoryName && review.owner && review.repo && (
+                      {canLink && (
                         <Button asChild variant="ghost" size="sm">
-                          <Link href={`/analyze/${owner}/${repo}/${review.prNumber}/${review.id}`}>
+                          <Link href={`/analyze/${owner}/${repo}/${prNumber}/${analysisId}`}>
                             <Eye className="mr-1.5 h-4 w-4" /> View
                           </Link>
                         </Button>
@@ -61,7 +69,7 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
                         <span>Quality: {review.qualityScore.toFixed(1)}/10</span>
                       </div>
                       <Badge variant={review.securityIssues > 0 ? "destructive" : "secondary"} className="text-xs">
-                        {review.securityIssues} Issues
+                        {review.securityIssues} Crit/High
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 text-right">
@@ -78,3 +86,4 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
   );
 }
 
+    

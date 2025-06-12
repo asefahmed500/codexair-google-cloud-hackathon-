@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import type { SecurityHotspotItem } from "@/types";
-import { AlertTriangle, FileWarning, CalendarDays } from "lucide-react";
-import { formatDistanceToNow } from 'date-fns';
+import { AlertTriangle, FileWarning, CalendarDays, GitPullRequest } from "lucide-react"; // Added GitPullRequest
+import { formatDistanceToNow, format } from 'date-fns';
 
 interface SecurityHotspotsProps {
   hotspots: SecurityHotspotItem[];
@@ -44,15 +44,16 @@ export default function SecurityHotspots({ hotspots }: SecurityHotspotsProps) {
                     </div>
                   </div>
                   <div className="mt-1.5 text-xs text-muted-foreground flex items-center justify-between">
-                     <span>Total Issues in File: {hotspot.totalIssuesInFile}</span>
-                     <div className="flex items-center gap-1" title={`Last issue detected in this file: ${new Date(hotspot.lastOccurrence).toLocaleDateString()}`}>
+                     <span className="flex items-center gap-1">
+                        <GitPullRequest className="h-3 w-3"/>
+                        In {hotspot.relatedPrIds.length} PR(s)
+                    </span>
+                     <div className="flex items-center gap-1" title={`Last issue detected: ${format(new Date(hotspot.lastOccurrence), "PPp")}`}>
                         <CalendarDays className="h-3 w-3"/>
-                        {hotspot.lastOccurrence.getFullYear() > 1 ? formatDistanceToNow(new Date(hotspot.lastOccurrence), { addSuffix: true }) : 'N/A'}
+                        {hotspot.lastOccurrence && new Date(hotspot.lastOccurrence).getFullYear() > 1970 ? formatDistanceToNow(new Date(hotspot.lastOccurrence), { addSuffix: true }) : 'N/A'}
                      </div>
                   </div>
-                   <p className="text-xs text-muted-foreground mt-1">
-                        Found in {hotspot.relatedPrIds.length} PR(s)
-                    </p>
+                  
                 </li>
               ))}
             </ul>
@@ -63,3 +64,4 @@ export default function SecurityHotspots({ hotspots }: SecurityHotspotsProps) {
   );
 }
 
+    

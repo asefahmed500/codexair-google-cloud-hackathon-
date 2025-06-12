@@ -8,12 +8,13 @@ import AnalyticsOverview from '@/components/dashboard/analytics-overview';
 import RecentReviews from '@/components/dashboard/recent-reviews';
 import QualityTrends from '@/components/dashboard/quality-trends';
 import TopIssues from '@/components/dashboard/top-issues';
-import SecurityHotspots from '@/components/dashboard/security-hotspots'; // New
-import TeamMetrics from '@/components/dashboard/team-metrics'; // New
+import SecurityHotspots from '@/components/dashboard/security-hotspots'; 
+import TeamMetrics from '@/components/dashboard/team-metrics'; 
 import { DashboardData } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import Navbar from '@/components/layout/navbar';
+import DashboardLoading from './loading'; // Import the detailed loading skeleton
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -50,55 +51,63 @@ export default function DashboardPage() {
   }
 
   if (status === 'loading' || (loading && !dashboardData && !error)) {
-    // Use DashboardLoading component
-    return <DashboardLoadingPlaceholder />;
+    return <DashboardLoading />; // Use the detailed loading skeleton from loading.tsx
   }
 
   if (error) {
     return (
-      <div className="flex flex-col min-h-screen">
+      <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
         <main className="flex-1 container py-8 flex items-center justify-center">
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-md shadow-lg">
             <CardHeader>
-              <CardTitle className="text-destructive">Error</CardTitle>
+              <CardTitle className="text-destructive">Error Loading Dashboard</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p>{error}</p>
+            <CardContent className="text-center">
+              <p className="text-muted-foreground">{error}</p>
               <Button onClick={fetchDashboardData} className="mt-4">Try Again</Button>
             </CardContent>
           </Card>
         </main>
+        <footer className="py-6 border-t bg-background">
+          <div className="container text-center text-sm text-muted-foreground">
+            &copy; {new Date().getFullYear()} codexair.
+          </div>
+        </footer>
       </div>
     );
   }
 
   if (!session) return null;
 
-  // Check for empty state after loading and no error
   if (!loading && !error && (!dashboardData || dashboardData.overview.totalAnalyses === 0)) {
     return (
       <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
         <main className="flex-1 container py-8 flex items-center justify-center">
-          <Card className="w-full max-w-lg text-center shadow-lg">
+          <Card className="w-full max-w-lg text-center shadow-xl">
             <CardHeader>
-              <CardTitle className="text-2xl font-headline">Welcome to codexair!</CardTitle>
+              <CardTitle className="text-3xl font-headline text-primary">Welcome to codexair!</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-muted-foreground">
-                It looks like you haven't analyzed any repositories or pull requests yet.
-                Get started by selecting a repository and analyzing a pull request.
+            <CardContent className="space-y-6">
+              <p className="text-lg text-muted-foreground">
+                It looks like you haven't analyzed any pull requests yet.
               </p>
-              <Button asChild size="lg" className="shadow-md hover:shadow-lg transition-shadow">
+              <p className="text-md">
+                Get started by connecting a repository and analyzing your first PR to unlock powerful code insights.
+              </p>
+              <Button asChild size="lg" className="shadow-md hover:shadow-lg transition-shadow bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Link href="/analyze">Start Your First Analysis</Link>
               </Button>
             </CardContent>
+             <CardFooter className="justify-center">
+                 <p className="text-xs text-muted-foreground">Empowering developers with AI-driven code intelligence.</p>
+             </CardFooter>
           </Card>
         </main>
         <footer className="py-6 border-t bg-background">
           <div className="container text-center text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} codexair. Built with passion.
+            &copy; {new Date().getFullYear()} codexair.
           </div>
         </footer>
       </div>
@@ -110,7 +119,7 @@ export default function DashboardPage() {
       <Navbar />
       <main className="flex-1 container py-8">
         <h1 className="text-3xl font-bold mb-8 text-foreground font-headline">codexair Dashboard</h1>
-        {dashboardData ? ( 
+        {dashboardData && ( 
           <div className="grid gap-6">
             <AnalyticsOverview overview={dashboardData.overview} />
             <div className="grid md:grid-cols-2 gap-6">
@@ -126,41 +135,15 @@ export default function DashboardPage() {
               <TeamMetrics metrics={dashboardData.teamMetrics} />
             </div>
           </div>
-        ) : <DashboardLoadingPlaceholder /> } {/* Show loading if dashboardData is somehow null after checks */}
+        ) }
       </main>
        <footer className="py-6 border-t bg-background">
         <div className="container text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} codexair. Built with passion.
+          &copy; {new Date().getFullYear()} codexair.
         </div>
       </footer>
     </div>
   );
 }
 
-// Simplified placeholder for initial loading, actual is in loading.tsx
-function DashboardLoadingPlaceholder() {
-  return (
-    <div className="flex flex-col min-h-screen">
-      <Navbar />
-      <main className="flex-1 container py-8">
-        <div className="grid gap-6 animate-pulse">
-          <div className="h-9 bg-muted rounded w-48 mb-8"></div>
-          <div className="h-40 bg-muted rounded-lg"></div> {/* Overview */}
-          <div className="grid md:grid-cols-2 gap-6"> {/* Recent Reviews & Quality Trends */}
-            <div className="h-96 bg-muted rounded-lg"></div>
-            <div className="h-96 bg-muted rounded-lg"></div>
-          </div>
-           <div className="grid md:grid-cols-2 gap-6"> {/* Top Issues & Suggestions */}
-            <div className="h-80 bg-muted rounded-lg"></div>
-            <div className="h-80 bg-muted rounded-lg"></div>
-          </div>
-          <div className="grid md:grid-cols-2 gap-6"> {/* Security Hotspots & Team Metrics */}
-            <div className="h-80 bg-muted rounded-lg"></div>
-            <div className="h-80 bg-muted rounded-lg"></div>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
-}
-
+    
