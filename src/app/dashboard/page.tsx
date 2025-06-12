@@ -37,21 +37,36 @@ export default function DashboardPage() {
     try {
       const response = await fetch('/api/dashboard');
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch dashboard data');
+        let errorMessage = `Failed to fetch dashboard data. Status: ${response.status} ${response.statusText}`;
+        try {
+          // Try to parse as JSON first, as our API usually sends JSON errors
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorData.details || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use the response text or a generic message
+          const textError = await response.text();
+          console.error("Non-JSON error response from /api/dashboard:", textError);
+          // Avoid displaying potentially large HTML error pages directly to the user
+          if (textError.toLowerCase().includes("<html")) {
+            errorMessage = `API error ${response.status}: Server returned an unexpected response. Check console for details.`;
+          } else {
+            errorMessage = `API error ${response.status}: ${textError.substring(0, 200) || response.statusText}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
       const data: DashboardData = await response.json();
       setDashboardData(data);
     } catch (err: any) {
-      console.error(err);
-      setError(err.message);
+      console.error("Error in fetchDashboardData:", err);
+      setError(err.message || "An unknown error occurred while fetching data.");
     } finally {
       setLoading(false);
     }
   }
 
   if (status === 'loading' || (loading && !dashboardData && !error)) {
-    return <DashboardLoading />; // Use the detailed loading skeleton from loading.tsx
+    return <DashboardLoading />;
   }
 
   if (error) {
@@ -145,5 +160,4 @@ export default function DashboardPage() {
     </div>
   );
 }
-
     
