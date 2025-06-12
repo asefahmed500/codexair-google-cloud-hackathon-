@@ -67,15 +67,15 @@ export async function findSimilarCode(queryVector: number[], limit = 5, similari
     const results = await db.collection('analyses').aggregate(pipeline).toArray();
     return results;
   } catch (error) {
-    console.error("Error during Atlas Vector Search:", error);
-    console.warn("Atlas Vector Search failed. Ensure your index 'idx_file_embeddings' is correctly configured on 'analyses' collection for path 'fileAnalyses.vectorEmbedding' (768 dimensions, cosine similarity recommended).");
+    console.error("Error during Atlas Vector Search for semantic code matching:", error);
+    console.warn("Atlas Vector Search for semantic matching failed. Ensure your index 'idx_file_embeddings' is correctly configured on 'analyses' collection for path 'fileAnalyses.vectorEmbedding' (768 dimensions, cosine similarity recommended).");
     return [];
   }
 }
 
 export async function setupVectorSearch() {
   await connectMongoose();
-  console.log('MongoDB Atlas Vector Search index setup guide:');
+  console.log('MongoDB Atlas Vector Search index setup guide (for Semantic Code Matching):');
   console.log('1. Go to your MongoDB Atlas cluster.');
   console.log('2. Select the database (e.g., "codexairdb").');
   console.log('3. Go to the "Search" tab and click "Create Search Index".');
@@ -85,21 +85,56 @@ export async function setupVectorSearch() {
   console.log('   - Target Field Path for vector: fileAnalyses.vectorEmbedding');
   console.log('   - Number of Dimensions: 768');
   console.log('   - Similarity Metric: cosine (recommended)');
-  console.log('Ensure this setup is complete for vector search functionality to work.');
+  console.log('Ensure this setup is complete for semantic vector search functionality to work.');
 }
 
 
-// Placeholder for MinHash/LSH based duplicate detection as mentioned in PRD
-// This is distinct from semantic vector search.
-export async function findDuplicateCodeBySignature(codeContent: string): Promise<any[]> {
-  console.warn("findDuplicateCodeBySignature (e.g., using MinHash/LSH) is not yet implemented. This requires specific algorithms and data structures for signature generation and comparison.");
-  // 1. Preprocess code (e.g., normalize, remove comments/whitespace).
-  // 2. Generate shingles (k-grams) from the code.
-  // 3. Compute MinHash signature for the shingles.
-  // 4. Use Locality Sensitive Hashing (LSH) to find candidate similar signatures from a database of stored signatures.
-  // 5. Compare candidates more thoroughly (e.g., Jaccard index on MinHash signatures or shingles).
+/**
+ * Placeholder for Duplicate Code Detection using MinHash/LSH algorithms.
+ * This is a distinct approach from semantic vector search and aims to find
+ * near-exact or structural duplicates.
+ *
+ * @param {string} codeContent The code content to check for duplicates.
+ * @param {string} fileId Optional identifier for the current file to avoid self-comparison.
+ * @returns {Promise<Array<{fileId: string, similarity: number, duplicateFileId: string}>>} 
+ *          A list of identified duplicates with their similarity scores.
+ */
+export async function findDuplicateCodeBySignature(codeContent: string, fileId?: string): Promise<any[]> {
+  console.warn(`[findDuplicateCodeBySignature] This feature (MinHash/LSH based duplicate detection) is a placeholder.
+    A full implementation would involve:
+    1. Code Preprocessing: Normalize code (e.g., remove comments, whitespace, standardize variable names).
+    2. Shingling: Generate k-grams (shingles) from the preprocessed code.
+    3. MinHashing: Compute MinHash signatures from the set of shingles for efficient comparison.
+       - These signatures would need to be stored, likely alongside file metadata.
+    4. Locality Sensitive Hashing (LSH): Use LSH to index MinHash signatures.
+       - This allows for efficient querying of candidate similar items by hashing similar signatures to the same buckets.
+    5. Candidate Comparison: For candidates found via LSH, compute actual similarity (e.g., Jaccard Index on MinHash signatures or shingle sets).
+    6. Database Integration: Store and query these signatures and LSH bands in MongoDB or a specialized store.
+    This function currently returns an empty array.`);
+  
+  // Example of what might be returned:
+  // return [
+  //   { fileId: "some/other/file.js", similarity: 0.75, details_url: "/path/to/comparison" },
+  //   { fileId: "another/duplicate.py", similarity: 0.92, details_url: "/path/to/comparison" }
+  // ];
   return [];
 }
+
+/**
+ * Placeholder for Historical Pattern Analysis using Time-Series Vector Clustering.
+ * This advanced feature would identify recurring error patterns or trends over time.
+ * Implementation would involve:
+ * 1. Collecting and timestamping vector embeddings of code issues or PR characteristics.
+ * 2. Applying time-series analysis and clustering algorithms (e.g., k-means on rolling windows, DBSCAN).
+ * 3. Developing logic to interpret clusters as significant patterns or anomalies.
+ * 4. Storing and querying these patterns.
+ * This is a complex data science task beyond simple API integration.
+ */
+export async function findHistoricalErrorPatterns(): Promise<any[]> {
+  console.warn("[findHistoricalErrorPatterns] This feature (Time-series vector clustering for historical pattern analysis) is a placeholder and represents a complex data analysis task not yet implemented.");
+  return [];
+}
+
 
 /**
  * Placeholder for Atlas Full-Text Search functionality.
@@ -131,18 +166,18 @@ export async function findTextSearchResults(queryText: string, limit = 10): Prom
           path: {
             wildcard: "*" // Or specify fields like ["fileAnalyses.filename", "fileAnalyses.aiInsights"]
           },
-          fuzzy: {
-            maxEdits: 1, // Optional: allow for some misspellings
+          fuzzy: { // Optional
+            maxEdits: 1
           }
         }
       }
     },
     {
-      $project: {
+      $project: { // Customize projection as needed
         _id: 1,
-        pullRequestId: 1, // Or populate as needed
-        filename: "$fileAnalyses.filename", // Example, might need further unwinding/filtering
-        aiInsights: "$fileAnalyses.aiInsights", // Example
+        pullRequestId: 1, 
+        filename: "$fileAnalyses.filename", 
+        aiInsights: "$fileAnalyses.aiInsights",
         score: { $meta: "searchScore" }
       }
     },
@@ -162,3 +197,4 @@ export async function findTextSearchResults(queryText: string, limit = 10): Prom
 }
 
 // setupVectorSearch(); // You might call this once when the app starts, or log it.
+
