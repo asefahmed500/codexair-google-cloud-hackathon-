@@ -16,6 +16,8 @@ let clientPromise: Promise<MongoClient>;
 declare global {
   // eslint-disable-next-line no-var
   var _mongoClientPromise: Promise<MongoClient> | undefined;
+  // eslint-disable-next-line no-var
+  var _mongooseConnection: Promise<typeof mongoose> | null | undefined;
 }
 
 if (process.env.NODE_ENV === 'development') {
@@ -32,6 +34,51 @@ if (process.env.NODE_ENV === 'development') {
 export default clientPromise;
 
 // Mongoose Schemas
+
+// User schema for NextAuth.js MongoDBAdapter
+// This schema will be automatically created and managed by the adapter
+// if it doesn't exist, but defining it explicitly can be good for clarity
+// and if you need to extend it or query it directly.
+const userSchema = new mongoose.Schema({
+  name: String,
+  email: { type: String, unique: true },
+  emailVerified: Date,
+  image: String,
+  role: { type: String, default: 'user', enum: ['user', 'admin'] }, // Added role field
+  accounts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Account' }],
+  sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Session' }],
+}, { timestamps: true });
+
+const accountSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    type: String,
+    provider: String,
+    providerAccountId: String,
+    refresh_token: String,
+    access_token: String,
+    expires_at: Number,
+    token_type: String,
+    scope: String,
+    id_token: String,
+    session_state: String,
+});
+accountSchema.index({ provider: 1, providerAccountId: 1 }, { unique: true });
+
+
+const sessionSchema = new mongoose.Schema({
+    sessionToken: { type: String, unique: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    expires: Date,
+});
+
+const verificationTokenSchema = new mongoose.Schema({
+    identifier: String,
+    token: { type: String, unique: true },
+    expires: Date,
+});
+verificationTokenSchema.index({ identifier: 1, token: 1 }, { unique: true });
+
+
 const repositorySchema = new mongoose.Schema<RepoType>({
   name: String,
   fullName: String,
@@ -50,23 +97,23 @@ const codeFileSchema = new mongoose.Schema({
   deletions: Number,
   changes: Number,
   patch: String,
-  content: String,
+  content: String, // Content of the file or diff
 }, { _id: false });
 
 const securityIssueSubSchema = new mongoose.Schema({
-  type: { type: String }, 
-  severity: String,
+  type: { type: String, enum: ['vulnerability', 'warning', 'info'] }, 
+  severity: { type: String, enum: ['critical', 'high', 'medium', 'low'] },
   title: String,
   description: String,
   file: String,
   line: Number,
-  suggestion: String,
+  suggestion: String, // Can be used for the "fix" or code example
   cwe: String,
 }, { _id: false });
 
 const suggestionSubSchema = new mongoose.Schema({
-  type: { type: String }, 
-  priority: String,
+  type: { type: String, enum: ['performance', 'style', 'bug', 'feature', 'optimization', 'code_smell'] }, 
+  priority: { type: String, enum: ['high', 'medium', 'low'] },
   title: String,
   description: String,
   file: String,
@@ -90,7 +137,7 @@ const fileAnalysisItemSchema = new mongoose.Schema<FileAnalysisItem>({
   suggestions: [suggestionSubSchema],
   metrics: codeAnalysisMetricsSubSchema,
   aiInsights: String,
-  vectorEmbedding: { type: [Number], default: undefined }, // Added for per-file embedding
+  vectorEmbedding: { type: [Number], default: undefined }, 
 }, { _id: false });
 
 
@@ -103,7 +150,7 @@ const analysisSchema = new mongoose.Schema<AnalysisType>({
   suggestions: [suggestionSubSchema],
   metrics: codeAnalysisMetricsSubSchema,
   aiInsights: String,
-  fileAnalyses: [fileAnalysisItemSchema], // Store individual file results
+  fileAnalyses: [fileAnalysisItemSchema], 
 }, { timestamps: true });
 
 
@@ -113,7 +160,7 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   number: { type: Number, required: true },
   title: String,
   body: String,
-  state: String, 
+  state: { type: String, enum: ['open', 'closed', 'merged'] }, 
   author: {
     login: String,
     avatar: String,
@@ -126,26 +173,36 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   indexes: [{ fields: { repositoryId: 1, number: 1 }, unique: true }]
 });
 
+// Export models - Mongoose will prevent recompilation if already compiled
+export const User = mongoose.models.User || mongoose.model('User', userSchema);
+export const Account = mongoose.models.Account || mongoose.model('Account', accountSchema);
+export const Session = mongoose.models.Session || mongoose.model('Session', sessionSchema);
+export const VerificationToken = mongoose.models.VerificationToken || mongoose.model('VerificationToken', verificationTokenSchema);
 
 export const Repository = mongoose.models.Repository || mongoose.model<RepoType>('Repository', repositorySchema);
 export const PullRequest = mongoose.models.PullRequest || mongoose.model<PRType>('PullRequest', pullRequestSchema);
 export const Analysis = mongoose.models.Analysis || mongoose.model<AnalysisType>('Analysis', analysisSchema);
 
-// Helper to connect Mongoose
-let mongooseConnection: Promise<typeof mongoose> | null = null;
+
 export const connectMongoose = async () => {
-  if (mongooseConnection) {
-    return mongooseConnection;
+  if (global._mongooseConnection) {
+    return global._mongooseConnection;
   }
-  mongooseConnection = mongoose.connect(MONGODB_URI!).then((m) => {
+  if (mongoose.connections[0].readyState) {
+    global._mongooseConnection = Promise.resolve(mongoose);
+    return global._mongooseConnection;
+  }
+  
+  global._mongooseConnection = mongoose.connect(MONGODB_URI!).then((m) => {
     console.log('Mongoose connected.');
     return m;
   }).catch(err => {
     console.error('Mongoose connection error:', err);
-    mongooseConnection = null; 
+    global._mongooseConnection = null; 
     throw err;
   });
-  return mongooseConnection;
+  return global._mongooseConnection;
 };
 
+// Initial connection call to ensure Mongoose is connected when models are imported.
 connectMongoose();

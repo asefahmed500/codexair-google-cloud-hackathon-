@@ -25,7 +25,7 @@ export interface CodeFile {
 
 export interface PullRequest {
   _id: string;
-  repositoryId: string;
+  repositoryId: string; // This should refer to the _id of the Repository document
   githubId: number;
   number: number;
   title: string;
@@ -38,7 +38,7 @@ export interface PullRequest {
   files: CodeFile[];
   createdAt: Date;
   updatedAt: Date;
-  analysis?: CodeAnalysis | string;
+  analysis?: CodeAnalysis | string; // Can be ObjectId string or populated object
   userId?: string;
 }
 
@@ -49,7 +49,7 @@ export interface SecurityIssue {
   description: string;
   file: string;
   line?: number;
-  suggestion: string; // Can be used for the "fix" or code example
+  suggestion: string; 
   cwe?: string;
 }
 
@@ -83,14 +83,14 @@ export interface FileAnalysisItem {
 
 export interface CodeAnalysis {
   _id: string;
-  pullRequestId: string;
+  pullRequestId: string; // This should be the _id of the PullRequest document
   qualityScore: number;
   complexity: number;
   maintainability: number;
   securityIssues: SecurityIssue[];
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics;
-  aiInsights: string; // This field will store the auto-generated summary
+  aiInsights: string; 
   fileAnalyses?: FileAnalysisItem[];
   createdAt: Date;
 }
@@ -155,11 +155,10 @@ export interface DashboardData {
   teamMetrics: TeamMemberMetric[];
 }
 
-// Type for vector search results
 export interface SimilarCodeResult {
-  originalDocId: string; // Analysis document ID
+  originalDocId: string; 
   pullRequestId: string;
-  prInfo?: { // Populated by $lookup
+  prInfo?: { 
     title: string;
     number: number;
     authorLogin: string;
@@ -167,6 +166,16 @@ export interface SimilarCodeResult {
   };
   filename: string;
   qualityScore: number;
-  aiInsights: string; // For the specific file
-  score: number; // Vector search similarity score
+  aiInsights: string; 
+  score: number; 
+}
+
+// Type for user data displayed in admin panel
+export interface AdminUserView {
+  _id: string;
+  name?: string | null;
+  email?: string | null;
+  role: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
