@@ -11,22 +11,26 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/dialog'; // Updated import
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { AdminUserView } from '@/types';
+import type { AdminSummaryStats } from '@/app/api/admin/summary-stats/route'; // Import the new type
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, Users, FolderGit2, FileScan } from 'lucide-react';
 
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [users, setUsers] = useState<AdminUserView[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [errorUsers, setErrorUsers] = useState<string | null>(null);
   const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
 
-  // State for AlertDialog
+  const [summaryStats, setSummaryStats] = useState<AdminSummaryStats | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [errorStats, setErrorStats] = useState<string | null>(null);
+
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [alertAction, setAlertAction] = useState<{ userId: string; newRole: 'user' | 'admin' } | null>(null);
   
@@ -40,29 +44,48 @@ export default function AdminPage() {
       return;
     }
 
-    async function fetchUsers() {
-      setLoading(true);
-      setError(null);
+    async function fetchAdminData() {
+      // Fetch Summary Stats
+      setLoadingStats(true);
+      setErrorStats(null);
       try {
-        const response = await fetch('/api/admin/users');
-        if (!response.ok) {
-          const errorData = await response.json();
+        const statsResponse = await fetch('/api/admin/summary-stats');
+        if (!statsResponse.ok) {
+          const errorData = await statsResponse.json();
+          throw new Error(errorData.error || 'Failed to fetch summary stats');
+        }
+        const statsData: AdminSummaryStats = await statsResponse.json();
+        setSummaryStats(statsData);
+      } catch (err: any) {
+        setErrorStats(err.message);
+        setSummaryStats(null);
+      } finally {
+        setLoadingStats(false);
+      }
+
+      // Fetch Users
+      setLoadingUsers(true);
+      setErrorUsers(null);
+      try {
+        const usersResponse = await fetch('/api/admin/users');
+        if (!usersResponse.ok) {
+          const errorData = await usersResponse.json();
           throw new Error(errorData.error || 'Failed to fetch users');
         }
-        const data = await response.json();
-        const fetchedUsers: AdminUserView[] = data.users || [];
+        const usersData = await usersResponse.json();
+        const fetchedUsers: AdminUserView[] = usersData.users || [];
         setUsers(fetchedUsers);
         setAdminCount(fetchedUsers.filter(u => u.role === 'admin').length);
       } catch (err: any) {
-        setError(err.message);
+        setErrorUsers(err.message);
         setUsers([]);
       } finally {
-        setLoading(false);
+        setLoadingUsers(false);
       }
     }
 
     if (session && session.user.role === 'admin') {
-      fetchUsers();
+      fetchAdminData();
     }
   }, [session, status, router]);
 
@@ -101,7 +124,8 @@ export default function AdminPage() {
       setUsers(prevUsers =>
         prevUsers.map(u => (u._id === userId ? { ...u, role: newRole } : u))
       );
-      setAdminCount(users.filter(u => u.role === 'admin').map(u => (u._id === userId ? { ...u, role: newRole } : u)).filter(u => u.role === 'admin').length);
+      // Recalculate admin count after role change
+      setAdminCount(prevUsers => prevUsers.map(u => (u._id === userId ? { ...u, role: newRole } : u)).filter(u => u.role === 'admin').length);
 
     } catch (err: any) {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
@@ -113,7 +137,7 @@ export default function AdminPage() {
   };
 
 
-  if (status === 'loading' || (loading && (!users.length && !error))) {
+  if (status === 'loading' || (loadingUsers && !users.length && !errorUsers && loadingStats && !summaryStats && !errorStats )) {
     return (
       <div className="flex flex-col min-h-screen">
         <Navbar />
@@ -124,6 +148,12 @@ export default function AdminPage() {
               <Skeleton className="h-4 w-64" />
             </CardHeader>
             <CardContent>
+              {/* Skeletons for summary stats */}
+              <div className="grid md:grid-cols-3 gap-4 mb-6">
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </div>
               <Skeleton className="h-10 w-full mb-2" />
               <Skeleton className="h-64 w-full" />
             </CardContent>
@@ -149,34 +179,40 @@ export default function AdminPage() {
     );
   }
   
-  if (error) {
-    return (
-        <div className="flex flex-col min-h-screen">
-            <Navbar />
-            <main className="flex-1 container py-8">
-                <Card className="text-center">
-                    <CardHeader><CardTitle className="text-destructive">Error Loading Users</CardTitle></CardHeader>
-                    <CardContent><p>{error}</p></CardContent>
-                </Card>
-            </main>
-        </div>
-    );
-  }
-
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
       <main className="flex-1 container py-8">
-        <Card className="shadow-lg">
+        <Card className="shadow-lg mb-8">
           <CardHeader>
             <CardTitle className="text-3xl font-bold font-headline">Admin Dashboard</CardTitle>
-            <CardDescription>Manage users and their roles within the application.</CardDescription>
+            <CardDescription>Manage users, roles, and view platform statistics.</CardDescription>
           </CardHeader>
           <CardContent>
-            <h2 className="text-xl font-semibold mb-4 text-foreground">User Management</h2>
-            {users.length === 0 ? (
+            <h2 className="text-xl font-semibold mb-4 text-foreground">Platform Overview</h2>
+            {loadingStats && <div className="grid md:grid-cols-3 gap-4 mb-6"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>}
+            {errorStats && <p className="text-destructive mb-4">Error loading platform stats: {errorStats}</p>}
+            {summaryStats && !loadingStats && (
+              <div className="grid md:grid-cols-3 gap-6 mb-8">
+                <StatCard Icon={Users} title="Total Users" value={summaryStats.totalUsers} />
+                <StatCard Icon={FolderGit2} title="Total Projects" value={summaryStats.totalRepositories} description="Repositories synced" />
+                <StatCard Icon={FileScan} title="Total PRs Analyzed" value={summaryStats.totalAnalyses} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg">
+          <CardHeader>
+             <h2 className="text-xl font-semibold text-foreground">User Management</h2>
+          </CardHeader>
+          <CardContent>
+            {loadingUsers && users.length === 0 && <Skeleton className="h-64 w-full" />}
+            {errorUsers && <p className="text-destructive">Error loading users: {errorUsers}</p>}
+            {!loadingUsers && users.length === 0 && !errorUsers && (
                 <p className="text-muted-foreground">No users found.</p>
-            ) : (
+            )}
+            {!loadingUsers && users.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -238,7 +274,7 @@ export default function AdminPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setAlertAction(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {setAlertAction(null); setIsAlertOpen(false);}}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleRoleUpdate} disabled={updatingRoleId === alertAction?.userId}>
               {updatingRoleId === alertAction?.userId ? 'Updating...' : 'Confirm'}
             </AlertDialogAction>
@@ -252,5 +288,26 @@ export default function AdminPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+interface StatCardProps {
+  Icon: React.ElementType;
+  title: string;
+  value: string | number;
+  description?: string;
+}
+function StatCard({ Icon, title, value, description }: StatCardProps) {
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <Icon className="h-5 w-5 text-accent" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-3xl font-bold text-foreground">{value}</div>
+        {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
+      </CardContent>
+    </Card>
   );
 }
