@@ -8,7 +8,7 @@ import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { CodeAnalysis, PullRequest as PRType, SecurityIssue, Suggestion, FileAnalysisItem } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2 } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -170,14 +170,17 @@ export default function AnalysisDetailsPage() {
                             </div>
                           </div>
                         </AccordionTrigger>
-                        <AccordionContent className="p-4 bg-secondary/30 rounded-b-md">
-                          <p className="text-sm mb-2"><strong className="text-foreground">Description:</strong> {issue.description}</p>
-                          <p className="text-sm mb-2"><strong className="text-foreground">File:</strong> {issue.file} {issue.line && `(Line: ${issue.line})`}</p>
+                        <AccordionContent className="p-4 bg-secondary/30 rounded-b-md space-y-2">
+                          <p className="text-sm"><strong className="text-foreground">Description:</strong> {issue.description}</p>
+                          <p className="text-sm"><strong className="text-foreground">File:</strong> {issue.file} {issue.line && `(Line: ${issue.line})`}</p>
                           <p className="text-sm font-medium text-foreground mb-1">Suggested Fix / Code:</p>
                           <ScrollArea className="max-h-60 w-full rounded-md border bg-background p-2 shadow-inner">
                               <pre className="text-xs font-code whitespace-pre-wrap">{issue.suggestion}</pre>
                           </ScrollArea>
                           {issue.cwe && <p className="text-sm mt-2"><strong className="text-foreground">CWE:</strong> <Badge variant="outline">{issue.cwe}</Badge></p>}
+                           <Button variant="link" size="sm" className="p-0 h-auto text-xs mt-2 text-primary hover:underline" disabled title="Feature coming soon">
+                             <Search className="mr-1 h-3 w-3" /> Find similar past issues (Coming Soon)
+                           </Button>
                         </AccordionContent>
                       </AccordionItem>
                     ))}
@@ -204,10 +207,10 @@ export default function AnalysisDetailsPage() {
                             </div>
                           </div>
                         </AccordionTrigger>
-                        <AccordionContent className="p-4 bg-secondary/30 rounded-b-md">
-                          <p className="text-sm mb-2"><strong className="text-foreground">Description:</strong> {suggestion.description}</p>
-                          <p className="text-sm mb-2"><strong className="text-foreground">Type:</strong> <Badge variant="outline" className="capitalize">{suggestion.type}</Badge></p>
-                          <p className="text-sm mb-2"><strong className="text-foreground">File:</strong> {suggestion.file} {suggestion.line && `(Line: ${suggestion.line})`}</p>
+                        <AccordionContent className="p-4 bg-secondary/30 rounded-b-md space-y-2">
+                          <p className="text-sm"><strong className="text-foreground">Description:</strong> {suggestion.description}</p>
+                          <p className="text-sm"><strong className="text-foreground">Type:</strong> <Badge variant="outline" className="capitalize">{suggestion.type}</Badge></p>
+                          <p className="text-sm"><strong className="text-foreground">File:</strong> {suggestion.file} {suggestion.line && `(Line: ${suggestion.line})`}</p>
                           {suggestion.codeExample && (
                             <>
                               <p className="text-sm font-medium text-foreground mb-1">Code Example:</p>
@@ -216,6 +219,9 @@ export default function AnalysisDetailsPage() {
                               </ScrollArea>
                             </>
                           )}
+                           <Button variant="link" size="sm" className="p-0 h-auto text-xs mt-2 text-primary hover:underline" disabled title="Feature coming soon">
+                             <Search className="mr-1 h-3 w-3" /> Find similar past issues (Coming Soon)
+                           </Button>
                         </AccordionContent>
                       </AccordionItem>
                     ))}

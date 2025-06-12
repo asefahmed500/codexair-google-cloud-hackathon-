@@ -96,12 +96,42 @@ export default function DashboardPage() {
 
   if (!session) return null;
 
+  // Check for empty state after loading and no error
+  if (!loading && !error && (!dashboardData || dashboardData.overview.totalAnalyses === 0)) {
+    return (
+      <div className="flex flex-col min-h-screen bg-secondary/50">
+        <Navbar />
+        <main className="flex-1 container py-8 flex items-center justify-center">
+          <Card className="w-full max-w-lg text-center shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-2xl font-headline">Welcome to codexair!</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground">
+                It looks like you haven't analyzed any repositories or pull requests yet.
+                Get started by selecting a repository and analyzing a pull request.
+              </p>
+              <Button asChild size="lg" className="shadow-md hover:shadow-lg transition-shadow">
+                <Link href="/analyze">Start Your First Analysis</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </main>
+        <footer className="py-6 border-t bg-background">
+          <div className="container text-center text-sm text-muted-foreground">
+            &copy; {new Date().getFullYear()} codexair. Built with passion.
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
       <main className="flex-1 container py-8">
         <h1 className="text-3xl font-bold mb-8 text-foreground font-headline">codexair Dashboard</h1>
-        {dashboardData ? (
+        {dashboardData ? ( // dashboardData will exist here due to the check above
           <div className="grid gap-6">
             <AnalyticsOverview overview={dashboardData.overview} />
             <div className="grid md:grid-cols-2 gap-6">
@@ -117,17 +147,7 @@ export default function DashboardPage() {
               <TeamMetrics metrics={dashboardData.teamMetrics} />
             </div>
           </div>
-        ) : (!loading && !error && (
-            <Card>
-                <CardHeader><CardTitle>No Data Yet</CardTitle></CardHeader>
-                <CardContent>
-                    <p className="text-muted-foreground mb-4">It looks like you haven't analyzed any repositories or pull requests yet.</p>
-                    <Button asChild>
-                        <Link href="/analyze">Start Your First Analysis</Link>
-                    </Button>
-                </CardContent>
-            </Card>
-        ))}
+        ) : null } {/* Should not be reached if logic is correct, but good for type safety */}
       </main>
        <footer className="py-6 border-t bg-background">
         <div className="container text-center text-sm text-muted-foreground">
