@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Github, Zap, ShieldCheck, LineChart, Search, BarChartBig, Lightbulb, Users, Code, GitMerge } from 'lucide-react';
+import { Github, Zap, ShieldCheck, LineChart, Search, BarChartBig, Lightbulb, Users, Code, GitMerge, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 
 // Google G logo SVG component
@@ -57,7 +57,7 @@ export default function HomePage() {
         </p>
       </header>
 
-      <main className="w-full max-w-5xl"> {/* Increased max-width for new content */}
+      <main className="w-full max-w-5xl">
         <Card className="shadow-xl mb-12">
           <CardHeader>
             <CardTitle className="text-center text-3xl font-headline">Intelligent Code Review Automation</CardTitle>
@@ -83,9 +83,9 @@ export default function HomePage() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col sm:flex-row justify-center gap-4 py-6">
-            <Button 
-              size="lg" 
-              onClick={() => signIn('github', { callbackUrl: '/dashboard' })} 
+            <Button
+              size="lg"
+              onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
               className="shadow-md hover:shadow-lg transition-shadow w-full sm:w-auto"
             >
               <Github className="mr-2 h-5 w-5" /> Login with GitHub
@@ -101,15 +101,15 @@ export default function HomePage() {
             </Button>
           </CardFooter>
         </Card>
-        
+
         <section className="text-center mb-16">
             <h2 className="text-3xl font-semibold text-foreground mb-8 font-headline">How codexair Works</h2>
-            <div className="grid md:grid-cols-5 gap-6">
+            <div className="grid md:grid-cols-5 gap-4">
                 <FeatureStepCard
                     icon={<Github className="w-10 h-10 text-primary mb-2" />}
                     step="1. Login & Connect"
                     description="Log in with GitHub & connect your repositories in one click."
-                    imageSrc="https://placehold.co/600x400.png"
+                    imageSrc="https://placehold.co/300x200.png"
                     imageAlt="Login with GitHub and Connect Repositories"
                     aiHint="github connect"
                 />
@@ -117,7 +117,7 @@ export default function HomePage() {
                     icon={<Zap className="w-10 h-10 text-primary mb-2" />}
                     step="2. AI Scans PRs"
                     description="AI scans every PR, detecting security risks, quality issues, and optimizations."
-                    imageSrc="https://placehold.co/600x400.png"
+                    imageSrc="https://placehold.co/300x200.png"
                     imageAlt="AI Scans Pull Requests"
                     aiHint="ai scan"
                 />
@@ -125,7 +125,7 @@ export default function HomePage() {
                     icon={<Lightbulb className="w-10 h-10 text-primary mb-2" />}
                     step="3. Instant Feedback"
                     description="Get instant feedback: inline fixes, scores (1-10), and historical comparisons."
-                    imageSrc="https://placehold.co/600x400.png"
+                    imageSrc="https://placehold.co/300x200.png"
                     imageAlt="Instant Feedback on Code"
                     aiHint="code feedback"
                 />
@@ -133,7 +133,7 @@ export default function HomePage() {
                     icon={<Search className="w-10 h-10 text-primary mb-2" />}
                     step="4. Vector Search"
                     description="Search similar code: find duplicates or past fixes using vector search."
-                    imageSrc="https://placehold.co/600x400.png"
+                    imageSrc="https://placehold.co/300x200.png"
                     imageAlt="Vector Search for Similar Code"
                     aiHint="code search"
                 />
@@ -141,9 +141,42 @@ export default function HomePage() {
                     icon={<LineChart className="w-10 h-10 text-primary mb-2" />}
                     step="5. Track Progress"
                     description="Track progress with dashboards showing team metrics, trends, and security hotspots."
-                    imageSrc="https://placehold.co/600x400.png"
+                    imageSrc="https://placehold.co/300x200.png"
                     imageAlt="Track Progress with Dashboards"
                     aiHint="dashboard metrics"
+                />
+            </div>
+        </section>
+
+        <section className="text-center mb-16">
+            <h2 className="text-3xl font-semibold text-foreground mb-8 font-headline">Unique Value Proposition</h2>
+            <div className="grid md:grid-cols-3 gap-8">
+                <ValuePropCard
+                    icon={<Code className="w-10 h-10 text-accent mb-3" />}
+                    title="For Developers"
+                    items={[
+                        "AI pair programmer in code reviews",
+                        "Instant security vulnerability detection",
+                        "Historical context for every change"
+                    ]}
+                />
+                <ValuePropCard
+                    icon={<Users className="w-10 h-10 text-accent mb-3" />}
+                    title="For Teams"
+                    items={[
+                        "Quantifiable code quality metrics",
+                        "Identify knowledge gaps through patterns",
+                        "Reduce onboarding time with smart suggestions"
+                    ]}
+                />
+                <ValuePropCard
+                    icon={<ShieldCheck className="w-10 h-10 text-accent mb-3" />}
+                    title="For Enterprises"
+                    items={[
+                        "Compliance reporting (SOC2, ISO27001)",
+                        "Risk mitigation through early detection",
+                        "Benchmark against industry standards"
+                    ]}
                 />
             </div>
         </section>
@@ -191,12 +224,12 @@ interface FeatureStepCardProps {
 function FeatureStepCard({ icon, step, description, imageSrc, imageAlt, aiHint }: FeatureStepCardProps) {
   return (
     <Card className="flex flex-col items-center text-center hover:shadow-lg transition-shadow">
-        <CardHeader className="items-center">
+        <CardHeader className="items-center pb-3">
             {icon}
-            <CardTitle className="text-lg">{step}</CardTitle>
+            <CardTitle className="text-md font-semibold">{step}</CardTitle>
         </CardHeader>
-        <CardContent className="flex-grow">
-            <Image src={imageSrc} alt={imageAlt} width={300} height={200} className="rounded-md mb-3 mx-auto" data-ai-hint={aiHint}/>
+        <CardContent className="flex-grow flex flex-col items-center">
+            <Image src={imageSrc} alt={imageAlt} width={150} height={100} className="rounded-md mb-3 mx-auto object-cover" data-ai-hint={aiHint}/>
             <CardDescription className="text-xs">{description}</CardDescription>
         </CardContent>
     </Card>
@@ -221,4 +254,25 @@ function BenefitCard({ icon, title, description}: BenefitCardProps) {
   );
 }
 
-    
+interface ValuePropCardProps {
+  icon: React.ReactNode;
+  title: string;
+  items: string[];
+}
+
+function ValuePropCard({ icon, title, items }: ValuePropCardProps) {
+  return (
+    <Card className="p-6 hover:shadow-lg transition-shadow flex flex-col items-center text-center">
+      {icon}
+      <CardTitle className="text-xl my-3">{title}</CardTitle>
+      <ul className="space-y-2 text-sm text-muted-foreground list-none p-0">
+        {items.map((item, index) => (
+          <li key={index} className="flex items-start">
+            <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-primary flex-shrink-0" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
