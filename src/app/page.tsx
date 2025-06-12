@@ -26,8 +26,9 @@ import {
   BarChartHorizontalBig, 
   Siren, 
   Briefcase, 
+  UserPlus,
 } from 'lucide-react';
-import Image from 'next/image';
+// Removed Image import as it's no longer used in FeatureCard
 
 // Google G logo SVG component
 const GoogleIcon = () => (
@@ -84,21 +85,38 @@ export default function HomePage() {
           </CardHeader>
           <CardContent className="text-center">
              <p className="text-lg text-muted-foreground mb-8">
-              Connect your GitHub account to get started. It's free and takes seconds.
+              Join codexair or sign in to continue. It's free and takes seconds.
             </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Button
                 size="lg"
                 onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
-                className="shadow-md hover:shadow-lg transition-shadow w-full sm:w-auto text-lg py-3"
+                className="shadow-md hover:shadow-lg transition-shadow w-full text-lg py-3"
                 >
-                <Github className="mr-2 h-5 w-5" /> Login with GitHub
+                <UserPlus className="mr-2 h-5 w-5" /> Sign Up with GitHub
                 </Button>
                 <Button
                 size="lg"
                 variant="outline"
                 onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
-                className="shadow-md hover:shadow-lg transition-shadow w-full sm:w-auto border-input hover:bg-accent/10 text-lg py-3"
+                className="shadow-md hover:shadow-lg transition-shadow w-full border-input hover:bg-accent/10 text-lg py-3"
+                >
+                <GoogleIcon />
+                Sign Up with Google
+                </Button>
+                <Button
+                size="lg"
+                variant="secondary" // Or another variant if "Login" needs to look different
+                onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
+                className="shadow-md hover:shadow-lg transition-shadow w-full text-lg py-3"
+                >
+                <LogIn className="mr-2 h-5 w-5" /> Login with GitHub
+                </Button>
+                <Button
+                size="lg"
+                variant="outline" 
+                onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+                className="shadow-md hover:shadow-lg transition-shadow w-full border-input hover:bg-accent/10 text-lg py-3"
                 >
                 <GoogleIcon />
                 Login with Google
@@ -114,33 +132,21 @@ export default function HomePage() {
                     icon={<Zap className="w-12 h-12 text-primary mb-3" />}
                     title="AI-Powered Review"
                     description="Automated analysis of pull requests for quality, security, and performance."
-                    imageSrc="https://placehold.co/400x250.png"
-                    imageAlt="AI analyzing code"
-                    aiHint="code analysis"
                 />
                 <FeatureCard
                     icon={<ShieldCheck className="w-12 h-12 text-primary mb-3" />}
                     title="Security Scanning"
                     description="Identifies potential vulnerabilities and common weaknesses (CWEs)."
-                    imageSrc="https://placehold.co/400x250.png"
-                    imageAlt="Security shield"
-                    aiHint="security scan"
                 />
                 <FeatureCard
                     icon={<Search className="w-12 h-12 text-primary mb-3" />}
                     title="Semantic Code Search"
                     description="Find similar code patterns and past fixes across your analyses using vector search."
-                    imageSrc="https://placehold.co/400x250.png"
-                    imageAlt="Code search interface"
-                    aiHint="code search"
                 />
                 <FeatureCard
                     icon={<LineChart className="w-12 h-12 text-primary mb-3" />}
                     title="Quality Dashboards"
                     description="Track code quality, complexity, and maintainability trends over time."
-                    imageSrc="https://placehold.co/400x250.png"
-                    imageAlt="Dashboard with charts"
-                    aiHint="analytics dashboard"
                 />
             </div>
         </section>
@@ -185,22 +191,17 @@ interface FeatureCardProps {
   icon: React.ReactNode;
   title: string;
   description: string;
-  imageSrc: string;
-  imageAlt: string;
-  aiHint: string;
 }
 
-function FeatureCard({ icon, title, description, imageSrc, imageAlt, aiHint }: FeatureCardProps) {
+function FeatureCard({ icon, title, description }: FeatureCardProps) {
   return (
-    <Card className="flex flex-col items-center text-center hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+    <Card className="flex flex-col items-center text-center hover:shadow-xl transition-shadow duration-300 overflow-hidden h-full">
         <CardHeader className="items-center pb-3 pt-6">
             {icon}
             <CardTitle className="text-xl font-semibold">{title}</CardTitle>
         </CardHeader>
         <CardContent className="flex-grow flex flex-col items-center px-4 pb-6">
-            <div className="relative w-full h-40 mb-4 rounded-md overflow-hidden">
-                <Image src={imageSrc} alt={imageAlt} layout="fill" objectFit="cover" data-ai-hint={aiHint}/>
-            </div>
+            {/* Image section removed */}
             <CardDescription className="text-sm">{description}</CardDescription>
         </CardContent>
     </Card>
