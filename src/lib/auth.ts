@@ -5,8 +5,8 @@ import GoogleProvider from 'next-auth/providers/google';
 import { MongoDBAdapter } from '@next-auth/mongodb-adapter';
 import clientPromise from './mongodb'; // Ensures MONGODB_URI is checked by mongodb.ts
 import type { Adapter } from 'next-auth/adapters';
-import type { User as CustomUser } from '@/types'; // Assuming User might have a role
-import { User as UserModel } from './mongodb'; // Import Mongoose User model
+// import type { User as CustomUser } from '@/types'; // Not directly used here, session type is more relevant
+import { User as UserModel, connectMongoose } from './mongodb'; // Import Mongoose User model and connectMongoose
 
 // Check critical NextAuth environment variables first
 if (!process.env.NEXTAUTH_URL) {
@@ -66,19 +66,47 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt', // Using JWT for session strategy
   },
   callbacks: {
-    async jwt({ token, account, user, profile }) {
+    async jwt({ token, user, account, profile }) {
       // Persist the OAuth access_token and provider to the token right after signin
       if (account) {
         token.accessToken = account.access_token;
         token.provider = account.provider; // e.g. "github" or "google"
       }
       // Persist the user ID and role to the token
-      if (user) {
+      if (user) { // This block usually runs on initial sign-in when user object is passed
         token.id = user.id; // This is the user ID from the database
-        // Fetch the role from the database user model
-        const dbUser = await UserModel.findById(user.id).select('role').lean();
+        
+        await connectMongoose(); // Ensure DB connection
+        const dbUser = await UserModel.findById(user.id).select('role email').lean();
+        
         if (dbUser) {
           token.role = dbUser.role || 'user'; // Default to 'user' if not set
+
+          // First user admin assignment logic
+          // This logic assumes that the MongoDBAdapter has already created the user.
+          const userCount = await UserModel.countDocuments();
+          if (userCount === 1 && token.role !== 'admin') {
+            // This is the very first user in the system
+            console.log(`INFO: First user detected (Email: ${dbUser.email}, ID: ${user.id}). Promoting to admin.`);
+            try {
+              await UserModel.updateOne({ _id: user.id }, { $set: { role: 'admin' } });
+              token.role = 'admin';
+              console.log(`INFO: User ${user.id} successfully promoted to admin.`);
+            } catch (e: any) {
+              console.error(`ERROR: Failed to promote first user ${user.id} to admin: ${e.message}`);
+            }
+          }
+        } else {
+          // Fallback if user somehow not found immediately after adapter creation (should be rare)
+           token.role = 'user';
+        }
+      } else if (token.id && !token.role) { 
+        // For subsequent JWT creations (e.g., session refresh) if role wasn't set previously
+        // or to ensure role is still fresh if it could change outside of sign-in.
+        await connectMongoose();
+        const dbUser = await UserModel.findById(token.id).select('role').lean();
+        if (dbUser) {
+          token.role = dbUser.role || 'user';
         }
       }
       return token;
