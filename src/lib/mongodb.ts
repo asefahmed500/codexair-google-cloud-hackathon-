@@ -184,6 +184,21 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   indexes: [{ fields: { repositoryId: 1, number: 1 }, unique: true }]
 });
 
+const auditLogSchema = new mongoose.Schema({
+  timestamp: { type: Date, default: Date.now },
+  adminUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  adminUserEmail: { type: String, required: true },
+  action: { type: String, required: true, enum: [
+    'USER_ROLE_CHANGED', 
+    'USER_STATUS_CHANGED_ACTIVE', 
+    'USER_STATUS_CHANGED_SUSPENDED',
+    // Add more actions here as needed, e.g., 'USER_DELETED', 'CONFIG_UPDATED'
+  ]},
+  targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  targetUserEmail: { type: String },
+  details: { type: mongoose.Schema.Types.Mixed }, // For storing arbitrary details like { previousRole: 'user', newRole: 'admin' }
+}, { timestamps: false }); // Audit logs have their own timestamp field
+
 
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
 export const Account = mongoose.models.Account || mongoose.model('Account', accountSchema);
@@ -193,6 +208,7 @@ export const VerificationToken = mongoose.models.VerificationToken || mongoose.m
 export const Repository = mongoose.models.Repository || mongoose.model<RepoType>('Repository', repositorySchema);
 export const PullRequest = mongoose.models.PullRequest || mongoose.model<PRType>('PullRequest', pullRequestSchema);
 export const Analysis = mongoose.models.Analysis || mongoose.model<AnalysisType>('Analysis', analysisSchema);
+export const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', auditLogSchema);
 
 
 export const connectMongoose = async () => {

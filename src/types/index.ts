@@ -1,4 +1,5 @@
 
+
 export interface Repository {
   _id: string;
   name: string;
@@ -194,5 +195,16 @@ export interface AnalysisReportItem {
   criticalIssuesCount: number;
   highIssuesCount: number;
   analysisId?: string; 
+}
+
+export interface AuditLogEntry {
+  _id: string;
+  timestamp: Date;
+  adminUserId?: string; // Could be populated User object later
+  adminUserEmail: string;
+  action: string;
+  targetUserId?: string; // Could be populated User object later
+  targetUserEmail?: string;
+  details?: any; // Store arbitrary JSON details
 }
 

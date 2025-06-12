@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb } from 'lucide-react'; // Added Lightbulb
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck } from 'lucide-react'; // Added BookCheck for Audit Logs
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -95,6 +95,9 @@ export default function Navbar() {
                   <DropdownMenuItem onClick={() => router.push('/admin/reports')}>
                     <FileText className="mr-2 h-4 w-4" /> Reports
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push('/admin/audit')}>
+                    <BookCheck className="mr-2 h-4 w-4" /> Audit Logs
+                  </DropdownMenuItem>
                 </>
               )}
 
@@ -119,4 +122,3 @@ export default function Navbar() {
     </header>
   );
 }
-

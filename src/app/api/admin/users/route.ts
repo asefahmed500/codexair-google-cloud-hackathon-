@@ -2,9 +2,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { User, connectMongoose } from '@/lib/mongodb'; 
+import { User, AuditLog, connectMongoose } from '@/lib/mongodb'; 
 import type { AdminUserView } from '@/types';
 import mongoose from 'mongoose';
+
+async function createAuditLog(adminUser: { id: string, email?: string | null }, action: string, targetUser?: any, details?: any) {
+  try {
+    await connectMongoose();
+    await new AuditLog({
+      adminUserId: adminUser.id,
+      adminUserEmail: adminUser.email || 'N/A',
+      action,
+      targetUserId: targetUser?._id,
+      targetUserEmail: targetUser?.email,
+      details,
+    }).save();
+  } catch (error) {
+    console.error('Failed to create audit log:', error);
+    // Decide if this failure should impact the main operation. For now, it won't.
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,8 +59,8 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!session?.user || session.user.role !== 'admin' || !session.user.id || !session.user.email) {
+      return NextResponse.json({ error: 'Forbidden or invalid admin session' }, { status: 403 });
     }
 
     const { userId, newRole, newStatus } = await request.json();
@@ -70,9 +87,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     let message = 'User updated successfully.';
+    const originalRole = targetUser.role;
+    const originalStatus = targetUser.status;
 
     if (newRole) {
-      // Safety check: Prevent demoting the last admin
       if (targetUser.role === 'admin' && newRole === 'user') {
         const adminCount = await User.countDocuments({ role: 'admin' });
         if (adminCount <= 1) {
@@ -80,7 +98,6 @@ export async function PATCH(request: NextRequest) {
         }
       }
       
-      // Prevent an admin from changing their own role if they are the only admin
       if (targetUser._id.toString() === session.user.id && targetUser.role === 'admin' && newRole === 'user') {
           const adminCount = await User.countDocuments({ role: 'admin' });
           if (adminCount <= 1) {
@@ -89,17 +106,18 @@ export async function PATCH(request: NextRequest) {
       }
       targetUser.role = newRole;
       message = 'User role updated successfully.';
+      if (originalRole !== newRole) {
+        await createAuditLog(session.user, 'USER_ROLE_CHANGED', targetUser, { previousRole: originalRole, newRole });
+      }
     }
 
     if (newStatus) {
-      // Safety check: Prevent suspending the last active admin
       if (targetUser._id.toString() === session.user.id && newStatus === 'suspended') {
         const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
         if (activeAdminCount <= 1) {
           return NextResponse.json({ error: 'Cannot suspend your own account as the last active admin.' }, { status: 400 });
         }
       }
-      // Prevent suspending if this user is the *only* active admin (even if not self)
       if (targetUser.role === 'admin' && targetUser.status === 'active' && newStatus === 'suspended') {
         const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
         if (activeAdminCount <= 1) {
@@ -108,6 +126,10 @@ export async function PATCH(request: NextRequest) {
       }
       targetUser.status = newStatus;
       message = newRole ? message + ' User status updated successfully.' : 'User status updated successfully.';
+      if (originalStatus !== newStatus) {
+        const action = newStatus === 'active' ? 'USER_STATUS_CHANGED_ACTIVE' : 'USER_STATUS_CHANGED_SUSPENDED';
+        await createAuditLog(session.user, action, targetUser, { previousStatus: originalStatus, newStatus });
+      }
     }
 
     await targetUser.save();
