@@ -1,21 +1,12 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BarChartBig } from "lucide-react";
-import Link from "next/link";
+import Navbar from "@/components/layout/navbar"; // Import the Navbar
 
 export default function DashboardLoading() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <BarChartBig className="h-7 w-7 text-primary" />
-            <span className="font-bold text-xl text-foreground font-headline">codexair</span>
-          </Link>
-          <Skeleton className="h-10 w-28 rounded-md" />
-        </div>
-      </header>
-
+      <Navbar /> {/* Use Navbar, it has its own loading state for user session */}
       <main className="flex-1 container py-8">
         <Skeleton className="h-9 w-48 mb-8" /> {/* Dashboard Title Skeleton */}
         

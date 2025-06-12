@@ -1,24 +1,17 @@
+
 'use client';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import type { Repository as RepoType } from '@/types';
-import { Github, GitFork, BarChartBig, ChevronDown, LogOut, UserCircle, Settings, Eye, RefreshCw, Search, Star, Lock, Unlock, ChevronLeft, ChevronRight } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Github, Eye, RefreshCw, Search, Star, Lock, Unlock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import Navbar from '@/components/layout/navbar'; // Import the new Navbar
 
 export default function AnalyzePage() {
   const { data: session, status } = useSession();
@@ -29,8 +22,10 @@ export default function AnalyzePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const fetchRepositories = async (page = 1, sync = false) => {
+    if (sync) setIsSyncing(true);
     setLoading(true);
     setError(null);
     try {
@@ -40,11 +35,13 @@ export default function AnalyzePage() {
       setRepositories(data.repositories || []);
       setCurrentPage(data.currentPage || 1);
       setTotalPages(data.totalPages || 1);
+      if (sync) toast({ title: "Repositories Synced", description: "Fetched latest repositories from GitHub." });
     } catch (err: any) {
       setError(err.message);
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
+      if (sync) setIsSyncing(false);
     }
   };
   
@@ -54,7 +51,7 @@ export default function AnalyzePage() {
     } else if (status === 'authenticated') {
       fetchRepositories(currentPage);
     }
-  }, [status, router, currentPage]);
+  }, [status, router, currentPage]); // `currentPage` as dependency to refetch on page change
 
   const handleSync = () => {
     fetchRepositories(1, true);
@@ -65,61 +62,27 @@ export default function AnalyzePage() {
   );
 
   if (status === 'loading') {
-    return <div className="flex items-center justify-center min-h-screen">Loading session...</div>;
+    // Let Navbar handle its own loading, or use a more comprehensive page skeleton
+    return <div className="flex flex-col min-h-screen"><Navbar /><div className="flex-1 flex items-center justify-center">Loading session...</div></div>;
   }
-  if (!session) return null;
-
+  if (!session) return null; // Should be redirected
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <BarChartBig className="h-7 w-7 text-primary" />
-            <span className="font-bold text-xl text-foreground font-headline">codexair</span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" className="text-foreground hover:bg-accent/10" onClick={handleSync} disabled={loading}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading && 'animate-spin'}`} />
-              Sync Repositories
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2 px-2 py-1 h-auto">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={session.user?.image || undefined} alt={session.user?.name || 'User'} />
-                    <AvatarFallback>{session.user?.name?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
-                  </Avatar>
-                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>{session.user?.name || 'My Account'}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-                    <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled>
-                  <UserCircle className="mr-2 h-4 w-4" /> Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled>
-                  <Settings className="mr-2 h-4 w-4" /> Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })}>
-                  <LogOut className="mr-2 h-4 w-4" /> Log out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
-
+      <Navbar /> {/* Use the new Navbar */}
       <main className="flex-1 container py-8">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold font-headline">Analyze Repository</CardTitle>
-            <CardDescription>Select a repository to view its pull requests and initiate AI-powered code analysis.</CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <CardTitle className="text-3xl font-bold font-headline">Analyze Repository</CardTitle>
+                    <CardDescription>Select a repository to view its pull requests and initiate AI-powered code analysis.</CardDescription>
+                </div>
+                <Button variant="outline" className="mt-4 sm:mt-0" onClick={handleSync} disabled={isSyncing || loading}>
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing && 'animate-spin'}`} />
+                    {isSyncing ? 'Syncing...' : 'Sync Repositories'}
+                </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="mb-6 flex gap-4">
@@ -144,7 +107,7 @@ export default function AnalyzePage() {
             ) : error ? (
               <p className="text-destructive text-center">{error}</p>
             ) : filteredRepositories.length === 0 ? (
-              <p className="text-muted-foreground text-center">
+              <p className="text-muted-foreground text-center py-8">
                 No repositories found. Try syncing or adjusting your search.
               </p>
             ) : (

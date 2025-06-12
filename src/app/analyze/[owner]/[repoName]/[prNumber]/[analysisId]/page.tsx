@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { CodeAnalysis, PullRequest as PRType, SecurityIssue, Suggestion, FileAnalysisItem } from '@/types';
@@ -13,37 +14,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from '@/components/ui/skeleton';
-
-// Mock API call, replace with actual data fetching
-async function fetchAnalysisDetails(analysisId: string): Promise<{ analysis: CodeAnalysis; pullRequest: PRType } | null> {
-  // In a real app, you'd fetch this from /api/analysis/${analysisId} or similar
-  // This is a placeholder. The actual data fetching logic will depend on how you store and retrieve combined PR and Analysis data.
-  // For now, we assume the analysisId gives us all we need, or we use the PR details from params.
-  // It's more likely you'd fetch PR details, and that PR object would contain the analysis or its ID.
-  // Let's assume an API endpoint exists: /api/pullrequests/${owner}/${repoName}/${prNumber} which returns PR with populated analysis
-  const { owner, repoName, prNumber } = useParams() as { owner: string; repoName: string; prNumber: string };
-
-  if (!owner || !repoName || !prNumber) return null;
-
-  const response = await fetch(`/api/pullrequests/details/${owner}/${repoName}/${prNumber}`);
-  if (!response.ok) {
-    console.error("Failed to fetch PR details with analysis");
-    return null;
-  }
-  const data = await response.json();
-  return { analysis: data.pullRequest.analysis, pullRequest: data.pullRequest };
-}
-
+import Navbar from '@/components/layout/navbar'; // Import the new Navbar
 
 export default function AnalysisDetailsPage() {
   const params = useParams();
@@ -64,7 +36,7 @@ export default function AnalysisDetailsPage() {
       router.push('/auth/signin');
     } else if (status === 'authenticated' && analysisId) {
       setLoading(true);
-      fetch(`/api/analysis-results/${analysisId}`) // Assuming an API route to fetch analysis by ID
+      fetch(`/api/analysis-results/${analysisId}`)
         .then(res => {
           if (!res.ok) throw new Error('Failed to fetch analysis details');
           return res.json();
@@ -81,22 +53,25 @@ export default function AnalysisDetailsPage() {
     }
   }, [status, router, analysisId]);
 
-  if (status === 'loading' || loading) {
+  if (status === 'loading' || (loading && !analysisData && !error)) {
     return <AnalysisDetailsLoadingSkeleton />;
   }
 
   if (error || !analysisData) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-lg text-center">
-          <CardHeader>
-            <CardTitle className="text-destructive">Error Loading Analysis</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">{error || "Could not load analysis data."}</p>
-            <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
-          </CardContent>
-        </Card>
+      <div className="flex flex-col min-h-screen">
+        <Navbar />
+        <main className="flex-1 container py-8 flex items-center justify-center">
+            <Card className="w-full max-w-lg text-center">
+            <CardHeader>
+                <CardTitle className="text-destructive">Error Loading Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p className="text-muted-foreground">{error || "Could not load analysis data."}</p>
+                <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
+            </CardContent>
+            </Card>
+        </main>
       </div>
     );
   }
@@ -107,7 +82,7 @@ export default function AnalysisDetailsPage() {
     switch (severity) {
       case 'critical': return 'destructive';
       case 'high': return 'destructive';
-      case 'medium': return 'default'; // Consider an orange/yellow variant
+      case 'medium': return 'default'; 
       case 'low': return 'secondary';
       default: return 'outline';
     }
@@ -124,44 +99,14 @@ export default function AnalysisDetailsPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <BarChartBig className="h-7 w-7 text-primary" />
-            <span className="font-bold text-xl text-foreground font-headline">codexair</span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>Back to PRs</Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2 px-2 py-1 h-auto">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={session?.user?.image || undefined} alt={session?.user?.name || 'User'} />
-                    <AvatarFallback>{session?.user?.name?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
-                  </Avatar>
-                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>{session?.user?.name || 'My Account'}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                 <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-                    <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/analyze')}>
-                    <Github className="mr-2 h-4 w-4" /> Analyze Repo
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })}>
-                  <LogOut className="mr-2 h-4 w-4" /> Log out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
-
+      <Navbar /> {/* Use the new Navbar */}
       <main className="flex-1 container py-8">
+        <div className="mb-6 flex justify-between items-center">
+             {/* Intentionally empty or add page-specific actions here */}
+             {/* The "Back to PRs" button could go here or be removed if Navbar is sufficient */}
+             <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>Back to PRs for {owner}/{repoName}</Button>
+        </div>
+
         <Card className="mb-6 shadow-lg">
           <CardHeader>
             <div className="flex justify-between items-start">
@@ -367,16 +312,11 @@ function MetricCard({ Icon, title, value, unit }: MetricCardProps) {
 function AnalysisDetailsLoadingSkeleton() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-            <Skeleton className="h-8 w-40" /> {/* Logo/Title */}
-            <div className="flex items-center gap-4">
-                <Skeleton className="h-9 w-32" /> {/* Back Button */}
-                <Skeleton className="h-10 w-10 rounded-full" /> {/* Avatar Dropdown */}
-            </div>
-        </div>
-      </header>
+      <Navbar /> {/* Using Navbar directly, assumes it handles its own loading state or matches this */}
       <main className="flex-1 container py-8">
+        <div className="mb-6 flex justify-between items-center">
+            <Skeleton className="h-9 w-40" /> {/* Back Button Skeleton */}
+        </div>
         <Card className="mb-6">
             <CardHeader>
                 <Skeleton className="h-10 w-3/4 mb-2" /> {/* PR Title */}
@@ -407,7 +347,3 @@ function AnalysisDetailsLoadingSkeleton() {
     </div>
   );
 }
-
-// Create new API route src/app/api/analysis-results/[analysisId]/route.ts
-// This route should fetch the analysis document and its associated pull request document.
-// For brevity in this response, the actual API route implementation is omitted but is crucial.
