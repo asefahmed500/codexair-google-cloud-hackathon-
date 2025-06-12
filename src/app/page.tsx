@@ -20,7 +20,12 @@ import {
   LogIn,
   Eye,
   HelpCircle,
-  Workflow
+  Workflow,
+  Settings,
+  Bell,
+  BarChartHorizontalBig,
+  Siren,
+  Briefcase
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -262,6 +267,66 @@ export default function HomePage() {
             </div>
         </section>
 
+        <section className="text-center mb-16">
+          <h2 className="text-3xl font-semibold text-foreground mb-8 font-headline">For Admins (Team Leads/Managers)</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <AdminFeatureCard
+              icon={<Users className="w-10 h-10 text-primary mb-3" />}
+              title="Team Management"
+              items={[
+                "Set up who can see what (some developers might only see their own code, others can see everything)",
+                "Control notification settings (who gets alerted about critical issues)",
+                "Manage access to different repositories",
+              ]}
+            />
+            <AdminFeatureCard
+              icon={<BarChartHorizontalBig className="w-10 h-10 text-primary mb-3" />}
+              title="Monitoring & Reporting"
+              items={[
+                "View team-wide dashboards showing:",
+                "- Overall code quality trends",
+                "- Which files or areas have the most problems",
+                "- Which developers are improving the most",
+                "- Security hotspots that need attention",
+                "Get weekly/monthly reports on team progress",
+                "See leaderboards of who's fixing the most issues",
+              ]}
+            />
+            <AdminFeatureCard
+              icon={<Settings className="w-10 h-10 text-primary mb-3" />}
+              title="Configuration"
+              items={[
+                "Set rules for what counts as \"critical\" vs \"minor\" issues",
+                "Configure which types of problems should block code from going live",
+                "Set up integrations with Slack or email for important alerts",
+                "Customize analysis settings for different programming languages",
+              ]}
+            />
+            <AdminFeatureCard
+              icon={<Siren className="w-10 h-10 text-primary mb-3" />}
+              title="Emergency Response"
+              items={[
+                "Get immediate alerts when critical security vulnerabilities are found",
+                "Ability to block dangerous code from being deployed",
+                "Track which security issues have been fixed vs still open",
+              ]}
+            />
+            <AdminFeatureCard
+              icon={<Briefcase className="w-10 h-10 text-primary mb-3" />}
+              title="Business Intelligence"
+              items={[
+                "See which parts of your codebase are most problematic",
+                "Track technical debt (accumulated code problems) over time",
+                "Compare your team's code quality to industry benchmarks",
+                "Plan refactoring efforts based on data about problem areas",
+              ]}
+            />
+          </div>
+          <p className="mt-8 text-lg text-muted-foreground">
+            The system essentially works like having an expert code reviewer who never sleeps, remembers every bug your team has ever fixed, and can instantly spot patterns across thousands of lines of code - but presents everything in a simple, actionable way for both individual developers and their managers.
+          </p>
+        </section>
+
       </main>
 
       <footer className="mt-16 text-center text-sm text-muted-foreground">
@@ -378,3 +443,39 @@ function JourneyStepCard({ icon, title, items }: JourneyStepCardProps) {
   );
 }
 
+interface AdminFeatureCardProps {
+  icon: React.ReactNode;
+  title: string;
+  items: string[];
+}
+
+function AdminFeatureCard({ icon, title, items }: AdminFeatureCardProps) {
+  return (
+    <Card className="flex flex-col text-left hover:shadow-lg transition-shadow h-full">
+      <CardHeader className="flex-row items-start gap-3 space-y-0">
+        {icon}
+        <div className="flex flex-col">
+          <CardTitle className="text-xl font-semibold">{title}</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-grow">
+        <ul className="space-y-2 text-sm text-muted-foreground list-none p-0">
+          {items.map((item, index) => {
+            const isSubItem = item.startsWith("- ");
+            const content = isSubItem ? item.substring(2) : item;
+            return (
+              <li key={index} className={`flex items-start ${isSubItem ? 'ml-4' : ''}`}>
+                {isSubItem ? (
+                  <span className="flex-shrink-0 mr-2 mt-1 text-primary">-&gt;</span>
+                ) : (
+                  <CheckCircle className="h-4 w-4 mr-2 mt-1 text-primary flex-shrink-0" />
+                )}
+                <span>{content}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
