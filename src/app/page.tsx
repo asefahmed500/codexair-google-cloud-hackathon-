@@ -20,7 +20,7 @@ import {
   LogIn,
   Eye,
   HelpCircle,
-  Workflow // Added Workflow
+  Workflow
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -377,3 +377,4 @@ function JourneyStepCard({ icon, title, items }: JourneyStepCardProps) {
     </Card>
   );
 }
+
