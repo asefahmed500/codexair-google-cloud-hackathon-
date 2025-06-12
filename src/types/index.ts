@@ -54,7 +54,7 @@ export interface SecurityIssue {
 }
 
 export interface Suggestion {
-  type: 'performance' | 'style' | 'bug' | 'feature';
+  type: 'performance' | 'style' | 'bug' | 'feature' | 'optimization' | 'code_smell';
   priority: 'high' | 'medium' | 'low';
   title: string;
   description: string;
@@ -78,7 +78,7 @@ export interface FileAnalysisItem {
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics;
   aiInsights: string;
-  vectorEmbedding?: number[]; // Added for per-file embedding
+  vectorEmbedding?: number[]; 
 }
 
 export interface CodeAnalysis {
@@ -98,15 +98,15 @@ export interface CodeAnalysis {
 export interface TopIssueItem {
   title: string;
   count: number;
-  severity?: SecurityIssue['severity']; // Optional, for security issues
-  priority?: Suggestion['priority']; // Optional, for suggestions
+  severity?: SecurityIssue['severity']; 
+  priority?: Suggestion['priority']; 
   type?: Suggestion['type'] | SecurityIssue['type'];
 }
 
 export interface DashboardOverview {
   totalAnalyses: number;
   avgQualityScore: number;
-  securityIssuesCount: number; // Total critical/high issues
+  securityIssuesCount: number; 
   trendsUp: boolean;
 }
 
@@ -114,16 +114,16 @@ export interface RecentAnalysisItem {
   id: string;
   pullRequestTitle?: string;
   repositoryName?: string;
-  prNumber?: number; // Added prNumber
+  prNumber?: number; 
   qualityScore: number;
-  securityIssues: number; // Count of issues for this specific analysis
+  securityIssues: number; 
   createdAt: Date;
 }
 
 export interface QualityTrendItem {
-  date: string; // Format: YYYY-MM-DD
+  date: string; 
   quality: number;
-  count: number; // Number of analyses on that date
+  count: number; 
 }
 
 export interface DashboardData {
