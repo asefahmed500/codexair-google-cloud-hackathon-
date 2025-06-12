@@ -14,6 +14,7 @@ import { Download, Eye, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { AnalysisReportItem } from '@/types';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge'; // Import Badge
 
 export default function AdminReportsPage() {
   const { data: session, status } = useSession();
@@ -61,17 +62,22 @@ export default function AdminReportsPage() {
         return;
     }
     const headers = ["PR Number", "PR Title", "Repository", "Author", "Analysis Date", "Quality Score", "Critical Issues", "High Issues", "Analysis Link"];
-    const rows = reportData.map(item => [
-        item.prNumber,
-        `"${item.prTitle.replace(/"/g, '""')}"`, 
-        item.repositoryFullName,
-        item.prAuthor,
-        format(new Date(item.analysisDate), 'yyyy-MM-dd HH:mm'),
-        item.qualityScore ?? 'N/A',
-        item.criticalIssuesCount,
-        item.highIssuesCount,
-        item.analysisId && item.repositoryFullName !== 'N/A' ? `${window.location.origin}/analyze/${item.repositoryFullName}/${item.prNumber}/${item.analysisId}` : 'N/A'
-    ]);
+    const rows = reportData.map(item => {
+        const analysisLink = item.analysisId && item.repositoryFullName !== 'N/A' && item.repositoryFullName.includes('/')
+            ? `${window.location.origin}/analyze/${item.repositoryFullName}/${item.prNumber}/${item.analysisId}`
+            : 'N/A';
+        return [
+            item.prNumber,
+            `"${item.prTitle.replace(/"/g, '""')}"`, 
+            item.repositoryFullName,
+            item.prAuthor,
+            format(new Date(item.analysisDate), 'yyyy-MM-dd HH:mm'),
+            item.qualityScore ?? 'N/A',
+            item.criticalIssuesCount,
+            item.highIssuesCount,
+            analysisLink
+        ];
+    });
 
     const csvContent = "data:text/csv;charset=utf-8,"
         + headers.join(",") + "\n"
@@ -87,12 +93,20 @@ export default function AdminReportsPage() {
     toast({title: "CSV Exported", description: "Analysis summary report downloaded.", variant: "default"});
   };
 
+  const getQualityScoreColor = (score: number | null) => {
+    if (score === null || score === undefined) return 'text-muted-foreground';
+    if (score >= 7) return 'text-green-600';
+    if (score >= 4) return 'text-amber-600';
+    return 'text-destructive';
+  };
+
+
   if (status === 'loading' || (loading && !reportData.length && !error)) {
     return (
-      <div className="flex flex-col min-h-screen">
+      <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
         <main className="flex-1 container py-8">
-          <Card>
+          <Card className="shadow-lg">
             <CardHeader>
               <Skeleton className="h-8 w-56 mb-1" />
               <Skeleton className="h-4 w-72" />
@@ -128,10 +142,10 @@ export default function AdminReportsPage() {
   
   if (error) {
     return (
-        <div className="flex flex-col min-h-screen">
+        <div className="flex flex-col min-h-screen bg-secondary/50">
             <Navbar />
             <main className="flex-1 container py-8">
-                <Card className="text-center">
+                <Card className="text-center shadow-lg">
                     <CardHeader><CardTitle className="text-destructive">Error Loading Report</CardTitle></CardHeader>
                     <CardContent><p>{error}</p></CardContent>
                 </Card>
@@ -146,21 +160,28 @@ export default function AdminReportsPage() {
       <main className="flex-1 container py-8">
         <Card className="shadow-lg">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <CardTitle className="text-3xl font-bold font-headline">Analysis Summary Report</CardTitle>
                     <CardDescription>Overview of all analyzed pull requests in the system.</CardDescription>
                 </div>
-                <Button onClick={handleDownloadCSV} disabled={reportData.length === 0} className="mt-4 sm:mt-0">
+                <Button onClick={handleDownloadCSV} disabled={reportData.length === 0 || loading} className="mt-4 sm:mt-0">
                     <Download className="mr-2 h-4 w-4" />
                     Download CSV
                 </Button>
             </div>
           </CardHeader>
           <CardContent>
-            {reportData.length === 0 ? (
+            {loading && reportData.length === 0 && (
+              <div className="space-y-2 mt-4">
+                  <Skeleton className="h-10 w-full" />
+                  {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+              </div>
+            )}
+            {!loading && reportData.length === 0 && !error && (
                 <p className="text-muted-foreground text-center py-10">No analyzed pull requests found to report.</p>
-            ) : (
+            )}
+            {!loading && reportData.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -193,23 +214,17 @@ export default function AdminReportsPage() {
                     <TableCell>{item.repositoryFullName}</TableCell>
                     <TableCell>{item.prAuthor}</TableCell>
                     <TableCell>{format(new Date(item.analysisDate), 'MMM d, yyyy')}</TableCell>
-                    <TableCell className="text-center">
-                      {item.qualityScore !== null ? (
-                        <span className={`font-semibold ${item.qualityScore >= 7 ? 'text-green-600' : item.qualityScore >= 4 ? 'text-amber-600' : 'text-destructive'}`}>
-                          {item.qualityScore.toFixed(1)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">N/A</span>
-                      )}
+                    <TableCell className={`text-center font-semibold ${getQualityScoreColor(item.qualityScore)}`}>
+                      {item.qualityScore !== null ? item.qualityScore.toFixed(1) : <span className="text-muted-foreground">N/A</span>}
                     </TableCell>
-                    <TableCell className={`text-center font-semibold ${item.criticalIssuesCount > 0 ? 'text-destructive' : ''}`}>
-                      {item.criticalIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1 text-destructive" />}
-                       {item.criticalIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1 text-green-600" />}
+                    <TableCell className={`text-center font-semibold ${item.criticalIssuesCount > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                      {item.criticalIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1" />}
+                      {item.criticalIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1" />}
                       {item.criticalIssuesCount}
                     </TableCell>
-                     <TableCell className={`text-center font-semibold ${item.highIssuesCount > 0 ? 'text-orange-500' : ''}`}>
-                      {item.highIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1 text-orange-500" />}
-                      {item.highIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1 text-green-600" />}
+                     <TableCell className={`text-center font-semibold ${item.highIssuesCount > 0 ? 'text-orange-500' : 'text-green-600'}`}>
+                      {item.highIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1" />}
+                      {item.highIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1" />}
                       {item.highIssuesCount}
                     </TableCell>
                     <TableCell className="text-center">
@@ -237,3 +252,4 @@ export default function AdminReportsPage() {
     </div>
   );
 }
+

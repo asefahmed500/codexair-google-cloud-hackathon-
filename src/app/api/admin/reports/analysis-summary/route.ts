@@ -8,6 +8,7 @@ import mongoose from 'mongoose';
 
 
 interface PopulatedPR extends Omit<PRType, 'analysis' | 'repositoryId'> {
+  _id: mongoose.Types.ObjectId; // Ensure _id is of ObjectId type for direct use
   analysis: AnalysisDocType | null;
   repositoryId: RepoType | null;
 }
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
         prTitle: pr.title,
         repositoryFullName: repoFullName,
         prAuthor: pr.author?.login || 'N/A',
-        analysisDate: analysis?.createdAt || pr.updatedAt,
+        analysisDate: analysis?.createdAt || pr.updatedAt, // Prefer analysis date, fallback to PR update
         qualityScore: analysis?.qualityScore !== undefined ? parseFloat(analysis.qualityScore.toFixed(1)) : null,
         criticalIssuesCount,
         highIssuesCount,
@@ -70,3 +71,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
+

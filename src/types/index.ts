@@ -185,16 +185,16 @@ export interface AdminUserView {
 }
 
 export interface AnalysisReportItem {
-  prId: string;
+  prId: string; // MongoDB _id of the PullRequest document
   prNumber: number;
   prTitle: string;
-  repositoryFullName: string;
+  repositoryFullName: string; // e.g., "owner/repo-name"
   prAuthor: string;
   analysisDate: Date;
   qualityScore: number | null;
   criticalIssuesCount: number;
   highIssuesCount: number;
-  analysisId?: string; 
+  analysisId?: string; // MongoDB _id of the Analysis document
 }
 
 export interface AuditLogEntry {
