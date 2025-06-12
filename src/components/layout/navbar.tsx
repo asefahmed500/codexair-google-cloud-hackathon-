@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation'; // Import usePathname
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,15 +19,18 @@ import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileTe
 export default function Navbar() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname(); // Get current path
 
   const handleScrollToFeatures = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
-    if (router.pathname === '/') {
+    if (pathname === '/') {
       e.preventDefault();
       const featuresSection = document.getElementById('features');
       if (featuresSection) {
         featuresSection.scrollIntoView({ behavior: 'smooth' });
       }
     } else {
+      // If not on homepage, just navigate to homepage then scroll.
+      // For a smoother experience, you might store the intent to scroll in a state or query param.
       router.push('/#features');
     }
   };
@@ -61,12 +64,12 @@ export default function Navbar() {
             </Link>
           </Button>
           <Button asChild variant="ghost">
-            <Link href="/#features" onClick={handleScrollToFeatures}>
+            <Link href="/features"> {/* Updated to /features page */}
               <LayoutGrid className="mr-2 h-4 w-4" /> Features
             </Link>
           </Button>
-          <Button asChild variant="ghost" disabled>
-            <Link href="/about">
+          <Button asChild variant="ghost">
+            <Link href="/about"> {/* Updated to /about page and enabled */}
               <Info className="mr-2 h-4 w-4" /> About Us
             </Link>
           </Button>
