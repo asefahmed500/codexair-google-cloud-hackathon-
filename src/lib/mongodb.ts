@@ -3,9 +3,10 @@ import mongoose from 'mongoose';
 import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType } from '@/types';
 
 const MONGODB_URI = process.env.MONGODB_URI;
+console.log('DEBUG: MONGODB_URI being used by mongodb.ts:', MONGODB_URI); // Added for debugging
 
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
+if (!MONGODB_URI || MONGODB_URI.trim() === "") {
+  throw new Error('CRITICAL ERROR: The MONGODB_URI environment variable is not defined or is empty. Please define it in your .env (or .env.local) file with your actual MongoDB connection string. It must start with "mongodb://" or "mongodb+srv://".');
 }
 
 let client: MongoClient;
@@ -96,7 +97,7 @@ const analysisSchema = new mongoose.Schema<AnalysisType>({
 
 
 const pullRequestSchema = new mongoose.Schema<PRType>({
-  repositoryId: { type: String, required: true }, // Could be ObjectId ref if local Repository collection ID is used
+  repositoryId: { type: String, required: true }, // Could be ObjectId if local Repository collection ID is used
   githubId: { type: Number, required: true },
   number: { type: Number, required: true },
   title: String,
