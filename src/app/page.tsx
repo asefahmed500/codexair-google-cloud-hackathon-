@@ -6,7 +6,22 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Github, Zap, ShieldCheck, LineChart, Search, BarChartBig, Lightbulb, Users, Code, GitMerge, CheckCircle } from 'lucide-react';
+import {
+  Github,
+  Zap,
+  ShieldCheck,
+  LineChart,
+  Search,
+  BarChartBig,
+  Lightbulb,
+  Users,
+  Code,
+  CheckCircle,
+  LogIn,
+  Eye,
+  HelpCircle,
+  Workflow // Added Workflow
+} from 'lucide-react';
 import Image from 'next/image';
 
 // Google G logo SVG component
@@ -180,6 +195,51 @@ export default function HomePage() {
                 />
             </div>
         </section>
+        
+        <section className="text-center mb-16">
+          <h2 className="text-3xl font-semibold text-foreground mb-8 font-headline">A Developer's Journey with codexair</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <JourneyStepCard
+              icon={<LogIn className="w-10 h-10 text-primary mb-3" />}
+              title="Getting Started"
+              items={[
+                "You sign in with your GitHub account (like logging into any app with Google)",
+                "You pick which of your code repositories you want the system to analyze",
+                "The platform automatically imports your recent pull requests and starts learning about your codebase",
+              ]}
+            />
+            <JourneyStepCard
+              icon={<Workflow className="w-10 h-10 text-primary mb-3" />}
+              title="Daily Workflow"
+              items={[
+                "When you create a new pull request, the system automatically:",
+                "- Reads through all your code changes",
+                "- Checks for security problems (like places hackers could attack)",
+                "- Looks for code quality issues (messy or hard-to-maintain code)",
+                "- Compares your code to similar code your team wrote before",
+              ]}
+            />
+            <JourneyStepCard
+              icon={<Eye className="w-10 h-10 text-primary mb-3" />}
+              title="What You See"
+              items={[
+                "A dashboard showing your code quality trends over time",
+                "Color-coded highlights on your code: red for security risks, yellow for problems, blue for suggestions",
+                "Smart recommendations like \"Hey, your teammate Sarah fixed this exact same bug last month - here's how she did it\"",
+                "A quality score for each pull request (like a grade from 1-10)",
+              ]}
+            />
+            <JourneyStepCard
+              icon={<HelpCircle className="w-10 h-10 text-primary mb-3" />}
+              title="Getting Help"
+              items={[
+                "Click on any highlighted issue to see why it's a problem and how to fix it",
+                "The system shows you examples of how your team solved similar issues before",
+                "You get notifications when critical security issues are found",
+              ]}
+            />
+          </div>
+        </section>
 
         <section className="text-center mb-16">
             <h2 className="text-3xl font-semibold text-foreground mb-8 font-headline">What You Can Achieve</h2>
@@ -262,17 +322,58 @@ interface ValuePropCardProps {
 
 function ValuePropCard({ icon, title, items }: ValuePropCardProps) {
   return (
-    <Card className="p-6 hover:shadow-lg transition-shadow flex flex-col items-center text-center">
-      {icon}
-      <CardTitle className="text-xl my-3">{title}</CardTitle>
-      <ul className="space-y-2 text-sm text-muted-foreground list-none p-0">
-        {items.map((item, index) => (
-          <li key={index} className="flex items-start">
-            <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-primary flex-shrink-0" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
+    <Card className="p-6 hover:shadow-lg transition-shadow flex flex-col items-center text-center h-full">
+      <CardHeader className="items-center p-2">
+        {icon}
+        <CardTitle className="text-xl my-2">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex-grow">
+        <ul className="space-y-2 text-sm text-muted-foreground list-none p-0">
+          {items.map((item, index) => (
+            <li key={index} className="flex items-start">
+              <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-primary flex-shrink-0" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface JourneyStepCardProps {
+  icon: React.ReactNode;
+  title: string;
+  items: string[];
+}
+
+function JourneyStepCard({ icon, title, items }: JourneyStepCardProps) {
+  return (
+    <Card className="flex flex-col text-left hover:shadow-lg transition-shadow h-full">
+      <CardHeader className="flex-row items-start gap-3 space-y-0">
+        {icon}
+        <div className="flex flex-col">
+          <CardTitle className="text-xl font-semibold">{title}</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-grow">
+        <ul className="space-y-2 text-sm text-muted-foreground list-none p-0">
+          {items.map((item, index) => {
+            const isSubItem = item.startsWith("- ");
+            const content = isSubItem ? item.substring(2) : item;
+            return (
+              <li key={index} className={`flex items-start ${isSubItem ? 'ml-4' : ''}`}>
+                {isSubItem ? (
+                  <span className="flex-shrink-0 mr-2 mt-1 text-primary">-&gt;</span>
+                ) : (
+                  <CheckCircle className="h-4 w-4 mr-2 mt-1 text-primary flex-shrink-0" />
+                )}
+                <span>{content}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </CardContent>
     </Card>
   );
 }
