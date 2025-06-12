@@ -25,7 +25,7 @@ export interface CodeFile {
 
 export interface PullRequest {
   _id: string;
-  repositoryId: string; // This should refer to the _id of the Repository document
+  repositoryId: string | Repository; // Can be ObjectId string or populated Repository object
   owner: string; // For easier linking and display
   repoName: string; // For easier linking and display
   githubId: number;
@@ -85,7 +85,7 @@ export interface FileAnalysisItem {
 
 export interface CodeAnalysis {
   _id: string;
-  pullRequestId: string; // This should be the _id of the PullRequest document
+  pullRequestId: string | PullRequest; // Can be ObjectId string or populated PullRequest object
   qualityScore: number;
   complexity: number;
   maintainability: number;
@@ -113,13 +113,15 @@ export interface DashboardOverview {
 }
 
 export interface RecentAnalysisItem {
-  id: string;
+  id: string; // analysisId
   pullRequestTitle?: string;
-  repositoryName?: string;
+  repositoryName?: string; // This will be fullName like "owner/repo"
   prNumber?: number;
+  owner?: string; // Extracted owner for link construction
+  repo?: string;  // Extracted repoName for link construction
   qualityScore: number;
-  securityIssues: number;
-  createdAt: Date;
+  securityIssues: number; // Count of critical/high
+  createdAt: Date; // Analysis creation date
 }
 
 export interface QualityTrendItem {
@@ -192,3 +194,4 @@ export interface AnalysisReportItem {
   highIssuesCount: number;
   analysisId?: string; 
 }
+

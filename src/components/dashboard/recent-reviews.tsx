@@ -17,7 +17,7 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
     <Card className="shadow-lg h-full flex flex-col">
       <CardHeader>
         <CardTitle className="text-2xl font-semibold font-headline">Recent Analyses</CardTitle>
-        <CardDescription>Quick overview of your latest code reviews.</CardDescription>
+        <CardDescription>Quick overview of the latest code reviews in the system.</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
         {reviews.length === 0 ? (
@@ -32,9 +32,9 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
           <ScrollArea className="h-[350px] pr-3"> {/* Adjusted height */}
             <div className="space-y-4">
               {reviews.map((review) => {
-                const repoParts = review.repositoryName?.split('/');
-                const owner = repoParts?.[0] || 'owner';
-                const repoName = repoParts?.[1] || 'repo';
+                // Use the explicitly provided owner and repo from RecentAnalysisItem
+                const owner = review.owner || 'owner'; // Fallback if not provided
+                const repo = review.repo || 'repo';   // Fallback if not provided
                 
                 return (
                   <div key={review.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
@@ -47,9 +47,9 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
                           {review.repositoryName ? `in ${review.repositoryName}` : ''} {review.prNumber ? `#${review.prNumber}`: ''}
                         </p>
                       </div>
-                      {review.prNumber && review.repositoryName && (
+                      {review.prNumber && review.repositoryName && review.owner && review.repo && (
                         <Button asChild variant="ghost" size="sm">
-                          <Link href={`/analyze/${owner}/${repoName}/${review.prNumber}/${review.id}`}>
+                          <Link href={`/analyze/${owner}/${repo}/${review.prNumber}/${review.id}`}>
                             <Eye className="mr-1.5 h-4 w-4" /> View
                           </Link>
                         </Button>
@@ -77,3 +77,4 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
     </Card>
   );
 }
+
