@@ -6,31 +6,19 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import Navbar from '@/components/layout/navbar'; // Import Navbar
 import {
-  Github,
   Zap,
   ShieldCheck,
   LineChart,
   Search,
   BarChartBig,
-  Lightbulb,
-  Users,
   Code,
   CheckCircle,
   LogIn,
-  Eye,
-  HelpCircle,
-  Workflow,
-  Settings,
-  Bell, 
-  BarChartHorizontalBig, 
-  Siren, 
-  Briefcase, 
   UserPlus,
 } from 'lucide-react';
-// Removed Image import as it's no longer used in FeatureCard
 
-// Google G logo SVG component
 const GoogleIcon = () => (
   <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="mr-2 h-5 w-5">
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
@@ -40,7 +28,6 @@ const GoogleIcon = () => (
     <path fill="none" d="M0 0h48v48H0z"></path>
   </svg>
 );
-
 
 export default function HomePage() {
   const { data: session, status } = useSession();
@@ -54,39 +41,48 @@ export default function HomePage() {
 
   if (status === 'loading') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="text-xl font-semibold text-foreground">Loading...</div>
+      <div className="flex flex-col min-h-screen bg-background">
+        <Navbar /> {/* Show Navbar even during loading for consistency */}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-xl font-semibold text-foreground">Loading...</div>
+        </div>
       </div>
     );
   }
 
+  // If authenticated, redirecting will be handled by useEffect. 
+  // Showing minimal content or a spinner here is fine.
   if (status === 'authenticated') {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="text-xl font-semibold text-foreground">Redirecting to dashboard...</div>
+     return (
+      <div className="flex flex-col min-h-screen bg-background">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-xl font-semibold text-foreground">Redirecting to dashboard...</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <header className="text-center mb-12 pt-16">
-        <BarChartBig className="w-20 h-20 text-primary mx-auto mb-4" />
-        <h1 className="text-5xl font-bold text-foreground mb-3 font-headline">codexair</h1>
-        <p className="text-2xl text-muted-foreground font-light max-w-2xl mx-auto">
-          AI-Powered Code Intelligence. Analyze PRs, find vulnerabilities, track quality, and ship better code, faster.
-        </p>
-      </header>
+    <div className="min-h-screen bg-background flex flex-col">
+      <Navbar />
+      <main className="flex-1 flex flex-col items-center justify-center p-4">
+        <header className="text-center py-16 md:py-24">
+          <BarChartBig className="w-20 h-20 text-primary mx-auto mb-6" />
+          <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-4 font-headline">codexair</h1>
+          <p className="text-xl md:text-2xl text-muted-foreground font-light max-w-3xl mx-auto">
+            Elevate Your Code. AI-Powered Analysis for Superior Software Quality & Security.
+          </p>
+        </header>
 
-      <main className="w-full max-w-5xl">
-        <Card className="shadow-xl mb-16 bg-card/80 backdrop-blur-sm">
+        <Card className="shadow-xl mb-16 sm:mb-24 w-full max-w-lg bg-card/80 backdrop-blur-sm border">
           <CardHeader>
-            <CardTitle className="text-center text-3xl font-headline text-primary">Unlock Your Code's Potential</CardTitle>
+            <CardTitle className="text-center text-2xl md:text-3xl font-headline text-primary">Get Started with codexair</CardTitle>
+            <CardDescription className="text-center text-md md:text-lg text-muted-foreground mt-2">
+              Sign up or log in to harness the power of AI for your code reviews.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="text-center">
-             <p className="text-lg text-muted-foreground mb-8">
-              Join codexair or sign in to continue. It's free and takes seconds.
-            </p>
+          <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Button
                 size="lg"
@@ -104,9 +100,21 @@ export default function HomePage() {
                 <GoogleIcon />
                 Sign Up with Google
                 </Button>
+            </div>
+             <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  Or
+                </span>
+              </div>
+            </div>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Button
                 size="lg"
-                variant="secondary" // Or another variant if "Login" needs to look different
+                variant="secondary"
                 onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
                 className="shadow-md hover:shadow-lg transition-shadow w-full text-lg py-3"
                 >
@@ -125,63 +133,64 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
-        <section className="text-center mb-20">
-            <h2 className="text-3xl font-semibold text-foreground mb-10 font-headline">Core Features</h2>
+        <section className="text-center mb-20 md:mb-32 w-full max-w-5xl px-4">
+            <h2 className="text-3xl md:text-4xl font-semibold text-foreground mb-12 font-headline">Core Features</h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
                 <FeatureCard
-                    icon={<Zap className="w-12 h-12 text-primary mb-3" />}
+                    icon={<Zap className="w-10 h-10 md:w-12 md:h-12 text-primary mb-4" />}
                     title="AI-Powered Review"
-                    description="Automated analysis of pull requests for quality, security, and performance."
+                    description="Automated, intelligent analysis of pull requests for quality, security, and performance."
                 />
                 <FeatureCard
-                    icon={<ShieldCheck className="w-12 h-12 text-primary mb-3" />}
+                    icon={<ShieldCheck className="w-10 h-10 md:w-12 md:h-12 text-primary mb-4" />}
                     title="Security Scanning"
-                    description="Identifies potential vulnerabilities and common weaknesses (CWEs)."
+                    description="Identify potential vulnerabilities and common weaknesses (CWEs) in your codebase."
                 />
                 <FeatureCard
-                    icon={<Search className="w-12 h-12 text-primary mb-3" />}
+                    icon={<Search className="w-10 h-10 md:w-12 md:h-12 text-primary mb-4" />}
                     title="Semantic Code Search"
-                    description="Find similar code patterns and past fixes across your analyses using vector search."
+                    description="Find similar code patterns and past fixes across analyses using vector search."
                 />
                 <FeatureCard
-                    icon={<LineChart className="w-12 h-12 text-primary mb-3" />}
+                    icon={<LineChart className="w-10 h-10 md:w-12 md:h-12 text-primary mb-4" />}
                     title="Quality Dashboards"
-                    description="Track code quality, complexity, and maintainability trends over time."
+                    description="Track code quality, complexity, and maintainability trends over time with actionable insights."
                 />
             </div>
         </section>
 
-        <section className="text-center mb-20 py-12 bg-secondary/50 rounded-lg">
-          <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-semibold text-foreground mb-10 font-headline">Why Choose codexair?</h2>
+        <section className="text-center mb-20 md:mb-32 py-16 md:py-20 bg-secondary/30 rounded-lg w-full">
+          <div className="container mx-auto px-4 max-w-5xl">
+            <h2 className="text-3xl md:text-4xl font-semibold text-foreground mb-12 font-headline">Why Choose codexair?</h2>
             <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
                 <ValuePropCard
-                    icon={<Code className="w-10 h-10 text-accent mb-3" />}
+                    icon={<Code className="w-10 h-10 text-accent mb-4" />}
                     title="For Developers"
                     items={[
-                        "Your AI pair programmer for reviews.",
-                        "Catch issues before they merge.",
-                        "Learn from historical code patterns.",
+                        "Your AI pair programmer for insightful reviews.",
+                        "Proactively catch issues before they merge.",
+                        "Learn from historical code patterns and best practices.",
+                        "Reduce cognitive load during code reviews.",
                     ]}
                 />
                 <ValuePropCard
-                    icon={<Users className="w-10 h-10 text-accent mb-3" />}
+                    icon={<BarChartBig className="w-10 h-10 text-accent mb-4" />} // Changed icon for variety
                     title="For Teams"
                     items={[
-                        "Standardize code quality across projects.",
+                        "Standardize code quality across all projects.",
                         "Identify common pitfalls and knowledge gaps.",
-                        "Streamline review cycles and improve velocity.",
+                        "Streamline review cycles & improve velocity.",
+                        "Foster a culture of continuous improvement.",
                     ]}
                 />
             </div>
           </div>
         </section>
-
       </main>
 
-      <footer className="mt-16 py-8 text-center text-sm text-muted-foreground border-t w-full">
+      <footer className="py-10 text-center text-sm text-muted-foreground border-t w-full">
         <p>&copy; {new Date().getFullYear()} codexair. All rights reserved.</p>
-        <p>Empowering developers with AI-driven code intelligence.</p>
+        <p className="mt-1">Empowering developers with AI-driven code intelligence.</p>
       </footer>
     </div>
   );
@@ -195,15 +204,10 @@ interface FeatureCardProps {
 
 function FeatureCard({ icon, title, description }: FeatureCardProps) {
   return (
-    <Card className="flex flex-col items-center text-center hover:shadow-xl transition-shadow duration-300 overflow-hidden h-full">
-        <CardHeader className="items-center pb-3 pt-6">
-            {icon}
-            <CardTitle className="text-xl font-semibold">{title}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex-grow flex flex-col items-center px-4 pb-6">
-            {/* Image section removed */}
-            <CardDescription className="text-sm">{description}</CardDescription>
-        </CardContent>
+    <Card className="flex flex-col items-center text-center hover:shadow-xl transition-shadow duration-300 overflow-hidden h-full bg-card border p-6 rounded-lg">
+        <div className="mb-4">{icon}</div>
+        <CardTitle className="text-xl font-semibold text-foreground mb-2">{title}</CardTitle>
+        <CardDescription className="text-sm text-muted-foreground flex-grow">{description}</CardDescription>
     </Card>
   );
 }
@@ -216,15 +220,13 @@ interface ValuePropCardProps {
 
 function ValuePropCard({ icon, title, items }: ValuePropCardProps) {
   return (
-    <Card className="p-6 hover:shadow-lg transition-shadow flex flex-col items-center text-center h-full bg-card">
-      <CardHeader className="items-center p-2">
-        {icon}
-        <CardTitle className="text-xl my-2 font-semibold">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex-grow">
+    <Card className="p-6 hover:shadow-lg transition-shadow flex flex-col items-center text-center h-full bg-background border rounded-lg">
+      <div className="mb-4">{icon}</div>
+      <CardTitle className="text-xl my-2 font-semibold text-foreground">{title}</CardTitle>
+      <CardContent className="flex-grow mt-2">
         <ul className="space-y-2 text-sm text-muted-foreground list-none p-0">
           {items.map((item, index) => (
-            <li key={index} className="flex items-start">
+            <li key={index} className="flex items-start text-left">
               <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-primary flex-shrink-0" />
               <span>{item}</span>
             </li>
@@ -234,4 +236,3 @@ function ValuePropCard({ icon, title, items }: ValuePropCardProps) {
     </Card>
   );
 }
-    

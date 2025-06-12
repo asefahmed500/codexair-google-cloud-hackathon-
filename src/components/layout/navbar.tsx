@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck } from 'lucide-react'; // Added BookCheck for Audit Logs
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck } from 'lucide-react';
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -34,6 +34,7 @@ export default function Navbar() {
     );
   }
 
+  // Minimal Navbar for unauthenticated users (e.g., on the homepage)
   if (!session) {
      return (
        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -42,11 +43,16 @@ export default function Navbar() {
             <BarChartBig className="h-7 w-7 text-primary" />
             <span className="font-bold text-xl text-foreground font-headline">codexair</span>
           </Link>
+          {/* Optionally, add a "Login" button here if desired for homepage */}
+           <Button variant="outline" onClick={() => router.push('/auth/signin')}>
+            Sign In / Sign Up
+          </Button>
         </div>
       </header>
      );
   }
 
+  // Full Navbar for authenticated users
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
