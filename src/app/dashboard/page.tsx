@@ -14,8 +14,8 @@ import { DashboardData } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import Link from 'next/link';
 import Navbar from '@/components/layout/navbar';
-import DashboardLoading from './loading'; // Import the detailed loading skeleton
-import { BarChartBig, Shield } from 'lucide-react'; // Added Shield for admin button
+import DashboardLoading from './loading'; 
+import { BarChartBig, Shield } from 'lucide-react'; 
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
