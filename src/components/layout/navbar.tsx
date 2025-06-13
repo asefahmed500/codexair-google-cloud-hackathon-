@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog } from 'lucide-react';
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -122,8 +122,13 @@ export default function Navbar() {
                 <DropdownMenuItem onClick={() => router.push('/dashboard')}>
                   <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/profile')}>
+                  <UserCircle className="mr-2 h-4 w-4" /> Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/settings')}>
+                  <Cog className="mr-2 h-4 w-4" /> Settings
+                </DropdownMenuItem>
                 
-                {/* Admin specific links - THIS IS THE CRITICAL CHECK */}
                 {session.user && session.user.role === 'admin' && (
                   <>
                     <DropdownMenuSeparator />
@@ -140,15 +145,6 @@ export default function Navbar() {
                   </>
                 )}
 
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled>
-                  <UserCircle className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })}>
                   <LogOut className="mr-2 h-4 w-4" />
