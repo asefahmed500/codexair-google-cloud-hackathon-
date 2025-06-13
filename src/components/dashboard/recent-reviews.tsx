@@ -1,4 +1,6 @@
 
+'use client';
+
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,11 +34,10 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
           <ScrollArea className="h-[350px] pr-3"> 
             <div className="space-y-4">
               {reviews.map((review) => {
-                // Ensure all parts for the link are present and valid
                 const owner = review.owner;
                 const repo = review.repo;
                 const prNumber = review.prNumber;
-                const analysisId = review.id;
+                const analysisId = review.id; // This is the analysisId
                 const canLink = owner && repo && prNumber && analysisId;
                 
                 const displayTitle = review.pullRequestTitle || `PR #${prNumber || 'N/A'}`;
@@ -90,3 +91,4 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
   );
 }
     
+

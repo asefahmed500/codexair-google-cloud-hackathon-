@@ -90,3 +90,4 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
     </Card>
   );
 }
+

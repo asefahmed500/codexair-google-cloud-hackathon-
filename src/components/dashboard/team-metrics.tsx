@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TeamMemberMetric } from "@/types";
-import { Users, TrendingUp, AlertCircle, CheckCircle2 } from "lucide-react"; // Added CheckCircle2
+import { Users, TrendingUp, AlertCircle, CheckCircle2 } from "lucide-react"; 
 
 interface TeamMetricsProps {
   metrics: TeamMemberMetric[];
@@ -23,7 +23,7 @@ export default function TeamMetrics({ metrics }: TeamMetricsProps) {
         <CardDescription>Overview of contributor activity and code quality.</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
-        {metrics.length === 0 ? (
+        {!metrics || metrics.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Users className="w-16 h-16 text-muted-foreground mb-4" />
             <p className="text-muted-foreground">No contributor metrics available yet.</p>
@@ -79,3 +79,4 @@ export default function TeamMetrics({ metrics }: TeamMetricsProps) {
 }
 
     
+

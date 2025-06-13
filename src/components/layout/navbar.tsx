@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
-import { usePathname, useRouter } from 'next/navigation'; // Import usePathname
+import { usePathname, useRouter } from 'next/navigation'; 
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog } from 'lucide-react';
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -22,14 +22,13 @@ export default function Navbar() {
   const pathname = usePathname(); 
 
   const handleScrollToFeatures = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
-    e.preventDefault(); // Prevent default link behavior
+    e.preventDefault(); 
     if (pathname === '/') {
       const featuresSection = document.getElementById('features');
       if (featuresSection) {
         featuresSection.scrollIntoView({ behavior: 'smooth' });
       }
     } else {
-      // If not on homepage, navigate to homepage and then scroll
       router.push('/#features');
     }
   };
@@ -42,7 +41,7 @@ export default function Navbar() {
             <BarChartBig className="h-7 w-7 text-primary" />
             <span className="font-bold text-xl text-foreground font-headline">codexair</span>
           </div>
-          <div className="h-10 w-10 bg-muted rounded-full animate-pulse"></div> {/* Placeholder for avatar */}
+          <div className="h-10 w-10 bg-muted rounded-full animate-pulse"></div>
         </div>
       </header>
     );
@@ -70,7 +69,7 @@ export default function Navbar() {
              </Button>
           ) : (
             <Button asChild variant="ghost">
-                <Link href="/#features">
+                <Link href="/features">
                     <LayoutGrid className="mr-2 h-4 w-4" /> Features
                 </Link>
             </Button>
@@ -78,11 +77,6 @@ export default function Navbar() {
           <Button asChild variant="ghost">
             <Link href="/about">
               <Info className="mr-2 h-4 w-4" /> About Us
-            </Link>
-          </Button>
-           <Button asChild variant="ghost">
-            <Link href="/features">
-              <LayoutGrid className="mr-2 h-4 w-4" /> Our Features
             </Link>
           </Button>
 
@@ -128,6 +122,12 @@ export default function Navbar() {
                 <DropdownMenuItem onClick={() => router.push('/dashboard')}>
                   <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/profile')}>
+                  <UserCircle className="mr-2 h-4 w-4" /> Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/settings')}>
+                  <Cog className="mr-2 h-4 w-4" /> Settings
+                </DropdownMenuItem>
                 
                 {session.user && session.user.role === 'admin' && (
                   <>
@@ -145,15 +145,6 @@ export default function Navbar() {
                   </>
                 )}
 
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled>
-                  <UserCircle className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })}>
                   <LogOut className="mr-2 h-4 w-4" />

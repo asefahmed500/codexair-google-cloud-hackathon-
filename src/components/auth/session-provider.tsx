@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Session } from 'next-auth';
@@ -16,3 +17,4 @@ export default function SessionProvider({ children, session }: Props) {
     </Provider>
   );
 }
+

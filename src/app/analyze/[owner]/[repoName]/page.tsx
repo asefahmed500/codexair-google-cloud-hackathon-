@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { PullRequest as PRType } from '@/types';
-import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert } from 'lucide-react';
+import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, Star } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -16,14 +16,14 @@ import Navbar from '@/components/layout/navbar';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface PullRequestWithAnalysisStatus extends PRType {
-  id: number | string; // GitHub PR ID
+  id: number | string; 
   html_url?: string;
   created_at: string; 
   updated_at: string; 
   user?: { login: string; avatar_url?: string }; 
   analysisStatus?: 'analyzed' | 'pending' | 'failed' | 'not_started';
   analysisId?: string;
-  qualityScore?: number;
+  qualityScore?: number | null; // Allow null for qualityScore
 }
 
 export default function RepositoryAnalysisPage() {
@@ -81,7 +81,6 @@ export default function RepositoryAnalysisPage() {
       return;
     }
     setAnalyzingPR(pullNumber);
-    // Optimistically update local state to 'pending'
     setPullRequests(prevPRs => 
       prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'pending' } : pr)
     );
@@ -94,7 +93,6 @@ export default function RepositoryAnalysisPage() {
       });
       if (!response.ok) {
         const errorData = await response.json();
-        // Revert status if API call failed
         setPullRequests(prevPRs => 
           prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'not_started' } : pr) 
         );
@@ -102,7 +100,6 @@ export default function RepositoryAnalysisPage() {
       }
       const result = await response.json();
       toast({ title: "Analysis Started", description: `Analysis for PR #${pullNumber} is in progress. Result page will open.` });
-      // Update status to analyzed and store analysisId
       setPullRequests(prevPRs => 
         prevPRs.map(pr => pr.number === pullNumber ? { 
             ...pr, 
@@ -115,7 +112,6 @@ export default function RepositoryAnalysisPage() {
     } catch (err: any) {
       setError(err.message); 
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
-       // Revert status if any error during process
       setPullRequests(prevPRs => 
         prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'not_started' } : pr)
       );
@@ -133,13 +129,27 @@ export default function RepositoryAnalysisPage() {
     }
   }
 
+  const getQualityScoreColor = (score: number | null | undefined) => {
+    if (score === null || score === undefined) return 'text-muted-foreground';
+    if (score >= 7) return 'text-green-600';
+    if (score >= 4) return 'text-amber-600';
+    return 'text-destructive';
+  };
+
   const getAnalysisStatusContent = (pr: PullRequestWithAnalysisStatus) => {
     switch (pr.analysisStatus) {
       case 'analyzed':
         return (
-          <span className="flex items-center gap-1 text-green-600" title={`Quality Score: ${pr.qualityScore?.toFixed(1) ?? 'N/A'}`}>
-            <CheckCircle className="h-4 w-4" /> Analysis complete
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-green-600">
+              <CheckCircle className="h-4 w-4" /> Analysis complete
+            </span>
+            {pr.qualityScore !== null && pr.qualityScore !== undefined && (
+              <Badge variant="outline" className={`font-semibold ${getQualityScoreColor(pr.qualityScore)}`}>
+                QS: {pr.qualityScore.toFixed(1)}
+              </Badge>
+            )}
+          </div>
         );
       case 'pending':
         return <span className="flex items-center gap-1 text-amber-600"><Clock className="h-4 w-4 animate-spin-slow" /> Analysis pending...</span>;

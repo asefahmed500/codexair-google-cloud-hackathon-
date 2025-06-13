@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import type { SecurityHotspotItem } from "@/types";
-import { AlertTriangle, FileWarning, CalendarDays, GitPullRequest } from "lucide-react"; // Added GitPullRequest
+import { AlertTriangle, FileWarning, CalendarDays, GitPullRequest } from "lucide-react"; 
 import { formatDistanceToNow, format } from 'date-fns';
 
 interface SecurityHotspotsProps {
@@ -23,11 +23,11 @@ export default function SecurityHotspots({ hotspots }: SecurityHotspotsProps) {
         <CardDescription>Files with the most critical or high-severity security issues.</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
-        {hotspots.length === 0 ? (
+        {!hotspots || hotspots.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <AlertTriangle className="w-16 h-16 text-muted-foreground mb-4" />
             <p className="text-muted-foreground">No significant security hotspots identified.</p>
-            <p className="text-xs text-muted-foreground mt-1">Keep analyzing your PRs!</p>
+            <p className="text-xs text-muted-foreground mt-1">Keep analyzing your PRs to find hotspots!</p>
           </div>
         ) : (
           <ScrollArea className="h-[320px] pr-3">
@@ -48,7 +48,7 @@ export default function SecurityHotspots({ hotspots }: SecurityHotspotsProps) {
                         <GitPullRequest className="h-3 w-3"/>
                         In {hotspot.relatedPrIds.length} PR(s)
                     </span>
-                     <div className="flex items-center gap-1" title={`Last issue detected: ${format(new Date(hotspot.lastOccurrence), "PPp")}`}>
+                     <div className="flex items-center gap-1" title={`Last issue detected: ${hotspot.lastOccurrence && new Date(hotspot.lastOccurrence).getFullYear() > 1970 ? format(new Date(hotspot.lastOccurrence), "PPp") : 'Date N/A'}`}>
                         <CalendarDays className="h-3 w-3"/>
                         {hotspot.lastOccurrence && new Date(hotspot.lastOccurrence).getFullYear() > 1970 ? formatDistanceToNow(new Date(hotspot.lastOccurrence), { addSuffix: true }) : 'N/A'}
                      </div>
@@ -65,3 +65,4 @@ export default function SecurityHotspots({ hotspots }: SecurityHotspotsProps) {
 }
 
     
+

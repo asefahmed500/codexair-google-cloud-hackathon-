@@ -24,3 +24,4 @@ declare module 'next-auth/jwt' {
     status?: 'active' | 'suspended'; // Add status to JWT
   }
 }
+

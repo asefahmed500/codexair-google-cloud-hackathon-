@@ -20,6 +20,8 @@ import Navbar from '@/components/layout/navbar';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
+const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated.";
+
 export default function AnalysisDetailsPage() {
   const params = useParams();
   const owner = params.owner as string;
@@ -117,6 +119,9 @@ export default function AnalysisDetailsPage() {
   }
   
   const { analysis, pullRequest } = analysisData;
+  const displayAiInsights = analysis.aiInsights && analysis.aiInsights !== FALLBACK_SUMMARY_MESSAGE 
+                            ? analysis.aiInsights
+                            : "AI summary for this pull request is not available or could not be generated.";
 
   const getSeverityBadgeVariant = (severity: SecurityIssue['severity']) => {
     switch (severity) {
@@ -165,7 +170,9 @@ export default function AnalysisDetailsPage() {
             <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-muted/30">
                 <h3 className="font-semibold text-lg flex items-center gap-2"><Lightbulb className="h-5 w-5 text-accent" />AI Review Summary:</h3>
                 <ScrollArea className="h-auto max-h-48 w-full rounded-md border p-4 bg-background shadow">
-                    <pre className="text-sm whitespace-pre-wrap text-foreground font-mono">{analysis.aiInsights}</pre>
+                    <pre className={`text-sm whitespace-pre-wrap font-mono ${analysis.aiInsights === FALLBACK_SUMMARY_MESSAGE ? 'text-muted-foreground italic' : 'text-foreground'}`}>
+                        {displayAiInsights}
+                    </pre>
                 </ScrollArea>
             </CardFooter>
           )}
@@ -504,4 +511,5 @@ function AnalysisDetailsLoadingSkeleton() {
     </div>
   );
 }
+
 

@@ -14,8 +14,8 @@ import { DashboardData } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import Link from 'next/link';
 import Navbar from '@/components/layout/navbar';
-import DashboardLoading from './loading'; // Import the detailed loading skeleton
-import { BarChartBig } from 'lucide-react';
+import DashboardLoading from './loading'; 
+import { BarChartBig, Shield } from 'lucide-react'; 
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -135,7 +135,18 @@ export default function DashboardPage() {
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
       <main className="flex-1 container py-8">
-        <h1 className="text-3xl font-bold mb-8 text-foreground font-headline">codexair Dashboard</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+            <h1 className="text-3xl font-bold text-foreground font-headline">codexair Dashboard</h1>
+            {session.user.role === 'admin' && (
+                <Button asChild variant="outline" className="shadow-sm hover:shadow-md transition-shadow">
+                    <Link href="/admin">
+                        <Shield className="mr-2 h-5 w-5 text-accent" />
+                        Go to Admin Panel
+                    </Link>
+                </Button>
+            )}
+        </div>
+        
         {dashboardData && ( 
           <div className="grid gap-6">
             <AnalyticsOverview overview={dashboardData.overview} />
