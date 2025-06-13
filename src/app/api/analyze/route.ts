@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { getPullRequestDetails, getPullRequestFiles, getFileContent, getRepositoryDetails } from '@/lib/github';
 import { analyzeCode } from '@/ai/flows/code-quality-analysis'; 
+import { summarizePrAnalysis } from '@/ai/flows/summarize-pr-analysis-flow'; // Import new flow
 import { PullRequest, Analysis, Repository, connectMongoose } from '@/lib/mongodb';
 import type { CodeAnalysisOutput as AIAnalysisOutput, FileAnalysisItem, PullRequest as PRType, CodeFile as CodeFileType } from '@/types';
 import { ai } from '@/ai/genkit';
@@ -57,12 +58,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `GitHub repository ${repoFullName} not found or inaccessible.` }, { status: 404 });
       }
       localRepo = await Repository.findOneAndUpdate(
-        { githubId: ghRepoDetails.id, userId: session.user.id }, // Query by githubId and userId to ensure uniqueness if user re-adds
+        { githubId: ghRepoDetails.id, userId: session.user.id }, 
         {
-          $set: { // Use $set to avoid overwriting existing fields if any partial doc exists
+          $set: { 
             name: ghRepoDetails.name,
             fullName: ghRepoDetails.full_name,
-            owner: ghRepoDetails.owner.login, // Ensure this is 'owner' from request params for consistency
+            owner: ghRepoDetails.owner.login, 
             githubId: ghRepoDetails.id,
             language: ghRepoDetails.language || 'N/A',
             stars: ghRepoDetails.stargazers_count || 0,
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
       );
       console.log(`[API/ANALYZE] Synced repository ${localRepo.fullName} with local ID ${localRepo._id}`);
     }
-    if (!localRepo) { // Should not happen if above logic is correct
+    if (!localRepo) { 
         return NextResponse.json({ error: `Repository ${repoFullName} not found locally or could not be synced.` }, { status: 404 });
     }
 
@@ -108,13 +109,13 @@ export async function POST(request: NextRequest) {
 
     // Step 4: Analyze files
     const fileAnalysesPromises = filesToConsider.map(async (file): Promise<FileAnalysisItem | null> => {
+        let analysisContext = "full file"; // Default context
         try {
           let contentToAnalyze: string | null = null;
-          let analysisContext = "full file"; 
-
+          
           console.log(`[API/ANALYZE] Preparing to analyze file: ${file.filename}, status: ${file.status}`);
 
-          if (file.status === 'added' || file.status === 'renamed') { // Treat renamed as added for content analysis
+          if (file.status === 'added' || file.status === 'renamed') { 
             contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
             analysisContext = file.status === 'added' ? "full file (added)" : "full file (renamed)";
           } else if (file.status === 'modified' && file.patch) {
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
               contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
               analysisContext = "full file (fallback from diff)";
             }
-          } else { // Fallback for unexpected cases or statuses we don't explicitly handle for diffs
+          } else { 
             console.warn(`[API/ANALYZE] Unhandled file status or condition for ${file.filename} (status: ${file.status}). Analyzing full content as fallback.`);
             contentToAnalyze = await getFileContent(owner, repoName, file.filename, ghPullRequest.head.sha);
             analysisContext = "full file (general fallback)";
@@ -148,22 +149,21 @@ export async function POST(request: NextRequest) {
           const aiResponse: AIAnalysisOutput = await analyzeCode({ code: contentToAnalyze, filename: file.filename });
           
           let fileEmbedding: number[] | undefined = undefined;
-          // Only generate embedding if contentToAnalyze is valid
           if (contentToAnalyze && contentToAnalyze.trim() !== '') { 
             try {
               const embeddingResult = await ai.generate({
                 model: 'googleai/text-embedding-004',
-                prompt: contentToAnalyze, // Use the (potentially truncated) content that was analyzed
+                prompt: contentToAnalyze, 
               });
               
               let rawEmbedding = embeddingResult.output;
-              if (rawEmbedding && typeof rawEmbedding === 'object' && 'embedding' in rawEmbedding && Array.isArray(rawEmbedding.embedding)) {
-                  fileEmbedding = rawEmbedding.embedding;
-              } else if (rawEmbedding && typeof rawEmbedding === 'object' && 'vector' in rawEmbedding && Array.isArray(rawEmbedding.vector)) {
-                  fileEmbedding = rawEmbedding.vector; // Some models might use 'vector'
-              } else if (Array.isArray(rawEmbedding)) { // Direct array output
+              if (Array.isArray(rawEmbedding) && rawEmbedding.every(n => typeof n === 'number')) {
                   fileEmbedding = rawEmbedding;
+              } else if (rawEmbedding && typeof rawEmbedding === 'object') { // Handle nested structures if any model returns that
+                  if ('embedding' in rawEmbedding && Array.isArray(rawEmbedding.embedding)) fileEmbedding = rawEmbedding.embedding;
+                  else if ('vector' in rawEmbedding && Array.isArray(rawEmbedding.vector)) fileEmbedding = rawEmbedding.vector;
               }
+
 
               if (!fileEmbedding || !fileEmbedding.every(n => typeof n === 'number')) {
                  console.warn(`[API/ANALYZE] Unexpected or missing embedding format for ${file.filename}. Output:`, embeddingResult.output);
@@ -176,7 +176,6 @@ export async function POST(request: NextRequest) {
               }
             } catch (embeddingError: any) {
               console.error(`[API/ANALYZE] Error generating embedding for file ${file.filename}:`, embeddingError.message);
-              // Continue without embedding for this file
             }
           } else {
             console.log(`[API/ANALYZE] Skipping embedding for ${file.filename} due to empty or invalid content.`);
@@ -190,12 +189,11 @@ export async function POST(request: NextRequest) {
             securityIssues: aiResponse.securityIssues || [],
             suggestions: aiResponse.suggestions || [],
             metrics: aiResponse.metrics || { linesOfCode: 0, cyclomaticComplexity: 0, cognitiveComplexity: 0, duplicateBlocks: 0 },
-            aiInsights: aiResponse.aiInsights || '',
+            aiInsights: aiResponse.aiInsights || '', // This is the per-file AI insight
             vectorEmbedding: fileEmbedding,
           };
         } catch (error: any) {
           console.error(`[API/ANALYZE] Error analyzing file ${file.filename}:`, error.message, error.stack);
-          // Return null for this file so Promise.all doesn't break, but log the error
           return null; 
         }
       });
@@ -203,21 +201,52 @@ export async function POST(request: NextRequest) {
     const fileAnalysesResults = (await Promise.all(fileAnalysesPromises)).filter(Boolean) as FileAnalysisItem[];
     console.log(`[API/ANALYZE] Successfully analyzed ${fileAnalysesResults.length} files.`);
 
-    // Step 5: Aggregate analysis results
+    // Step 5: Aggregate analysis results for overall metrics
     const totalAnalyzedFiles = fileAnalysesResults.length;
-    const aggregatedAnalysis: Omit<AIAnalysisOutput, '_id' | 'pullRequestId' | 'createdAt' | 'vectorEmbedding'> & { fileAnalyses?: FileAnalysisItem[] } = {
-      qualityScore: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.qualityScore, 0) / totalAnalyzedFiles : 0,
-      complexity: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.complexity, 0) / totalAnalyzedFiles : 0,
-      maintainability: totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.maintainability, 0) / totalAnalyzedFiles : 0,
-      securityIssues: fileAnalysesResults.flatMap(a => a.securityIssues || []),
-      suggestions: fileAnalysesResults.flatMap(a => a.suggestions || []),
+    const aggregatedQualityScore = totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.qualityScore, 0) / totalAnalyzedFiles : 0;
+    const aggregatedComplexity = totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.complexity, 0) / totalAnalyzedFiles : 0;
+    const aggregatedMaintainability = totalAnalyzedFiles > 0 ? fileAnalysesResults.reduce((sum, a) => sum + a.maintainability, 0) / totalAnalyzedFiles : 0;
+    const allSecurityIssues = fileAnalysesResults.flatMap(a => a.securityIssues || []);
+    const allSuggestions = fileAnalysesResults.flatMap(a => a.suggestions || []);
+    
+    const totalCriticalIssues = allSecurityIssues.filter(s => s.severity === 'critical').length;
+    const totalHighIssues = allSecurityIssues.filter(s => s.severity === 'high').length;
+
+    // Step 5.5: Generate PR-level summary using the new flow
+    let prLevelSummary = 'Overall analysis summary could not be generated.';
+    if (totalAnalyzedFiles > 0) {
+        try {
+            const summaryInput = {
+                prTitle: ghPullRequest.title,
+                overallQualityScore: aggregatedQualityScore,
+                totalCriticalIssues: totalCriticalIssues,
+                totalHighIssues: totalHighIssues,
+                totalSuggestions: allSuggestions.length,
+                fileCount: totalAnalyzedFiles,
+                perFileSummaries: fileAnalysesResults.map(fa => ({ filename: fa.filename, insight: fa.aiInsights })),
+            };
+            const summaryOutput = await summarizePrAnalysis(summaryInput);
+            prLevelSummary = summaryOutput.prSummary;
+            console.log(`[API/ANALYZE] Generated PR-level summary for PR #${pullNumber}.`);
+        } catch (summaryError: any) {
+            console.error(`[API/ANALYZE] Error generating PR-level summary for PR #${pullNumber}:`, summaryError.message);
+        }
+    }
+
+
+    const finalAnalysisData = {
+      qualityScore: aggregatedQualityScore,
+      complexity: aggregatedComplexity,
+      maintainability: aggregatedMaintainability,
+      securityIssues: allSecurityIssues,
+      suggestions: allSuggestions,
       metrics: {
         linesOfCode: fileAnalysesResults.reduce((sum, fa) => sum + (fa.metrics?.linesOfCode || 0), 0),
         cyclomaticComplexity: totalAnalyzedFiles > 0 ? parseFloat((fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.cyclomaticComplexity || 0), 0) / totalAnalyzedFiles).toFixed(1)) : 0,
         cognitiveComplexity: totalAnalyzedFiles > 0 ? parseFloat((fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.cognitiveComplexity || 0), 0) / totalAnalyzedFiles).toFixed(1)) : 0,
         duplicateBlocks: fileAnalysesResults.reduce((sum, fa) => sum + (fa.metrics?.duplicateBlocks || 0), 0),
       },
-      aiInsights: fileAnalysesResults.map(a => `File: ${a.filename} (Analyzed Lines: ${a.metrics?.linesOfCode || 'N/A'} from ${a.metrics?.linesOfCode ? analysisContext : 'N/A'}):\n${a.aiInsights}`).join('\n\n---\n\n') || 'No AI insights generated for individual files.',
+      aiInsights: prLevelSummary, // Use the new PR-level summary
       fileAnalyses: fileAnalysesResults,
     };
     
@@ -231,12 +260,12 @@ export async function POST(request: NextRequest) {
         patch: f.patch || '',
       }));
 
-    let savedPR = existingPR; // Use existingPR if found earlier (without analysis)
+    let savedPR = existingPR; 
     if (!savedPR) {
       savedPR = new PullRequest({
         repositoryId: localRepo._id.toString(), 
-        owner: owner, // Store owner from request params
-        repoName: repoName, // Store repoName from request params
+        owner: owner, 
+        repoName: repoName, 
         githubId: ghPullRequest.id, 
         number: pullNumber,
         title: ghPullRequest.title,
@@ -252,14 +281,13 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date(ghPullRequest.updated_at),
       });
     } else {
-      // Update existing PR details if it was already in DB but without analysis
       savedPR.title = ghPullRequest.title;
       savedPR.body = ghPullRequest.body || '';
       savedPR.state = ghPullRequest.state as PRType['state'];
       savedPR.files = prFiles; 
-      savedPR.owner = owner; // Ensure owner/repoName are updated
+      savedPR.owner = owner; 
       savedPR.repoName = repoName;
-      savedPR.author = { // Update author info
+      savedPR.author = { 
           login: ghPullRequest.user?.login || savedPR.author?.login || 'unknown',
           avatar: ghPullRequest.user?.avatar_url || savedPR.author?.avatar || '',
       };
@@ -270,7 +298,7 @@ export async function POST(request: NextRequest) {
 
     const analysisDoc = new Analysis({
       pullRequestId: savedPR._id,
-      ...aggregatedAnalysis,
+      ...finalAnalysisData,
     });
     await analysisDoc.save();
     console.log(`[API/ANALYZE] Saved Analysis ${analysisDoc._id} for PR ${savedPR._id}`);
@@ -278,7 +306,6 @@ export async function POST(request: NextRequest) {
     savedPR.analysis = analysisDoc._id;
     await savedPR.save();
 
-    // Populate analysis for the response
     const populatedPR = await PullRequest.findById(savedPR._id).populate('analysis').lean();
 
     return NextResponse.json({ analysis: analysisDoc.toObject(), pullRequest: populatedPR });
@@ -299,4 +326,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errorMessage, details: error.message }, { status: statusCode });
   }
 }
-
