@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { AdminUserView } from '@/types';
-import type { AdminSummaryStats } from '@/app/api/admin/summary-stats/route'; 
+import type { AdminSummaryStats } from '@/app/api/admin/summary-stats/route';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX } from 'lucide-react';
@@ -43,10 +43,10 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    if (sessionStatus === 'loading') return; 
+    if (sessionStatus === 'loading') return;
 
     if (!session || session.user.role !== 'admin') {
-      router.replace('/auth/signin'); 
+      router.replace('/auth/signin');
       return;
     }
 
@@ -156,7 +156,7 @@ export default function AdminPage() {
       
       toast({ title: "User Updated", description: result.message, variant: "default" });
       setUsers(prevUsers => {
-        const updatedUsers = prevUsers.map(u => 
+        const updatedUsers = prevUsers.map(u =>
             (u._id === userId ? { ...u, ... (newRole && {role: newRole}), ...(newStatus && {status: newStatus}) } : u)
         );
         updateAdminCounts(updatedUsers); // Recalculate admin counts after update
@@ -329,9 +329,9 @@ export default function AdminPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                         <Button 
-                            variant="outline" 
-                            size="sm" 
+                         <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => confirmStatusChange(user._id, user.status === 'active' ? 'suspended' : 'active')}
                             disabled={disableStatusChange}
                             title={statusChangeTitle}
@@ -340,7 +340,11 @@ export default function AdminPage() {
                             {user.status === 'active' ? 'Suspend' : 'Activate'}
                          </Button>
                       </TableCell>
-                      <TableCell>{format(new Date(user.createdAt), 'PPP')}</TableCell>
+                      <TableCell>
+                        {user.createdAt && !isNaN(new Date(user.createdAt).getTime())
+                          ? format(new Date(user.createdAt), 'PPP')
+                          : 'N/A'}
+                      </TableCell>
                     </TableRow>
                   );
                 })}

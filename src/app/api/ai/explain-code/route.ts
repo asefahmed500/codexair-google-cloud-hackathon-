@@ -2,8 +2,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { explainCode, ExplainCodeInputSchema, type ExplainCodeInput } from '@/ai/flows/explain-code-flow';
-import { z } from 'genkit';
+import { explainCode, type ExplainCodeInput } from '@/ai/flows/explain-code-flow';
+import { z } from 'genkit'; // Use genkit's Zod instance if preferred, or plain 'zod'
+
+// Define the input schema locally for validation within the API route
+const LocalExplainCodeInputSchema = z.object({
+  code: z.string().describe('The code snippet to explain.'),
+  language: z.string().optional().describe('The programming language of the code snippet. If not provided, the AI will attempt to infer it.'),
+  question: z.string().describe('The specific question about the code (e.g., "What does this do?", "Why is this a bad practice?", "How can this be improved?").'),
+});
 
 
 export async function POST(request: NextRequest) {
@@ -17,7 +24,7 @@ export async function POST(request: NextRequest) {
     
     let validatedInput: ExplainCodeInput;
     try {
-      validatedInput = ExplainCodeInputSchema.parse(reqBody);
+      validatedInput = LocalExplainCodeInputSchema.parse(reqBody);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return NextResponse.json({ error: 'Invalid input', details: err.errors }, { status: 400 });
@@ -47,3 +54,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errorMessage, details: error.message }, { status: 500 });
   }
 }
+

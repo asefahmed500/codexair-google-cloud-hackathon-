@@ -19,18 +19,17 @@ import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileTe
 export default function Navbar() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const pathname = usePathname(); // Get current path
+  const pathname = usePathname(); 
 
   const handleScrollToFeatures = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
+    e.preventDefault(); // Prevent default link behavior
     if (pathname === '/') {
-      e.preventDefault();
       const featuresSection = document.getElementById('features');
       if (featuresSection) {
         featuresSection.scrollIntoView({ behavior: 'smooth' });
       }
     } else {
-      // If not on homepage, just navigate to homepage then scroll.
-      // For a smoother experience, you might store the intent to scroll in a state or query param.
+      // If not on homepage, navigate to homepage and then scroll
       router.push('/#features');
     }
   };
@@ -63,14 +62,27 @@ export default function Navbar() {
               <Home className="mr-2 h-4 w-4" /> Home
             </Link>
           </Button>
+          {pathname === '/' ? (
+             <Button asChild variant="ghost">
+                <a href="#features" onClick={handleScrollToFeatures}>
+                    <LayoutGrid className="mr-2 h-4 w-4" /> Features
+                </a>
+             </Button>
+          ) : (
+            <Button asChild variant="ghost">
+                <Link href="/#features">
+                    <LayoutGrid className="mr-2 h-4 w-4" /> Features
+                </Link>
+            </Button>
+          )}
           <Button asChild variant="ghost">
-            <Link href="/features"> {/* Updated to /features page */}
-              <LayoutGrid className="mr-2 h-4 w-4" /> Features
+            <Link href="/about">
+              <Info className="mr-2 h-4 w-4" /> About Us
             </Link>
           </Button>
-          <Button asChild variant="ghost">
-            <Link href="/about"> {/* Updated to /about page and enabled */}
-              <Info className="mr-2 h-4 w-4" /> About Us
+           <Button asChild variant="ghost">
+            <Link href="/features">
+              <LayoutGrid className="mr-2 h-4 w-4" /> Our Features
             </Link>
           </Button>
 
@@ -111,12 +123,13 @@ export default function Navbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>{session.user?.name || 'My Account'}</DropdownMenuLabel>
+                {session.user?.email && <DropdownMenuLabel className="text-xs font-normal text-muted-foreground -mt-1.5">{session.user.email}</DropdownMenuLabel>}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => router.push('/dashboard')}>
                   <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
                 </DropdownMenuItem>
                 
-                {session.user.role === 'admin' && (
+                {session.user && session.user.role === 'admin' && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Admin</DropdownMenuLabel>
