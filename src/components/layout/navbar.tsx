@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield } from 'lucide-react';
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -85,6 +85,11 @@ export default function Navbar() {
           {session && !isAdmin && ( // Only show these for non-admin users
             <>
               <Button asChild variant="ghost">
+                <Link href="/dashboard">
+                  <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
+                </Link>
+              </Button>
+              <Button asChild variant="ghost">
                 <Link href="/explain">
                   <Lightbulb className="mr-2 h-4 w-4" />
                   Explain Code
@@ -97,6 +102,13 @@ export default function Navbar() {
                 </Link>
               </Button>
             </>
+          )}
+           {session && isAdmin && ( // Admin-specific main nav link
+            <Button asChild variant="ghost">
+              <Link href="/admin">
+                <Shield className="mr-2 h-4 w-4" /> Admin Panel
+              </Link>
+            </Button>
           )}
         </nav>
 
@@ -122,36 +134,30 @@ export default function Navbar() {
                 {session.user?.email && <DropdownMenuLabel className="text-xs font-normal text-muted-foreground -mt-1.5">{session.user.email}</DropdownMenuLabel>}
                 <DropdownMenuSeparator />
 
-                {!isAdmin && ( // User-specific links for non-admins
+                {/* Common links for both user and admin for their own account management */}
+                <DropdownMenuItem onClick={() => router.push('/profile')}>
+                  <UserCircle className="mr-2 h-4 w-4" /> My Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/settings')}>
+                  <Cog className="mr-2 h-4 w-4" /> My Settings
+                </DropdownMenuItem>
+
+                {!isAdmin && ( // User-specific quick links
                   <>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => router.push('/dashboard')}>
                       <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/profile')}>
-                      <UserCircle className="mr-2 h-4 w-4" /> Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/settings')}>
-                      <Cog className="mr-2 h-4 w-4" /> Settings
+                     <DropdownMenuItem onClick={() => router.push('/analyze')}>
+                      <GitFork className="mr-2 h-4 w-4" /> Analyze Repository
                     </DropdownMenuItem>
                   </>
                 )}
 
                 {isAdmin && ( // Admin-specific links
                   <>
-                    {/* Optionally, an admin might still want a quick link to their own profile/settings.
-                        If not, these two items below can also be removed for admins.
-                        For now, I'll keep them as personal account management is often useful even for admins.
-                    */}
-                    <DropdownMenuItem onClick={() => router.push('/profile')}>
-                      <UserCircle className="mr-2 h-4 w-4" /> My Profile (Admin)
-                    </DropdownMenuItem>
-                     <DropdownMenuItem onClick={() => router.push('/settings')}>
-                      <Cog className="mr-2 h-4 w-4" /> My Settings (Admin)
-                    </DropdownMenuItem>
-
-
                     <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Admin Panel</DropdownMenuLabel>
+                    <DropdownMenuLabel>Admin Tools</DropdownMenuLabel>
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                       <Users className="mr-2 h-4 w-4" /> User Management
                     </DropdownMenuItem>
