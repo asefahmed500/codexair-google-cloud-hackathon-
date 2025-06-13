@@ -30,7 +30,6 @@ export default function Navbar() {
       }
     } else {
       // If not on homepage, just navigate to homepage then scroll.
-      // For a smoother experience, you might store the intent to scroll in a state or query param.
       router.push('/#features');
     }
   };
@@ -64,12 +63,12 @@ export default function Navbar() {
             </Link>
           </Button>
           <Button asChild variant="ghost">
-            <Link href="/features"> {/* Updated to /features page */}
+            <Link href="/features">
               <LayoutGrid className="mr-2 h-4 w-4" /> Features
             </Link>
           </Button>
           <Button asChild variant="ghost">
-            <Link href="/about"> {/* Updated to /about page and enabled */}
+            <Link href="/about">
               <Info className="mr-2 h-4 w-4" /> About Us
             </Link>
           </Button>
