@@ -29,6 +29,7 @@ export async function explainCode(input: ExplainCodeInput): Promise<ExplainCodeO
 
 const explainCodePrompt = ai.definePrompt({
   name: 'explainCodePrompt',
+  model: 'googleai/gemini-1.5-flash-latest', // Explicitly set the model here
   input: {schema: ExplainCodeInputSchema},
   output: {schema: ExplainCodeOutputSchema},
   prompt: `You are an expert AI programming assistant. A user has provided a code snippet{{#if language}} written in {{language}}{{/if}} and a question about it.
