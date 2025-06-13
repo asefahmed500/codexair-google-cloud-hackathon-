@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield } from 'lucide-react';
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -43,7 +43,7 @@ export default function Navbar() {
             <BarChartBig className="h-7 w-7 text-primary" />
             <span className="font-bold text-xl text-foreground font-headline">codexair</span>
           </div>
-          <div className="h-10 w-10 bg-muted rounded-full animate-pulse"></div>
+          <div className="h-10 w-10 bg-muted rounded-full animate-pulse"></div> {/* Skeleton for avatar */}
         </div>
       </header>
     );
@@ -85,6 +85,11 @@ export default function Navbar() {
           {session && !isAdmin && ( // Only show these for non-admin users
             <>
               <Button asChild variant="ghost">
+                <Link href="/dashboard">
+                  <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
+                </Link>
+              </Button>
+              <Button asChild variant="ghost">
                 <Link href="/explain">
                   <Lightbulb className="mr-2 h-4 w-4" />
                   Explain Code
@@ -97,6 +102,13 @@ export default function Navbar() {
                 </Link>
               </Button>
             </>
+          )}
+           {session && isAdmin && ( // Admin-specific main nav link
+            <Button asChild variant="ghost">
+              <Link href="/admin">
+                <Shield className="mr-2 h-4 w-4" /> Admin Panel
+              </Link>
+            </Button>
           )}
         </nav>
 
@@ -121,37 +133,20 @@ export default function Navbar() {
                 <DropdownMenuLabel>{session.user?.name || 'My Account'}</DropdownMenuLabel>
                 {session.user?.email && <DropdownMenuLabel className="text-xs font-normal text-muted-foreground -mt-1.5">{session.user.email}</DropdownMenuLabel>}
                 <DropdownMenuSeparator />
+                
+                {/* Common links for both user and admin for their own account management */}
+                <DropdownMenuItem onClick={() => router.push('/profile')}>
+                  <UserCircle className="mr-2 h-4 w-4" /> My Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/settings')}>
+                  <Cog className="mr-2 h-4 w-4" /> My Settings
+                </DropdownMenuItem>
 
-                {!isAdmin && ( // User-specific links for non-admins
-                  <>
-                    <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-                      <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/profile')}>
-                      <UserCircle className="mr-2 h-4 w-4" /> Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/settings')}>
-                      <Cog className="mr-2 h-4 w-4" /> Settings
-                    </DropdownMenuItem>
-                  </>
-                )}
 
                 {isAdmin && ( // Admin-specific links
                   <>
-                    {/* Optionally, an admin might still want a quick link to their own profile/settings.
-                        If not, these two items below can also be removed for admins.
-                        For now, I'll keep them as personal account management is often useful even for admins.
-                    */}
-                    <DropdownMenuItem onClick={() => router.push('/profile')}>
-                      <UserCircle className="mr-2 h-4 w-4" /> My Profile (Admin)
-                    </DropdownMenuItem>
-                     <DropdownMenuItem onClick={() => router.push('/settings')}>
-                      <Cog className="mr-2 h-4 w-4" /> My Settings (Admin)
-                    </DropdownMenuItem>
-
-
                     <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Admin Panel</DropdownMenuLabel>
+                    <DropdownMenuLabel>Admin Tools</DropdownMenuLabel>
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                       <Users className="mr-2 h-4 w-4" /> User Management
                     </DropdownMenuItem>
@@ -163,6 +158,14 @@ export default function Navbar() {
                     </DropdownMenuItem>
                   </>
                 )}
+                
+                {!isAdmin && ( // Non-admin specific links (if any beyond profile/settings are needed here)
+                     <>
+                        {/* Example: could add quick link to dashboard if not already prominent */}
+                        {/* For now, profile/settings cover basic user actions in dropdown for non-admins */}
+                     </>
+                )}
+
 
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })}>
@@ -177,3 +180,4 @@ export default function Navbar() {
     </header>
   );
 }
+
