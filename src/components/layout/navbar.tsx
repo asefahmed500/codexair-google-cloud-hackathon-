@@ -129,6 +129,7 @@ export default function Navbar() {
                   <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
                 </DropdownMenuItem>
                 
+                {/* Admin specific links - crucial check here */}
                 {session.user && session.user.role === 'admin' && (
                   <>
                     <DropdownMenuSeparator />
