@@ -103,7 +103,7 @@ export default function AnalysisDetailsPage() {
     return (
       <div className="flex flex-col min-h-screen">
         <Navbar />
-        <main className="flex-1 container py-8 flex items-center justify-center">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
             <Card className="w-full max-w-lg text-center">
             <CardHeader>
                 <CardTitle className="text-destructive">Error Loading Analysis</CardTitle>
@@ -145,7 +145,7 @@ export default function AnalysisDetailsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar /> 
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex justify-between items-center">
              <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>Back to PRs for {owner}/{repoName}</Button>
         </div>
@@ -427,7 +427,7 @@ export default function AnalysisDetailsPage() {
 
       </main>
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} codexair.
         </div>
       </footer>
@@ -457,7 +457,7 @@ function AnalysisDetailsLoadingSkeleton() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar /> 
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section Skeleton */}
         <div className="mb-6 flex justify-between items-center">
             <Skeleton className="h-10 w-48" /> {/* Back Button */}
@@ -504,12 +504,10 @@ function AnalysisDetailsLoadingSkeleton() {
         </div>
       </main>
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
             <Skeleton className="h-4 w-1/3 mx-auto" />
         </div>
       </footer>
     </div>
   );
 }
-
-

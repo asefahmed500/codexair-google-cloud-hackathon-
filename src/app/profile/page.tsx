@@ -63,7 +63,7 @@ export default function ProfilePage() {
     return (
       <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
-        <main className="flex-1 container py-12 md:py-16 flex justify-center">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 flex justify-center">
           <Card className="w-full max-w-2xl shadow-lg">
             <CardHeader className="items-center text-center">
               <Skeleton className="h-24 w-24 rounded-full mb-4" />
@@ -89,7 +89,7 @@ export default function ProfilePage() {
     return (
         <div className="flex flex-col min-h-screen bg-secondary/50">
             <Navbar />
-            <main className="flex-1 container py-8 flex items-center justify-center">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
                 <Card className="text-center p-6">
                     <CardHeader><CardTitle className="text-destructive">Error</CardTitle></CardHeader>
                     <CardContent>
@@ -103,10 +103,10 @@ export default function ProfilePage() {
   }
   
   if (!profile) {
-     return ( // Fallback for when profile is null but no error (e.g. initial state before fetch completes fully)
+     return ( 
         <div className="flex flex-col min-h-screen bg-secondary/50">
             <Navbar />
-            <main className="flex-1 container py-8 flex items-center justify-center">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
                 <p>Loading profile...</p>
             </main>
         </div>
@@ -117,7 +117,7 @@ export default function ProfilePage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
-      <main className="flex-1 container py-12 md:py-16 flex justify-center">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 flex justify-center">
         <Card className="w-full max-w-2xl shadow-xl">
           <CardHeader className="items-center text-center border-b pb-6">
             <Avatar className="w-24 h-24 mb-4 ring-4 ring-primary/20 shadow-md">
@@ -148,7 +148,7 @@ export default function ProfilePage() {
         </Card>
       </main>
       <footer className="py-10 text-center text-sm text-muted-foreground border-t bg-background">
-        <div className="container mx-auto">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <p>&copy; {new Date().getFullYear()} codexair. All rights reserved.</p>
         </div>
       </footer>

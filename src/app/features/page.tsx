@@ -134,7 +134,7 @@ export default function FeaturesPage() {
   return (
     <div className="min-h-screen bg-secondary/50 flex flex-col">
       <Navbar />
-      <main className="flex-1 container py-12 md:py-16">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
         <section className="text-center mb-16">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4 font-headline">
             codexair Features
@@ -167,7 +167,7 @@ export default function FeaturesPage() {
         </section>
       </main>
       <footer className="py-10 text-center text-sm text-muted-foreground border-t bg-background">
-        <div className="container mx-auto">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <p>&copy; {new Date().getFullYear()} codexair. All rights reserved.</p>
           <p className="mt-1">Empowering developers with AI-driven code intelligence.</p>
         </div>

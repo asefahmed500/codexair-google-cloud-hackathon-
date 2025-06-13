@@ -90,7 +90,7 @@ export default function ExplainCodePage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card className="max-w-3xl mx-auto shadow-lg">
           <CardHeader>
             <CardTitle className="text-2xl sm:text-3xl font-bold font-headline flex items-center">
@@ -205,7 +205,7 @@ export default function ExplainCodePage() {
         </Card>
       </main>
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} codexair. AI-Powered Code Insights.
         </div>
       </footer>

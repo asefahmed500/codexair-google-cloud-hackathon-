@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Github, Zap } from 'lucide-react';
 
-// Google G logo SVG component
 const GoogleIcon = () => (
   <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="mr-3 h-6 w-6">
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
@@ -19,7 +18,7 @@ const GoogleIcon = () => (
 
 export default function LoginForm() {
   return (
-    <Card className="w-full max-w-md shadow-xl">
+    <Card className="w-full max-w-md shadow-xl mx-4 sm:mx-0">
       <CardHeader className="text-center items-center"> 
         <Zap className="w-12 h-12 sm:w-16 sm:h-16 text-primary mx-auto mb-3 sm:mb-4" /> 
         <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Welcome to codexair</CardTitle>
@@ -48,4 +47,3 @@ export default function LoginForm() {
     </Card>
   );
 }
-

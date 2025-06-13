@@ -11,7 +11,8 @@ import { useEffect, useState } from 'react';
 import type { Repository as RepoType } from '@/types';
 import { Github, Eye, RefreshCw, Search, Star, Lock, Unlock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import Navbar from '@/components/layout/navbar'; // Import the new Navbar
+import Navbar from '@/components/layout/navbar'; 
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AnalyzePage() {
   const { data: session, status } = useSession();
@@ -62,23 +63,22 @@ export default function AnalyzePage() {
   );
 
   if (status === 'loading') {
-    // Let Navbar handle its own loading, or use a more comprehensive page skeleton
     return <div className="flex flex-col min-h-screen"><Navbar /><div className="flex-1 flex items-center justify-center">Loading session...</div></div>;
   }
-  if (!session) return null; // Should be redirected
+  if (!session) return null; 
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <Navbar /> {/* Use the new Navbar */}
-      <main className="flex-1 container py-8">
+      <Navbar /> 
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card className="shadow-lg">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Analyze Repository</CardTitle>
                     <CardDescription>Select a repository to view its pull requests and initiate AI-powered code analysis.</CardDescription>
                 </div>
-                <Button variant="outline" className="mt-4 sm:mt-0" onClick={handleSync} disabled={isSyncing || loading}>
+                <Button variant="outline" className="w-full sm:w-auto" onClick={handleSync} disabled={isSyncing || loading}>
                     <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing && 'animate-spin'}`} />
                     {isSyncing ? 'Syncing...' : 'Sync Repositories'}
                 </Button>
@@ -99,7 +99,7 @@ export default function AnalyzePage() {
             </div>
 
             {loading && !repositories.length ? (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[...Array(3)].map((_, i) => (
                   <SkeletonRepoCard key={i} />
                 ))}
@@ -169,7 +169,7 @@ export default function AnalyzePage() {
         </Card>
       </main>
        <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} codexair.
         </div>
       </footer>
@@ -194,4 +194,3 @@ function SkeletonRepoCard() {
       </Card>
     )
 }
-
