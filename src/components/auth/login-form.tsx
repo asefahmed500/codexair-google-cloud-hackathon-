@@ -21,24 +21,24 @@ export default function LoginForm() {
   return (
     <Card className="w-full max-w-md shadow-xl">
       <CardHeader className="text-center items-center"> 
-        <Zap className="w-16 h-16 text-primary mx-auto mb-4" /> 
-        <CardTitle className="text-3xl font-bold font-headline">Welcome to codexair</CardTitle>
+        <Zap className="w-12 h-12 sm:w-16 sm:h-16 text-primary mx-auto mb-3 sm:mb-4" /> 
+        <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Welcome to codexair</CardTitle>
         <CardDescription>Sign in to access your AI-powered code analysis dashboard.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-2"> 
         <Button
           variant="default"
           size="lg"
-          className="w-full text-lg py-6 shadow-md hover:shadow-lg transition-shadow"
+          className="w-full text-md sm:text-lg py-3 sm:py-6 shadow-md hover:shadow-lg transition-shadow"
           onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
         >
-          <Github className="mr-3 h-6 w-6" />
+          <Github className="mr-3 h-5 w-5 sm:h-6 sm:w-6" />
           Sign in with GitHub
         </Button>
         <Button
           variant="outline"
           size="lg"
-          className="w-full text-lg py-6 shadow-md hover:shadow-lg transition-shadow border-input hover:bg-accent/50"
+          className="w-full text-md sm:text-lg py-3 sm:py-6 shadow-md hover:shadow-lg transition-shadow border-input hover:bg-accent/50"
           onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
         >
           <GoogleIcon />

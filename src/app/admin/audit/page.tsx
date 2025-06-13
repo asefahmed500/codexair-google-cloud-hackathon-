@@ -118,7 +118,7 @@ export default function AdminAuditLogsPage() {
       <main className="flex-1 container py-8">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold font-headline flex items-center">
+            <CardTitle className="text-2xl sm:text-3xl font-bold font-headline flex items-center">
                 <FileText className="mr-3 h-8 w-8 text-primary" />
                 Admin Audit Logs
             </CardTitle>

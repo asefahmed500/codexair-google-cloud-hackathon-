@@ -162,7 +162,7 @@ export default function AdminReportsPage() {
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <CardTitle className="text-3xl font-bold font-headline">Analysis Summary Report</CardTitle>
+                    <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Analysis Summary Report</CardTitle>
                     <CardDescription>Overview of all analyzed pull requests in the system.</CardDescription>
                 </div>
                 <Button onClick={handleDownloadCSV} disabled={reportData.length === 0 || loading} className="mt-4 sm:mt-0">

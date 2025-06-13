@@ -126,7 +126,7 @@ export default function ProfilePage() {
                 {profile.name ? profile.name.charAt(0).toUpperCase() : <UserCircle />}
               </AvatarFallback>
             </Avatar>
-            <CardTitle className="text-3xl font-bold font-headline text-foreground">
+            <CardTitle className="text-2xl sm:text-3xl font-bold font-headline text-foreground">
               {profile.name || 'User Profile'}
             </CardTitle>
             <CardDescription className="text-md text-muted-foreground">

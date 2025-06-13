@@ -75,7 +75,7 @@ export default function AnalyzePage() {
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <CardTitle className="text-3xl font-bold font-headline">Analyze Repository</CardTitle>
+                    <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Analyze Repository</CardTitle>
                     <CardDescription>Select a repository to view its pull requests and initiate AI-powered code analysis.</CardDescription>
                 </div>
                 <Button variant="outline" className="mt-4 sm:mt-0" onClick={handleSync} disabled={isSyncing || loading}>
@@ -115,7 +115,7 @@ export default function AnalyzePage() {
                 {filteredRepositories.map(repo => (
                   <Card key={repo._id} className="hover:shadow-md transition-shadow">
                     <CardHeader>
-                      <CardTitle className="text-xl flex items-center gap-2">
+                      <CardTitle className="text-lg md:text-xl flex items-center gap-2">
                         <Github className="h-5 w-5 text-primary" />
                         {repo.fullName}
                       </CardTitle>

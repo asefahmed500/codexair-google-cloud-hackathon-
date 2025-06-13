@@ -178,7 +178,7 @@ export default function SettingsPage() {
             <div className="flex items-center space-x-3">
               <Cog className="h-8 w-8 text-primary" />
               <div>
-                <CardTitle className="text-3xl font-bold font-headline text-foreground">
+                <CardTitle className="text-2xl sm:text-3xl font-bold font-headline text-foreground">
                   Settings
                 </CardTitle>
                 <CardDescription className="text-md text-muted-foreground">

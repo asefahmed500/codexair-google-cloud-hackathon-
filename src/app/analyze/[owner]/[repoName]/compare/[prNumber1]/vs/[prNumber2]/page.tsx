@@ -131,7 +131,7 @@ export default function PRComparisonPage() {
 
         <Card className="mb-8 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold font-headline flex items-center gap-3">
+            <CardTitle className="text-2xl md:text-3xl font-bold font-headline flex items-center gap-3">
               <ArrowLeftRight className="h-8 w-8 text-primary" />
               Comparing Pull Requests in {owner}/{repoName}
             </CardTitle>
@@ -183,7 +183,10 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
         throw new Error(errorData.details || errorData.error || 'Failed to start analysis');
       }
       const result = await response.json();
-      router.push(`/analyze/${owner}/${repoName}/${prNumToAnalyze}/${result.analysis._id}`);
+      // Instead of direct navigation, update the prData for this column or refresh the page
+      // For simplicity, we can show a success toast and encourage manual refresh or navigation
+      toast({ title: "Analysis Started", description: `Analysis for PR #${prNumToAnalyze} is in progress. Navigate to its analysis page to view results.` });
+      // router.push(`/analyze/${owner}/${repoName}/${prNumToAnalyze}/${result.analysis._id}`); // Optionally navigate
     } catch (err: any) {
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
     } finally {
@@ -196,7 +199,7 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
     <Card className="flex flex-col h-full shadow-md">
       <CardHeader>
         <div className="flex justify-between items-start">
-            <CardTitle className="text-xl font-semibold">
+            <CardTitle className="text-lg md:text-xl font-semibold">
                 PR #{prNumber}: <span className="font-normal">{pullRequest.title}</span>
             </CardTitle>
             <Button variant="outline" size="sm" asChild>

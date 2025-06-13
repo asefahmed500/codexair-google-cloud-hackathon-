@@ -16,7 +16,7 @@ function FeatureDetailCard({ icon, title, description, details }: FeatureDetailP
       <CardHeader>
         <div className="flex items-center gap-3 mb-2">
           {icon}
-          <CardTitle className="text-2xl font-headline">{title}</CardTitle>
+          <CardTitle className="text-xl md:text-2xl font-headline">{title}</CardTitle>
         </div>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
@@ -136,16 +136,16 @@ export default function FeaturesPage() {
       <Navbar />
       <main className="flex-1 container py-12 md:py-16">
         <section className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4 font-headline">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4 font-headline">
             codexair Features
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-md sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
             Explore the comprehensive suite of tools codexair offers to elevate your code quality, enhance security, and streamline your development workflow.
           </p>
         </section>
 
         <section className="mb-16">
-          <h2 className="text-3xl font-semibold text-foreground mb-8 text-center md:text-left font-headline">
+          <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-8 text-center md:text-left font-headline">
             For Developers & Teams
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -156,7 +156,7 @@ export default function FeaturesPage() {
         </section>
 
         <section>
-          <h2 className="text-3xl font-semibold text-foreground mb-8 text-center md:text-left font-headline">
+          <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-8 text-center md:text-left font-headline">
             Administrative Capabilities
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

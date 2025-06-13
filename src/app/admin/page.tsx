@@ -250,7 +250,7 @@ export default function AdminPage() {
       <main className="flex-1 container py-8">
         <Card className="shadow-lg mb-8">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold font-headline">Admin Dashboard</CardTitle>
+            <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Admin Dashboard</CardTitle>
             <CardDescription>Manage users, roles, status, and view platform statistics.</CardDescription>
           </CardHeader>
           <CardContent>

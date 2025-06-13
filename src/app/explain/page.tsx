@@ -93,7 +93,7 @@ export default function ExplainCodePage() {
       <main className="flex-1 container py-8">
         <Card className="max-w-3xl mx-auto shadow-lg">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold font-headline flex items-center">
+            <CardTitle className="text-2xl sm:text-3xl font-bold font-headline flex items-center">
               <ScrollText className="mr-3 h-8 w-8 text-primary" />
               Explain My Code
             </CardTitle>
@@ -189,7 +189,7 @@ export default function ExplainCodePage() {
             <CardFooter className="pt-4 flex-col items-start">
               <Card className="w-full bg-muted/30 shadow-inner">
                 <CardHeader>
-                  <CardTitle className="text-xl font-semibold flex items-center">
+                  <CardTitle className="text-xl sm:text-2xl font-semibold flex items-center">
                     <Lightbulb className="mr-2 h-5 w-5 text-accent" />
                     AI Explanation
                   </CardTitle>

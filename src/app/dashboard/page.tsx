@@ -101,7 +101,7 @@ export default function DashboardPage() {
           <Card className="w-full max-w-lg text-center shadow-xl">
             <CardHeader className="items-center">
               <BarChartBig className="w-16 h-16 text-primary mb-4" />
-              <CardTitle className="text-3xl font-headline text-primary">Welcome to codexair!</CardTitle>
+              <CardTitle className="text-2xl sm:text-3xl font-headline text-primary">Welcome to codexair!</CardTitle>
               <CardDescription className="text-md text-muted-foreground mt-2">
                 Your intelligent code review assistant.
               </CardDescription>
@@ -136,7 +136,7 @@ export default function DashboardPage() {
       <Navbar />
       <main className="flex-1 container py-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-            <h1 className="text-3xl font-bold text-foreground font-headline">codexair Dashboard</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground font-headline">codexair Dashboard</h1>
             {session.user.role === 'admin' && (
                 <Button asChild variant="outline" className="shadow-sm hover:shadow-md transition-shadow">
                     <Link href="/admin">
