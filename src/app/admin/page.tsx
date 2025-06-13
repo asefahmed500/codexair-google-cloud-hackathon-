@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, type ChangeEvent } from 'react';
+import React, { useEffect, useState, type ChangeEvent } from 'react'; // Import React
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/layout/navbar';
@@ -18,6 +18,86 @@ import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX } from 'lucide-react';
 
+// Interface for UserTableRow props
+interface UserTableRowProps {
+  user: AdminUserView;
+  currentSessionUser: AdminUserView | undefined | null; // Updated to reflect session.user structure
+  adminCount: number;
+  activeAdminCount: number;
+  updatingUserId: string | null;
+  onRoleChange: (userId: string, newRole: 'user' | 'admin') => void;
+  onStatusChange: (userId: string, newStatus: 'active' | 'suspended') => void;
+}
+
+// Memoized UserTableRow component
+const UserTableRow = React.memo(function UserTableRow({
+  user,
+  currentSessionUser,
+  adminCount,
+  activeAdminCount,
+  updatingUserId,
+  onRoleChange,
+  onStatusChange,
+}: UserTableRowProps) {
+  const isCurrentUser = currentSessionUser?.id === user._id; // Assuming session user has 'id'
+  const isLastAdmin = user.role === 'admin' && adminCount <= 1;
+  const isLastActiveAdmin = user.role === 'admin' && user.status === 'active' && activeAdminCount <= 1;
+
+  const disableRoleChange = updatingUserId === user._id || (isCurrentUser && isLastAdmin);
+  const roleChangeTitle = (isCurrentUser && isLastAdmin) ? "Cannot change your own role as the last admin." : "";
+
+  const disableStatusChange = updatingUserId === user._id || (isCurrentUser && isLastActiveAdmin && user.status === 'active');
+  const statusChangeTitle = (isCurrentUser && isLastActiveAdmin && user.status === 'active') ? "Cannot suspend your own account as the last active admin." : (user.status === 'active' ? "Suspend User" : "Activate User");
+
+  return (
+    <TableRow key={user._id}>
+      <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
+      <TableCell>{user.email || 'N/A'}</TableCell>
+      <TableCell>
+        <Select
+          value={user.role}
+          onValueChange={(newRole) => onRoleChange(user._id, newRole as 'user' | 'admin')}
+          disabled={disableRoleChange}
+        >
+          <SelectTrigger className="w-[120px]" disabled={disableRoleChange} title={roleChangeTitle}>
+            <SelectValue placeholder="Select role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="user">User</SelectItem>
+            <SelectItem value="admin">
+              Admin {isLastAdmin && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last admin account"/>}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell>
+        <Badge variant={user.status === 'active' ? 'default' : 'destructive'} className={`whitespace-nowrap ${user.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-400' : 'bg-red-500/20 text-red-700 border-red-400'}`}>
+          {user.status}
+          {isLastActiveAdmin && user.status === 'active' && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last active admin account"/>}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onStatusChange(user._id, user.status === 'active' ? 'suspended' : 'active')}
+          disabled={disableStatusChange}
+          title={statusChangeTitle}
+          className="whitespace-nowrap"
+        >
+          {user.status === 'active' ? <UserX className="mr-1 h-4 w-4" /> : <UserCheck className="mr-1 h-4 w-4" />}
+          {user.status === 'active' ? 'Suspend' : 'Activate'}
+        </Button>
+      </TableCell>
+      <TableCell className="whitespace-nowrap">
+        {user.createdAt && !isNaN(new Date(user.createdAt).getTime())
+          ? format(new Date(user.createdAt), 'PPP')
+          : 'N/A'}
+      </TableCell>
+    </TableRow>
+  );
+});
+
 
 export default function AdminPage() {
   const { data: session, status: sessionStatus } = useSession();
@@ -33,7 +113,7 @@ export default function AdminPage() {
 
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [alertAction, setAlertAction] = useState<{ userId: string; newRole?: 'user' | 'admin'; newStatus?: 'active' | 'suspended', actionType: 'role' | 'status' } | null>(null);
-  
+
   const [adminCount, setAdminCount] = useState(0);
   const [activeAdminCount, setActiveAdminCount] = useState(0);
 
@@ -46,7 +126,7 @@ export default function AdminPage() {
     if (sessionStatus === 'loading') return;
 
     if (!session || session.user.role !== 'admin') {
-      router.replace('/auth/signin');
+      router.replace('/auth/signin'); // Or router.replace('/dashboard');
       return;
     }
 
@@ -101,7 +181,7 @@ export default function AdminPage() {
         toast({ title: "No Change", description: "The selected role is the same as the current role.", variant: "default"});
         return;
     }
-    
+
     // Client-side check: prevent current admin from demoting themselves if they are the last admin
     if (session?.user?.id === userId && userToUpdate.role === 'admin' && newRole === 'user' && adminCount <= 1) {
         toast({ title: "Action Prohibited", description: "You cannot change your own role as the last admin.", variant: "destructive"});
@@ -153,7 +233,7 @@ export default function AdminPage() {
       if (!response.ok) {
         throw new Error(result.error || 'Failed to update user');
       }
-      
+
       toast({ title: "User Updated", description: result.message, variant: "default" });
       setUsers(prevUsers => {
         const updatedUsers = prevUsers.map(u =>
@@ -177,7 +257,7 @@ export default function AdminPage() {
     return (
       <div className="flex flex-col min-h-screen">
         <Navbar />
-        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
           <Card>
             <CardHeader>
               <Skeleton className="h-8 w-48 mb-1" />
@@ -202,18 +282,19 @@ export default function AdminPage() {
     return (
         <div className="flex flex-col min-h-screen">
             <Navbar />
-            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 flex items-center justify-center">
                 <Card className="text-center">
                 <CardHeader><CardTitle className="text-destructive">Access Denied</CardTitle></CardHeader>
                 <CardContent>
                     <p>You do not have permission to view this page.</p>
+                    <Button onClick={() => router.push('/dashboard')} className="mt-4">Go to Dashboard</Button>
                 </CardContent>
                 </Card>
             </main>
         </div>
     );
   }
-  
+
   const getAlertDescription = () => {
     if (!alertAction) return "";
     const { actionType, newRole, newStatus, userId } = alertAction;
@@ -247,7 +328,7 @@ export default function AdminPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <Card className="shadow-lg mb-8">
           <CardHeader>
             <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Admin Dashboard</CardTitle>
@@ -291,65 +372,18 @@ export default function AdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => {
-                    const isCurrentUser = session?.user?.id === user._id;
-                    const isLastAdmin = user.role === 'admin' && adminCount <= 1;
-                    const isLastActiveAdmin = user.role === 'admin' && user.status === 'active' && activeAdminCount <= 1;
-                    
-                    const disableRoleChange = updatingUserId === user._id || (isCurrentUser && isLastAdmin);
-                    const roleChangeTitle = (isCurrentUser && isLastAdmin) ? "Cannot change your own role as the last admin." : "";
-                    
-                    const disableStatusChange = updatingUserId === user._id || (isCurrentUser && isLastActiveAdmin && user.status === 'active');
-                    const statusChangeTitle = (isCurrentUser && isLastActiveAdmin && user.status === 'active') ? "Cannot suspend your own account as the last active admin." : (user.status === 'active' ? "Suspend User" : "Activate User");
-
-                    return (
-                      <TableRow key={user._id}>
-                        <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
-                        <TableCell>{user.email || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Select
-                            value={user.role}
-                            onValueChange={(newRole) => confirmRoleChange(user._id, newRole as 'user' | 'admin')}
-                            disabled={disableRoleChange}
-                          >
-                            <SelectTrigger className="w-[120px]" disabled={disableRoleChange} title={roleChangeTitle}>
-                              <SelectValue placeholder="Select role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="user">User</SelectItem>
-                              <SelectItem value="admin">
-                                Admin {isLastAdmin && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last admin account"/>}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                         <TableCell>
-                          <Badge variant={user.status === 'active' ? 'default' : 'destructive'} className={`whitespace-nowrap ${user.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-400' : 'bg-red-500/20 text-red-700 border-red-400'}`}>
-                            {user.status}
-                            {isLastActiveAdmin && user.status === 'active' && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last active admin account"/>}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                           <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => confirmStatusChange(user._id, user.status === 'active' ? 'suspended' : 'active')}
-                              disabled={disableStatusChange}
-                              title={statusChangeTitle}
-                              className="whitespace-nowrap"
-                           >
-                              {user.status === 'active' ? <UserX className="mr-1 h-4 w-4" /> : <UserCheck className="mr-1 h-4 w-4" />}
-                              {user.status === 'active' ? 'Suspend' : 'Activate'}
-                           </Button>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {user.createdAt && !isNaN(new Date(user.createdAt).getTime())
-                            ? format(new Date(user.createdAt), 'PPP')
-                            : 'N/A'}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {users.map((user) => (
+                    <UserTableRow
+                      key={user._id}
+                      user={user}
+                      currentSessionUser={session?.user as AdminUserView | undefined | null} // Cast session.user
+                      adminCount={adminCount}
+                      activeAdminCount={activeAdminCount}
+                      updatingUserId={updatingUserId}
+                      onRoleChange={confirmRoleChange}
+                      onStatusChange={confirmStatusChange}
+                    />
+                  ))}
                 </TableBody>
               </Table>
             </div>
@@ -404,3 +438,5 @@ function StatCard({ Icon, title, value, description }: StatCardProps) {
     </Card>
   );
 }
+
+    

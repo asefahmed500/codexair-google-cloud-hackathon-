@@ -22,14 +22,11 @@ export async function GET(request: NextRequest) {
 
     if (sync) {
       // Fetch from GitHub and sync with MongoDB
+      // This part remains user-specific: an admin syncing is syncing *for themselves*
       const githubRepos = await getUserRepositories(page, limit);
 
       const repos = await Promise.all(
         githubRepos.map(async (ghRepo) => {
-          // Fetch full details to get correct language, stars, etc.
-          // listForAuthenticatedUser might not have all details fresh.
-          // However, to avoid too many API calls, we can use the list data first.
-          // For this example, we use the list data directly.
           const repoData: Partial<RepoType> = {
             name: ghRepo.name,
             fullName: ghRepo.full_name,
@@ -38,30 +35,53 @@ export async function GET(request: NextRequest) {
             language: ghRepo.language || 'N/A',
             stars: ghRepo.stargazers_count || 0,
             isPrivate: ghRepo.private,
-            userId: session.user.id!,
+            userId: session.user.id!, // Sync for the current user
           };
 
           return Repository.findOneAndUpdate(
-            { githubId: ghRepo.id, userId: session.user.id! },
+            { githubId: ghRepo.id, userId: session.user.id! }, // Ensure uniqueness per user-repo
             { $set: repoData },
             { upsert: true, new: true, setDefaultsOnInsert: true }
           );
         })
       );
-      return NextResponse.json({ repositories: repos.filter(Boolean) });
+      // When syncing, we return the newly synced/updated repos for that user.
+      // If admin is syncing, it's for their own association.
+      const userSyncedReposQuery: any = { userId: session.user.id! };
+      
+      const userSyncedRepos = await Repository.find(userSyncedReposQuery)
+        .sort({ updatedAt: -1 }) 
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean();
+      const totalUserSyncedRepos = await Repository.countDocuments(userSyncedReposQuery);
+
+      return NextResponse.json({
+        repositories: userSyncedRepos,
+        totalPages: Math.ceil(totalUserSyncedRepos / limit),
+        currentPage: page,
+      });
+
     } else {
       // Fetch from MongoDB only
       const skip = (page - 1) * limit;
-      const userRepos = await Repository.find({ userId: session.user.id! })
+      const query: any = {}; 
+
+      if (session.user.role !== 'admin') { 
+        query.userId = session.user.id!;
+      }
+      // For admins, the query remains empty (if not explicitly filtering further), thus fetching all repositories.
+
+      const fetchedRepositories = await Repository.find(query) 
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit)
-        .lean(); // Use .lean() for faster queries if not modifying docs
+        .lean(); 
       
-      const totalRepos = await Repository.countDocuments({ userId: session.user.id! });
+      const totalRepos = await Repository.countDocuments(query); 
       
       return NextResponse.json({ 
-        repositories: userRepos,
+        repositories: fetchedRepositories,
         totalPages: Math.ceil(totalRepos / limit),
         currentPage: page,
       });
@@ -69,11 +89,9 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Error in /api/repositories GET:', error);
-    // Check if it's a GitHub API rate limit or auth error specifically
     if (error.message.includes('GitHub API error') || error.status === 401 || error.status === 403) {
       return NextResponse.json({ error: `GitHub API interaction failed: ${error.message}` }, { status: error.status || 500 });
     }
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-

@@ -33,6 +33,8 @@ export default function Navbar() {
     }
   };
 
+  const isAdmin = session?.user?.role === 'admin';
+
   if (status === "loading") {
     return (
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -80,7 +82,7 @@ export default function Navbar() {
             </Link>
           </Button>
 
-          {session && (
+          {session && !isAdmin && ( // Only show these for non-admin users
             <>
               <Button asChild variant="ghost">
                 <Link href="/explain">
@@ -119,20 +121,37 @@ export default function Navbar() {
                 <DropdownMenuLabel>{session.user?.name || 'My Account'}</DropdownMenuLabel>
                 {session.user?.email && <DropdownMenuLabel className="text-xs font-normal text-muted-foreground -mt-1.5">{session.user.email}</DropdownMenuLabel>}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-                  <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/profile')}>
-                  <UserCircle className="mr-2 h-4 w-4" /> Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/settings')}>
-                  <Cog className="mr-2 h-4 w-4" /> Settings
-                </DropdownMenuItem>
 
-                {session.user && session.user.role === 'admin' && (
+                {!isAdmin && ( // User-specific links for non-admins
                   <>
+                    <DropdownMenuItem onClick={() => router.push('/dashboard')}>
+                      <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/profile')}>
+                      <UserCircle className="mr-2 h-4 w-4" /> Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/settings')}>
+                      <Cog className="mr-2 h-4 w-4" /> Settings
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {isAdmin && ( // Admin-specific links
+                  <>
+                    {/* Optionally, an admin might still want a quick link to their own profile/settings.
+                        If not, these two items below can also be removed for admins.
+                        For now, I'll keep them as personal account management is often useful even for admins.
+                    */}
+                    <DropdownMenuItem onClick={() => router.push('/profile')}>
+                      <UserCircle className="mr-2 h-4 w-4" /> My Profile (Admin)
+                    </DropdownMenuItem>
+                     <DropdownMenuItem onClick={() => router.push('/settings')}>
+                      <Cog className="mr-2 h-4 w-4" /> My Settings (Admin)
+                    </DropdownMenuItem>
+
+
                     <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Admin</DropdownMenuLabel>
+                    <DropdownMenuLabel>Admin Panel</DropdownMenuLabel>
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                       <Users className="mr-2 h-4 w-4" /> User Management
                     </DropdownMenuItem>

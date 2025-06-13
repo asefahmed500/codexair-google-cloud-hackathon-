@@ -7,21 +7,22 @@ declare module 'next-auth' {
     accessToken?: string;
     user: {
       id: string;
-      status?: 'active' | 'suspended'; // Add status to session user
-    } & NextAuthSession['user'];
+      role?: 'user' | 'admin'; // Explicitly add role
+      status?: 'active' | 'suspended';
+    } & Omit<NextAuthSession['user'], 'id' | 'role' | 'status'>; // Omit fields we are explicitly defining
   }
 
   interface User extends NextAuthUser {
-    // Add custom properties here if needed from the provider profile
-    status?: 'active' | 'suspended'; // Ensure User type can have status
+    role?: 'user' | 'admin'; // Ensure User type can have role
+    status?: 'active' | 'suspended';
   }
 }
 
 declare module 'next-auth/jwt' {
   interface JWT extends NextAuthJWT {
     accessToken?: string;
-    id?: string; // Or sub for user id from provider
-    status?: 'active' | 'suspended'; // Add status to JWT
+    id?: string;
+    role?: 'user' | 'admin'; // Add role to JWT
+    status?: 'active' | 'suspended';
   }
 }
-

@@ -73,27 +73,18 @@ export const authOptions: NextAuthOptions = {
         token.accessToken = account.access_token;
         token.provider = account.provider;
 
-        // PRIMARY METHOD: Look up the Account document to get the MongoDB User ID.
-        // The adapter should have already created/linked the User and Account.
         const linkedAccount = await AccountModel.findOne({
           provider: account.provider,
           providerAccountId: account.providerAccountId,
         }).lean();
 
         if (linkedAccount && linkedAccount.userId) {
-          token.id = linkedAccount.userId.toString(); // This IS the MongoDB _id
-          console.log(`[JWT Callback] Initial sign-in: Set token.id to "${token.id}" from linked Account.userId for ${account.provider}:${account.providerAccountId}.`);
+          token.id = linkedAccount.userId.toString();
         } else {
-          // This case implies an issue with the adapter or a race condition.
-          // The `user.id` from the adapter *should* be the MongoDB _id.
-          // We log a warning and try to use user.id if it looks like an ObjectId.
-          console.warn(`[JWT Callback] Initial sign-in: Could not find linked Account for ${account.provider}:${account.providerAccountId}. Adapter might not have completed linking, or this is an unexpected state.`);
           if (user?.id && typeof user.id === 'string' && user.id.length === 24 && /^[0-9a-fA-F]+$/.test(user.id)) {
-            token.id = user.id; // Assume user.id from adapter is the MongoDB _id.
-            console.log(`[JWT Callback] Initial sign-in: Fallback - Using user.id ("${user.id}") from adapter/user object as it appears to be a valid MongoDB ObjectId.`);
+            token.id = user.id;
           } else {
             console.error(`[JWT Callback] CRITICAL: Could not determine MongoDB User ID for ${account.provider}:${account.providerAccountId}. User object from adapter:`, user, "Profile from provider:", profile);
-            // If we cannot determine the DB ID, ensure token.id is not set to an incorrect value.
             delete token.id;
           }
         }
@@ -104,15 +95,19 @@ export const authOptions: NextAuthOptions = {
       if (token.id && typeof token.id === 'string' && token.id.length === 24 && /^[0-9a-fA-F]+$/.test(token.id)) {
         const dbUser = await UserModel.findById(token.id).select('role email status').lean();
         if (dbUser) {
-          token.role = dbUser.role || 'user';
-          token.status = dbUser.status || 'active';
-          token.email = dbUser.email; // Keep email in token updated from DB
+          // Assign the role directly from the database.
+          // For a brand new user (not the first), this role would have been set to 'user'
+          // by Mongoose's default during creation by the adapter.
+          token.role = dbUser.role;
+          token.status = dbUser.status || 'active'; // Status also has a schema default
+          token.email = dbUser.email;
 
           // First user promotion logic:
-          // Only run this during initial sign-in when `account` was present,
+          // Only run this during initial OAuth sign-in (when `account` is present)
           // and if the user is not already an admin.
-          if (account && token.role !== 'admin') { // 'account' ensures it's initial OAuth sign-in context
+          if (account && token.role !== 'admin') {
             const userCount = await UserModel.countDocuments();
+            // If this user is the only one in the database, promote them.
             if (userCount === 1) {
               console.log(`INFO: First user detected (Email: ${dbUser.email}, ID: ${token.id}). Promoting to admin.`);
               try {
@@ -125,17 +120,14 @@ export const authOptions: NextAuthOptions = {
             }
           }
         } else {
-          console.warn(`[JWT Callback] User with DB ID ${token.id} not found in database. Token may be stale or ID was incorrect from initial setup.`);
-          // Clear user-specific fields if user not found by a valid-looking ID
+          // User with this ID not found in DB, clear potentially stale token info
           delete token.role;
           delete token.status;
           delete token.email;
-          // Potentially delete token.id as well, or let NextAuth handle session invalidation if appropriate
-          // delete token.id; 
         }
-      } else if (token.id) { // token.id exists but is not a valid ObjectId string format
-        console.error(`[JWT Callback] Invalid token.id ("${token.id}") found. It's not a valid MongoDB ObjectId string. Clearing user-specific fields from token.`);
-        delete token.id; // Remove invalid ID to prevent further errors
+      } else if (token.id) {
+        // Invalid token.id format, clear potentially stale token info
+        delete token.id;
         delete token.role;
         delete token.status;
         delete token.email;
@@ -155,51 +147,41 @@ export const authOptions: NextAuthOptions = {
       if (token.status && session.user) {
         session.user.status = token.status as 'active' | 'suspended';
       }
-      if (token.email && session.user) { // Ensure email is passed to session
+      if (token.email && session.user) {
         session.user.email = token.email as string;
       }
       return session;
     },
     async signIn({ user, account, profile }) {
         await connectMongoose();
-        // For OAuth, user.id is the provider's ID. We need to check the DB user linked via the account.
-        if (account) { // This is an OAuth sign-in (account object is present)
+        if (account) {
           const linkedDbAccount = await AccountModel.findOne({
             provider: account.provider,
             providerAccountId: account.providerAccountId,
           }).lean();
 
           if (linkedDbAccount && linkedDbAccount.userId) {
-            // Account exists, user record should exist. linkedDbAccount.userId is the MongoDB ObjectId.
             const dbUser = await UserModel.findById(linkedDbAccount.userId).select('status email').lean();
             if (dbUser?.status === 'suspended') {
               console.log(`Sign-in attempt denied for suspended OAuth user: ${dbUser.email || profile?.email}`);
-              return '/auth/signin?error=suspended'; // Redirect to error page
+              return '/auth/signin?error=suspended';
             }
-            // If user exists and is not suspended, allow sign-in
-            return true; 
+            return true;
           } else {
-            // User is new or account not yet linked by adapter for some reason (adapter should handle this).
-            // The adapter will create/link them. Status check isn't applicable here for a brand new user.
-            // Default status is 'active'.
-            console.log(`[signIn Callback] New or unlinked OAuth user: ${profile?.email}. Allowing sign-in flow to proceed for adapter processing.`);
-            return true; // Allow sign-in to proceed for adapter to create/link.
+            // New or unlinked OAuth user, allow sign-in to proceed for adapter processing.
+            return true;
           }
-        } else if (user && user.id) { 
-          // This is likely a credentials sign-in, or a non-OAuth context where user.id is the DB ID.
-          // Validate if user.id seems like a MongoDB ObjectId
+        } else if (user && user.id) {
+          // This case is less common with pure OAuth but handles scenarios if user object is passed directly
           if (typeof user.id === 'string' && user.id.length === 24 && /^[0-9a-fA-F]+$/.test(user.id)) {
             const dbUser = await UserModel.findById(user.id).select('status email').lean();
             if (dbUser?.status === 'suspended') {
               console.log(`Sign-in attempt denied for suspended user: ${user.email}`);
               return '/auth/signin?error=suspended';
             }
-          } else {
-            console.warn(`[signIn Callback] For non-OAuth sign-in, user.id ("${user.id}") is not a valid MongoDB ObjectId. This might indicate an issue if direct DB ID is expected.`);
-            // Depending on policy, you might deny or allow. For now, allowing if not clearly OAuth.
           }
         }
-        return true; // Allow sign-in to proceed if not explicitly denied
+        return true;
     }
   },
   pages: {
