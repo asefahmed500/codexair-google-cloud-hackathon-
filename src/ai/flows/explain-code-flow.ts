@@ -11,14 +11,14 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const ExplainCodeInputSchema = z.object({
+const ExplainCodeInputSchema = z.object({
   code: z.string().describe('The code snippet to explain.'),
   language: z.string().optional().describe('The programming language of the code snippet. If not provided, the AI will attempt to infer it.'),
   question: z.string().describe('The specific question about the code (e.g., "What does this do?", "Why is this a bad practice?", "How can this be improved?").'),
 });
 export type ExplainCodeInput = z.infer<typeof ExplainCodeInputSchema>;
 
-export const ExplainCodeOutputSchema = z.object({
+const ExplainCodeOutputSchema = z.object({
   explanation: z.string().describe('The AI-generated explanation for the code snippet in response to the question.'),
 });
 export type ExplainCodeOutput = z.infer<typeof ExplainCodeOutputSchema>;
@@ -56,3 +56,4 @@ const explainCodeFlow = ai.defineFlow(
     return output!;
   }
 );
+
