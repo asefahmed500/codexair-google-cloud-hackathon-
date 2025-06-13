@@ -103,8 +103,9 @@ const repositorySchema = new mongoose.Schema<RepoType>({
   language: String,
   stars: Number,
   isPrivate: Boolean,
-  userId: { type: String, required: true }, 
+  userId: { type: String, required: true },
 }, { timestamps: true });
+repositorySchema.index({ userId: 1, updatedAt: -1 }); // Added index
 
 const codeFileSchema = new mongoose.Schema({
   filename: String,
@@ -113,22 +114,22 @@ const codeFileSchema = new mongoose.Schema({
   deletions: Number,
   changes: Number,
   patch: String,
-  content: String, 
+  content: String,
 }, { _id: false });
 
 const securityIssueSubSchema = new mongoose.Schema({
-  type: { type: String, enum: ['vulnerability', 'warning', 'info'] }, 
+  type: { type: String, enum: ['vulnerability', 'warning', 'info'] },
   severity: { type: String, enum: ['critical', 'high', 'medium', 'low'] },
   title: String,
   description: String,
   file: String,
   line: Number,
-  suggestion: String, 
+  suggestion: String,
   cwe: String,
 }, { _id: false });
 
 const suggestionSubSchema = new mongoose.Schema({
-  type: { type: String, enum: ['performance', 'style', 'bug', 'feature', 'optimization', 'code_smell'] }, 
+  type: { type: String, enum: ['performance', 'style', 'bug', 'feature', 'optimization', 'code_smell'] },
   priority: { type: String, enum: ['high', 'medium', 'low'] },
   title: String,
   description: String,
@@ -153,7 +154,7 @@ const fileAnalysisItemSchema = new mongoose.Schema<FileAnalysisItem>({
   suggestions: [suggestionSubSchema],
   metrics: codeAnalysisMetricsSubSchema,
   aiInsights: String,
-  vectorEmbedding: { type: [Number], default: undefined }, 
+  vectorEmbedding: { type: [Number], default: undefined },
 }, { _id: false });
 
 
@@ -166,8 +167,9 @@ const analysisSchema = new mongoose.Schema<AnalysisType>({
   suggestions: [suggestionSubSchema],
   metrics: codeAnalysisMetricsSubSchema,
   aiInsights: String,
-  fileAnalyses: [fileAnalysisItemSchema], 
+  fileAnalyses: [fileAnalysisItemSchema],
 }, { timestamps: true });
+analysisSchema.index({ createdAt: -1 }); // Added index
 
 
 const pullRequestSchema = new mongoose.Schema<PRType>({
@@ -178,16 +180,16 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   number: { type: Number, required: true },
   title: String,
   body: String,
-  state: { type: String, enum: ['open', 'closed', 'merged'] }, 
+  state: { type: String, enum: ['open', 'closed', 'merged'] },
   author: {
     login: String,
     avatar: String,
   },
   files: [codeFileSchema],
   analysis: { type: mongoose.Schema.Types.ObjectId, ref: 'Analysis' },
-  userId: String, 
-}, { 
-  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' }, 
+  userId: String,
+}, {
+  timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
   indexes: [{ fields: { repositoryId: 1, number: 1 }, unique: true }]
 });
 
@@ -196,8 +198,8 @@ const auditLogSchema = new mongoose.Schema({
   adminUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   adminUserEmail: { type: String, required: true },
   action: { type: String, required: true, enum: [
-    'USER_ROLE_CHANGED', 
-    'USER_STATUS_CHANGED_ACTIVE', 
+    'USER_ROLE_CHANGED',
+    'USER_STATUS_CHANGED_ACTIVE',
     'USER_STATUS_CHANGED_SUSPENDED',
     // Add more actions here as needed, e.g., 'USER_DELETED', 'CONFIG_UPDATED'
   ]},
@@ -205,6 +207,7 @@ const auditLogSchema = new mongoose.Schema({
   targetUserEmail: { type: String },
   details: { type: mongoose.Schema.Types.Mixed }, // For storing arbitrary details like { previousRole: 'user', newRole: 'admin' }
 }, { timestamps: false }); // Audit logs have their own timestamp field
+auditLogSchema.index({ timestamp: -1 }); // Added index
 
 
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
@@ -226,13 +229,13 @@ export const connectMongoose = async () => {
     global._mongooseConnection = Promise.resolve(mongoose);
     return global._mongooseConnection;
   }
-  
+
   global._mongooseConnection = mongoose.connect(MONGODB_URI!).then((m) => {
     console.log('[MongoDB Setup] Mongoose connected successfully.');
     return m;
   }).catch(err => {
     console.error('[MongoDB Setup] Mongoose connection error:', err);
-    global._mongooseConnection = null; 
+    global._mongooseConnection = null;
     throw err;
   });
   return global._mongooseConnection;
@@ -240,3 +243,4 @@ export const connectMongoose = async () => {
 
 connectMongoose();
 
+    
