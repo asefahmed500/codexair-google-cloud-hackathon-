@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
         .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
     }
     
-    if (relevantAnalyses.length === 0 && !isAdmin) { 
+    if (relevantAnalyses.length === 0 && !isAdmin) { // Also check for !isAdmin here
         return NextResponse.json({
             overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
             recentAnalyses: [],
@@ -210,15 +210,16 @@ export async function GET(request: NextRequest) {
       if (!analysis) return;
       (analysis.fileAnalyses || []).forEach((file: FileAnalysisItem) => {
         if (!file.filename) return;
-        const uniqueKey = `${analysis.pullRequestId?._id?.toString() || 'unknown_pr'}-${file.filename}`; 
+        // Using only filename as key for aggregation across PRs
+        const fileKey = file.filename;
 
-        if (!fileIssueCounts[file.filename]) {
-          fileIssueCounts[file.filename] = {
+        if (!fileIssueCounts[fileKey]) {
+          fileIssueCounts[fileKey] = {
             filename: file.filename,
             criticalIssues: 0,
             highIssues: 0,
-            totalIssuesInFile: 0,
-            relatedPrIds: [],
+            totalIssuesInFile: 0, // This will be sum of issues from all PRs for this file
+            relatedPrIds: [], // Collect unique PR IDs where this file was problematic
             lastOccurrence: new Date(0),
           };
         }
@@ -228,17 +229,17 @@ export async function GET(request: NextRequest) {
           if (issue.severity === 'critical') fileCritical++;
           if (issue.severity === 'high') fileHigh++;
         });
-        fileIssueCounts[file.filename].criticalIssues += fileCritical;
-        fileIssueCounts[file.filename].highIssues += fileHigh;
-        fileIssueCounts[file.filename].totalIssuesInFile += (file.securityIssues || []).length;
+        fileIssueCounts[fileKey].criticalIssues += fileCritical;
+        fileIssueCounts[fileKey].highIssues += fileHigh;
+        fileIssueCounts[fileKey].totalIssuesInFile += (file.securityIssues || []).length;
         
         const currentAnalysisDate = new Date(analysis.createdAt);
-        if (!fileIssueCounts[file.filename].lastOccurrence || currentAnalysisDate > fileIssueCounts[file.filename].lastOccurrence) {
-            fileIssueCounts[file.filename].lastOccurrence = currentAnalysisDate;
+        if (!fileIssueCounts[fileKey].lastOccurrence || currentAnalysisDate > fileIssueCounts[fileKey].lastOccurrence) {
+            fileIssueCounts[fileKey].lastOccurrence = currentAnalysisDate;
         }
 
-        if (analysis.pullRequestId?._id && !fileIssueCounts[file.filename].relatedPrIds.includes(analysis.pullRequestId._id.toString())) {
-             fileIssueCounts[file.filename].relatedPrIds.push(analysis.pullRequestId._id.toString());
+        if (analysis.pullRequestId?._id && !fileIssueCounts[fileKey].relatedPrIds.includes(analysis.pullRequestId._id.toString())) {
+             fileIssueCounts[fileKey].relatedPrIds.push(analysis.pullRequestId._id.toString());
         }
       });
     });
@@ -296,4 +297,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-

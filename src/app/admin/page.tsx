@@ -126,7 +126,7 @@ export default function AdminPage() {
     if (sessionStatus === 'loading') return;
 
     if (!session || session.user.role !== 'admin') {
-      router.replace('/auth/signin');
+      router.replace('/auth/signin'); // Or router.replace('/dashboard');
       return;
     }
 
@@ -257,7 +257,7 @@ export default function AdminPage() {
     return (
       <div className="flex flex-col min-h-screen">
         <Navbar />
-        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
           <Card>
             <CardHeader>
               <Skeleton className="h-8 w-48 mb-1" />
@@ -282,11 +282,12 @@ export default function AdminPage() {
     return (
         <div className="flex flex-col min-h-screen">
             <Navbar />
-            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 flex items-center justify-center">
                 <Card className="text-center">
                 <CardHeader><CardTitle className="text-destructive">Access Denied</CardTitle></CardHeader>
                 <CardContent>
                     <p>You do not have permission to view this page.</p>
+                    <Button onClick={() => router.push('/dashboard')} className="mt-4">Go to Dashboard</Button>
                 </CardContent>
                 </Card>
             </main>
@@ -327,7 +328,7 @@ export default function AdminPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
-      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <Card className="shadow-lg mb-8">
           <CardHeader>
             <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Admin Dashboard</CardTitle>

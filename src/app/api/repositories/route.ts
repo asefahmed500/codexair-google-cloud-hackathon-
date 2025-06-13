@@ -35,25 +35,26 @@ export async function GET(request: NextRequest) {
             language: ghRepo.language || 'N/A',
             stars: ghRepo.stargazers_count || 0,
             isPrivate: ghRepo.private,
-            userId: session.user.id!,
+            userId: session.user.id!, // Sync for the current user
           };
 
           return Repository.findOneAndUpdate(
-            { githubId: ghRepo.id, userId: session.user.id! },
+            { githubId: ghRepo.id, userId: session.user.id! }, // Ensure uniqueness per user-repo
             { $set: repoData },
             { upsert: true, new: true, setDefaultsOnInsert: true }
           );
         })
       );
-      // When syncing, we typically return the newly synced/updated repos for that user.
-      // To keep this consistent, we'll still query based on the user after sync.
-      // The main "view all" logic is for non-sync GET requests.
-       const userSyncedRepos = await Repository.find({ userId: session.user.id! })
-        .sort({ updatedAt: -1 }) // Sort by most recently updated/synced
+      // When syncing, we return the newly synced/updated repos for that user.
+      // If admin is syncing, it's for their own association.
+      const userSyncedReposQuery: any = { userId: session.user.id! };
+      
+      const userSyncedRepos = await Repository.find(userSyncedReposQuery)
+        .sort({ updatedAt: -1 }) 
         .skip((page - 1) * limit)
         .limit(limit)
         .lean();
-      const totalUserSyncedRepos = await Repository.countDocuments({ userId: session.user.id! });
+      const totalUserSyncedRepos = await Repository.countDocuments(userSyncedReposQuery);
 
       return NextResponse.json({
         repositories: userSyncedRepos,
@@ -64,20 +65,20 @@ export async function GET(request: NextRequest) {
     } else {
       // Fetch from MongoDB only
       const skip = (page - 1) * limit;
-      const query: any = {}; // Start with an empty query object
+      const query: any = {}; 
 
-      if (session.user.role !== 'admin') { // If the user is NOT an admin, filter by their userId
+      if (session.user.role !== 'admin') { 
         query.userId = session.user.id!;
       }
       // For admins, the query remains empty (if not explicitly filtering further), thus fetching all repositories.
 
-      const fetchedRepositories = await Repository.find(query) // Use the conditional query
+      const fetchedRepositories = await Repository.find(query) 
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(); 
       
-      const totalRepos = await Repository.countDocuments(query); // Count based on the same query
+      const totalRepos = await Repository.countDocuments(query); 
       
       return NextResponse.json({ 
         repositories: fetchedRepositories,
@@ -94,4 +95,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-
