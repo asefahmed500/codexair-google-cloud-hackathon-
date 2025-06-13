@@ -43,7 +43,7 @@ export default function Navbar() {
             <BarChartBig className="h-7 w-7 text-primary" />
             <span className="font-bold text-xl text-foreground font-headline">codexair</span>
           </div>
-          <div className="h-10 w-10 bg-muted rounded-full animate-pulse"></div>
+          <div className="h-10 w-10 bg-muted rounded-full animate-pulse"></div> {/* Skeleton for avatar */}
         </div>
       </header>
     );
@@ -133,7 +133,7 @@ export default function Navbar() {
                 <DropdownMenuLabel>{session.user?.name || 'My Account'}</DropdownMenuLabel>
                 {session.user?.email && <DropdownMenuLabel className="text-xs font-normal text-muted-foreground -mt-1.5">{session.user.email}</DropdownMenuLabel>}
                 <DropdownMenuSeparator />
-
+                
                 {/* Common links for both user and admin for their own account management */}
                 <DropdownMenuItem onClick={() => router.push('/profile')}>
                   <UserCircle className="mr-2 h-4 w-4" /> My Profile
@@ -142,17 +142,6 @@ export default function Navbar() {
                   <Cog className="mr-2 h-4 w-4" /> My Settings
                 </DropdownMenuItem>
 
-                {!isAdmin && ( // User-specific quick links
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-                      <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
-                    </DropdownMenuItem>
-                     <DropdownMenuItem onClick={() => router.push('/analyze')}>
-                      <GitFork className="mr-2 h-4 w-4" /> Analyze Repository
-                    </DropdownMenuItem>
-                  </>
-                )}
 
                 {isAdmin && ( // Admin-specific links
                   <>
@@ -169,6 +158,14 @@ export default function Navbar() {
                     </DropdownMenuItem>
                   </>
                 )}
+                
+                {!isAdmin && ( // Non-admin specific links (if any beyond profile/settings are needed here)
+                     <>
+                        {/* Example: could add quick link to dashboard if not already prominent */}
+                        {/* For now, profile/settings cover basic user actions in dropdown for non-admins */}
+                     </>
+                )}
+
 
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })}>
@@ -183,3 +180,4 @@ export default function Navbar() {
     </header>
   );
 }
+
