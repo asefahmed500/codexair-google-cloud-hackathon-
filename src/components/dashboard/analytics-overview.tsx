@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, BarChart2, ShieldCheck, AlertOctagon, Activity } from "lucide-react";
 import type { DashboardOverview } from "@/types";
@@ -74,3 +75,4 @@ function MetricCard({ title, value, Icon, unit, trend, trendText, className }: M
     </Card>
   );
 }
+

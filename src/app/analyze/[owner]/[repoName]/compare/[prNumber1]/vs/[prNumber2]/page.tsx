@@ -384,3 +384,4 @@ function PRComparisonLoadingSkeleton({owner, repoName, prNumber1, prNumber2} : {
     </div>
   );
 }
+

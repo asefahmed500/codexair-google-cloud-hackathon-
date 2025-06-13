@@ -196,3 +196,4 @@ function ValuePropCard({ icon, title, items }: ValuePropCardProps) {
     </Card>
   );
 }
+

@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CodeAnalysis } from "@/types";
 
@@ -45,3 +46,4 @@ export default function CodeAnalyzer({ analysis }: CodeAnalyzerProps) {
     </Card>
   );
 }
+

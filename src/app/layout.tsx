@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import SessionProvider from '@/components/auth/session-provider';
@@ -32,3 +33,4 @@ export default async function RootLayout({
     </html>
   );
 }
+

@@ -172,8 +172,8 @@ const analysisSchema = new mongoose.Schema<AnalysisType>({
 
 const pullRequestSchema = new mongoose.Schema<PRType>({
   repositoryId: { type: String, required: true }, // Refers to Repository._id
-  owner: { type: String, required: true }, // Added for easier linking from search results
-  repoName: { type: String, required: true }, // Added for easier linking from search results
+  owner: { type: String, required: true }, // Added for easier linking and display
+  repoName: { type: String, required: true }, // Added for easier linking and display
   githubId: { type: Number, required: true },
   number: { type: Number, required: true },
   title: String,
@@ -239,3 +239,4 @@ export const connectMongoose = async () => {
 };
 
 connectMongoose();
+

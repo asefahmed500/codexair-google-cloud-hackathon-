@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
@@ -60,3 +61,4 @@ export default function SecurityScanner({ issues }: SecurityScannerProps) {
     </Card>
   );
 }
+
