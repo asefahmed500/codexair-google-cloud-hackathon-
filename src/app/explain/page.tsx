@@ -8,10 +8,10 @@ import Navbar from '@/components/layout/navbar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; // Added Input
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Lightbulb, RefreshCw, AlertTriangle, Terminal, ScrollText } from 'lucide-react'; // Added ScrollText
+import { Lightbulb, RefreshCw, AlertTriangle, Terminal, ScrollText } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import type { ExplainCodeOutput } from '@/ai/flows/explain-code-flow';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,7 +32,7 @@ export default function ExplainCodePage() {
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('');
   const [selectedQuestion, setSelectedQuestion] = useState(predefinedQuestions[0].value);
-  const [customQuestion, setCustomQuestion] = useState(''); // New state for custom question
+  const [customQuestion, setCustomQuestion] = useState('');
   const [explanation, setExplanation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +124,7 @@ export default function ExplainCodePage() {
                 id="language-input"
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                placeholder="e.g., javascript, python, java (AI will infer if blank)"
+                placeholder="e.g., javascript, python, java (AI will infer if left blank)"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
@@ -155,9 +155,6 @@ export default function ExplainCodePage() {
                 value={customQuestion}
                 onChange={(e) => {
                   setCustomQuestion(e.target.value);
-                  if (e.target.value.trim() !== '') {
-                    // Optionally clear predefined or just let logic handle precedence
-                  }
                 }}
                 placeholder="e.g., How does this function handle edge cases?"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -179,7 +176,7 @@ export default function ExplainCodePage() {
           </CardContent>
           
           {error && (
-             <CardFooter>
+             <CardFooter className="flex-col items-start">
                 <Alert variant="destructive" className="w-full">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Error</AlertTitle>
@@ -189,7 +186,7 @@ export default function ExplainCodePage() {
           )}
 
           {explanation && !isLoading && (
-            <CardFooter className="pt-0">
+            <CardFooter className="pt-4 flex-col items-start">
               <Card className="w-full bg-muted/30 shadow-inner">
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold flex items-center">
@@ -198,7 +195,7 @@ export default function ExplainCodePage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-auto max-h-96 w-full rounded-md border bg-background p-4 shadow">
+                  <ScrollArea className="h-auto max-h-[30rem] w-full rounded-md border bg-background p-4 shadow">
                      <pre className="text-sm whitespace-pre-wrap font-mono text-foreground">{explanation}</pre>
                   </ScrollArea>
                 </CardContent>
@@ -215,5 +212,3 @@ export default function ExplainCodePage() {
     </div>
   );
 }
-
-
