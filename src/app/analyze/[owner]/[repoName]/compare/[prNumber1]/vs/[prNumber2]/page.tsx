@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from '@/components/ui/skeleton';
 import Navbar from '@/components/layout/navbar';
 import { PullRequest as PRType, CodeAnalysis, SecurityIssue, Suggestion, CodeFile, Repository as RepoType } from '@/types';
-import { ArrowLeftRight, Github, AlertTriangle, Lightbulb, FileText, CalendarDays, User, CheckCircle, XCircle, FileWarning } from 'lucide-react';
+import { ArrowLeftRight, Github, AlertTriangle, Lightbulb, FileText, CalendarDays, User, CheckCircle, XCircle, FileWarning, RefreshCw, GitPullRequest } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
@@ -166,11 +166,11 @@ interface PRDetailsColumnProps {
 
 function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVariant, getPriorityBadgeVariant }: PRDetailsColumnProps) {
   const { pullRequest, analysis } = prData;
-  const router = useRouter(); // For the Analyze PR button if needed
+  const router = useRouter();
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleAnalyzePR = async (prNumToAnalyze: number) => {
-    // This function is similar to the one on the main repo page.
-    // It assumes the PR is open and not yet analyzed.
+    setIsAnalyzing(true);
     toast({ title: "Initiating Analysis...", description: `Analysis for PR #${prNumToAnalyze} will start.`});
     try {
       const response = await fetch('/api/analyze', {
@@ -183,11 +183,11 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
         throw new Error(errorData.details || errorData.error || 'Failed to start analysis');
       }
       const result = await response.json();
-      // Redirect to the new analysis page or refresh current page.
-      // For comparison, a refresh or re-fetch might be better.
       router.push(`/analyze/${owner}/${repoName}/${prNumToAnalyze}/${result.analysis._id}`);
     } catch (err: any) {
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -257,9 +257,18 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
                   <CardContent className="p-0">
                     <p className="text-xs text-muted-foreground mb-3">This pull request has not been analyzed yet.</p>
                     {pullRequest.state === 'open' && (
-                      <Button size="sm" variant="default" onClick={() => handleAnalyzePR(pullRequest.number)}>
-                        Analyze PR #{pullRequest.number}
-                      </Button>
+                       <Button 
+                          size="sm" 
+                          variant="default" 
+                          onClick={() => handleAnalyzePR(pullRequest.number)}
+                          disabled={isAnalyzing}
+                        >
+                          {isAnalyzing ? (
+                            <><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
+                          ) : (
+                            <><GitPullRequest className="mr-2 h-4 w-4" />Analyze PR #{pullRequest.number}</>
+                          )}
+                        </Button>
                     )}
                   </CardContent>
                 </Card>
