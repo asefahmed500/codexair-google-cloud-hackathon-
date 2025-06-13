@@ -131,7 +131,7 @@ export default function PRComparisonPage() {
 
         <Card className="mb-8 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-2xl md:text-3xl font-bold font-headline flex items-center gap-3">
+            <CardTitle className="text-2xl sm:text-3xl md:text-4xl font-bold font-headline flex items-center gap-3">
               <ArrowLeftRight className="h-8 w-8 text-primary" />
               Comparing Pull Requests in {owner}/{repoName}
             </CardTitle>
@@ -183,10 +183,10 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
         throw new Error(errorData.details || errorData.error || 'Failed to start analysis');
       }
       const result = await response.json();
-      // Instead of direct navigation, update the prData for this column or refresh the page
-      // For simplicity, we can show a success toast and encourage manual refresh or navigation
       toast({ title: "Analysis Started", description: `Analysis for PR #${prNumToAnalyze} is in progress. Navigate to its analysis page to view results.` });
-      // router.push(`/analyze/${owner}/${repoName}/${prNumToAnalyze}/${result.analysis._id}`); // Optionally navigate
+      // To reflect the new analysis, ideally, we'd re-fetch or update this specific prData.
+      // For now, we'll rely on the toast and potential navigation by the user.
+      // A more advanced solution might involve a global state or context for PR data.
     } catch (err: any) {
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
     } finally {
@@ -218,14 +218,14 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
       </CardHeader>
       <CardContent className="flex-grow">
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-4 text-xs h-auto">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 text-xs h-auto">
             <TabsTrigger value="overview" className="py-1.5">Overview</TabsTrigger>
             <TabsTrigger value="files" className="py-1.5">Files ({pullRequest.files?.length || 0})</TabsTrigger>
             <TabsTrigger value="security" className="py-1.5">Security ({analysis?.securityIssues?.length || 0})</TabsTrigger>
             <TabsTrigger value="suggestions" className="py-1.5">Suggestions ({analysis?.suggestions?.length || 0})</TabsTrigger>
           </TabsList>
           
-          <ScrollArea className="h-[450px] pr-2">
+          <ScrollArea className="h-[60vh] md:h-[450px] pr-2">
             <TabsContent value="overview">
               <h4 className="font-semibold mb-2 text-sm">PR Description:</h4>
               {pullRequest.body ? (
@@ -397,3 +397,5 @@ function PRComparisonLoadingSkeleton({owner, repoName, prNumber1, prNumber2} : {
   );
 }
 
+
+    
