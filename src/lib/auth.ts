@@ -73,24 +73,29 @@ export const authOptions: NextAuthOptions = {
         token.accessToken = account.access_token;
         token.provider = account.provider;
 
-        // `user.id` from the adapter during initial sign-in *should* be the MongoDB ObjectId string.
-        // We prioritize looking up via Account for robustness.
+        // PRIMARY METHOD: Look up the Account document to get the MongoDB User ID.
+        // The adapter should have already created/linked the User and Account.
         const linkedAccount = await AccountModel.findOne({
           provider: account.provider,
           providerAccountId: account.providerAccountId,
         }).lean();
 
         if (linkedAccount && linkedAccount.userId) {
-          token.id = linkedAccount.userId.toString();
-          console.log(`[JWT Callback] Initial sign-in: Set token.id to "${token.id}" from linked Account.`);
-        } else if (user?.id && typeof user.id === 'string' && user.id.length === 24 && /^[0-9a-fA-F]+$/.test(user.id)) {
-          // Fallback if linkedAccount isn't found but user.id from adapter seems valid (e.g., credentials sign-in or adapter providing db id)
-          token.id = user.id;
-          console.log(`[JWT Callback] Initial sign-in: Linked account not found, but user.id ("${user.id}") from adapter/user object appears to be a valid MongoDB ObjectId. Using it for token.id.`);
-        }
-         else {
-          console.error(`[JWT Callback] CRITICAL: Could not determine MongoDB User ID for ${account.provider}:${account.providerAccountId}. User from adapter:`, user, "Profile from provider:", profile);
-          delete token.id; // Important: ensure token.id is not a provider ID if it couldn't be resolved to a DB ID.
+          token.id = linkedAccount.userId.toString(); // This IS the MongoDB _id
+          console.log(`[JWT Callback] Initial sign-in: Set token.id to "${token.id}" from linked Account.userId for ${account.provider}:${account.providerAccountId}.`);
+        } else {
+          // This case implies an issue with the adapter or a race condition.
+          // The `user.id` from the adapter *should* be the MongoDB _id.
+          // We log a warning and try to use user.id if it looks like an ObjectId.
+          console.warn(`[JWT Callback] Initial sign-in: Could not find linked Account for ${account.provider}:${account.providerAccountId}. Adapter might not have completed linking, or this is an unexpected state.`);
+          if (user?.id && typeof user.id === 'string' && user.id.length === 24 && /^[0-9a-fA-F]+$/.test(user.id)) {
+            token.id = user.id; // Assume user.id from adapter is the MongoDB _id.
+            console.log(`[JWT Callback] Initial sign-in: Fallback - Using user.id ("${user.id}") from adapter/user object as it appears to be a valid MongoDB ObjectId.`);
+          } else {
+            console.error(`[JWT Callback] CRITICAL: Could not determine MongoDB User ID for ${account.provider}:${account.providerAccountId}. User object from adapter:`, user, "Profile from provider:", profile);
+            // If we cannot determine the DB ID, ensure token.id is not set to an incorrect value.
+            delete token.id;
+          }
         }
       }
 
@@ -120,18 +125,17 @@ export const authOptions: NextAuthOptions = {
             }
           }
         } else {
-          console.warn(`[JWT Callback] User with DB ID ${token.id} not found in database. Token may be stale.`);
+          console.warn(`[JWT Callback] User with DB ID ${token.id} not found in database. Token may be stale or ID was incorrect from initial setup.`);
+          // Clear user-specific fields if user not found by a valid-looking ID
           delete token.role;
           delete token.status;
           delete token.email;
+          // Potentially delete token.id as well, or let NextAuth handle session invalidation if appropriate
+          // delete token.id; 
         }
-      } else {
-         // If token.id is not a valid MongoDB ObjectId string at this point.
-        if (token.id) { // Log only if token.id was set but invalid
-            console.error(`[JWT Callback] Invalid token.id ("${token.id}") found. It's not a valid MongoDB ObjectId string. Clearing user-specific fields from token.`);
-        }
-        // Ensure a potentially incorrect id doesn't propagate or cause issues.
-        delete token.id;
+      } else if (token.id) { // token.id exists but is not a valid ObjectId string format
+        console.error(`[JWT Callback] Invalid token.id ("${token.id}") found. It's not a valid MongoDB ObjectId string. Clearing user-specific fields from token.`);
+        delete token.id; // Remove invalid ID to prevent further errors
         delete token.role;
         delete token.status;
         delete token.email;
@@ -166,20 +170,24 @@ export const authOptions: NextAuthOptions = {
           }).lean();
 
           if (linkedDbAccount && linkedDbAccount.userId) {
+            // Account exists, user record should exist. linkedDbAccount.userId is the MongoDB ObjectId.
             const dbUser = await UserModel.findById(linkedDbAccount.userId).select('status email').lean();
             if (dbUser?.status === 'suspended') {
               console.log(`Sign-in attempt denied for suspended OAuth user: ${dbUser.email || profile?.email}`);
               return '/auth/signin?error=suspended'; // Redirect to error page
             }
+            // If user exists and is not suspended, allow sign-in
+            return true; 
           } else {
-            // User is new or account not yet linked by adapter.
+            // User is new or account not yet linked by adapter for some reason (adapter should handle this).
             // The adapter will create/link them. Status check isn't applicable here for a brand new user.
-            // The default status is 'active' as per schema.
+            // Default status is 'active'.
             console.log(`[signIn Callback] New or unlinked OAuth user: ${profile?.email}. Allowing sign-in flow to proceed for adapter processing.`);
+            return true; // Allow sign-in to proceed for adapter to create/link.
           }
         } else if (user && user.id) { 
-          // This is likely a credentials sign-in, where user.id IS the MongoDB _id
-          // or a non-OAuth context where user.id is expected to be the DB ID.
+          // This is likely a credentials sign-in, or a non-OAuth context where user.id is the DB ID.
+          // Validate if user.id seems like a MongoDB ObjectId
           if (typeof user.id === 'string' && user.id.length === 24 && /^[0-9a-fA-F]+$/.test(user.id)) {
             const dbUser = await UserModel.findById(user.id).select('status email').lean();
             if (dbUser?.status === 'suspended') {
@@ -187,13 +195,11 @@ export const authOptions: NextAuthOptions = {
               return '/auth/signin?error=suspended';
             }
           } else {
-            console.warn(`[signIn Callback] user.id ("${user.id}") is not a valid MongoDB ObjectId for non-OAuth sign-in. This might be an issue.`);
-            // Depending on policy, you might deny sign-in here or let it proceed if other checks are in place.
-            // For safety, if we don't have an account and user.id isn't a DB id, it's risky.
-            // However, NextAuth typically handles adapter user creation before this for new OAuth users.
+            console.warn(`[signIn Callback] For non-OAuth sign-in, user.id ("${user.id}") is not a valid MongoDB ObjectId. This might indicate an issue if direct DB ID is expected.`);
+            // Depending on policy, you might deny or allow. For now, allowing if not clearly OAuth.
           }
         }
-        return true; // Allow sign-in to proceed
+        return true; // Allow sign-in to proceed if not explicitly denied
     }
   },
   pages: {
@@ -205,5 +211,6 @@ export const authOptions: NextAuthOptions = {
 
 const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };
+    
 
     
