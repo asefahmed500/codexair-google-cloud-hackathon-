@@ -75,7 +75,7 @@ export default function AdminAuditLogsPage() {
     return (
       <div className="flex flex-col min-h-screen">
         <Navbar />
-        <main className="flex-1 container py-8">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Card>
             <CardHeader>
               <Skeleton className="h-8 w-48 mb-1" />
@@ -100,7 +100,7 @@ export default function AdminAuditLogsPage() {
     return (
         <div className="flex flex-col min-h-screen">
             <Navbar />
-            <main className="flex-1 container py-8 flex items-center justify-center">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
                 <Card className="text-center">
                 <CardHeader><CardTitle className="text-destructive">Access Denied</CardTitle></CardHeader>
                 <CardContent>
@@ -115,10 +115,10 @@ export default function AdminAuditLogsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold font-headline flex items-center">
+            <CardTitle className="text-2xl sm:text-3xl font-bold font-headline flex items-center">
                 <FileText className="mr-3 h-8 w-8 text-primary" />
                 Admin Audit Logs
             </CardTitle>
@@ -132,40 +132,42 @@ export default function AdminAuditLogsPage() {
             )}
             {!loading && auditLogs.length > 0 && (
               <>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Timestamp</TableHead>
-                      <TableHead>Admin</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Target User</TableHead>
-                      <TableHead>Details</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {auditLogs.map((log) => (
-                      <TableRow key={log._id}>
-                        <TableCell>{format(new Date(log.timestamp), 'Pp')}</TableCell>
-                        <TableCell>{log.adminUserEmail || 'N/A'}</TableCell>
-                        <TableCell>
-                            <span className="font-medium">
-                                {log.action.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
-                            </span>
-                        </TableCell>
-                        <TableCell>{log.targetUserEmail || 'N/A'}</TableCell>
-                        <TableCell className="text-xs">
-                          {log.details && typeof log.details === 'object' && Object.keys(log.details).length > 0 ? (
-                            <pre className="max-w-xs overflow-x-auto bg-muted p-1 rounded-sm">
-                                {JSON.stringify(log.details, null, 2)}
-                            </pre>
-                          ) : 'No details'}
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Timestamp</TableHead>
+                        <TableHead>Admin</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Target User</TableHead>
+                        <TableHead>Details</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {auditLogs.map((log) => (
+                        <TableRow key={log._id}>
+                          <TableCell>{format(new Date(log.timestamp), 'Pp')}</TableCell>
+                          <TableCell>{log.adminUserEmail || 'N/A'}</TableCell>
+                          <TableCell>
+                              <span className="font-medium">
+                                  {log.action.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+                              </span>
+                          </TableCell>
+                          <TableCell>{log.targetUserEmail || 'N/A'}</TableCell>
+                          <TableCell className="text-xs">
+                            {log.details && typeof log.details === 'object' && Object.keys(log.details).length > 0 ? (
+                              <pre className="max-w-xs overflow-x-auto bg-muted p-1 rounded-sm">
+                                  {JSON.stringify(log.details, null, 2)}
+                              </pre>
+                            ) : 'No details'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
                 {totalPages > 1 && (
-                  <div className="mt-6 flex justify-between items-center">
+                  <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <Button
                       variant="outline"
                       onClick={handlePreviousPage}
@@ -191,14 +193,10 @@ export default function AdminAuditLogsPage() {
         </Card>
       </main>
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} codexair Admin.
         </div>
       </footer>
     </div>
   );
 }
-
-    
-
-    

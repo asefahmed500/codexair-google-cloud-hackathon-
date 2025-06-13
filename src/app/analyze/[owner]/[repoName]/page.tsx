@@ -170,18 +170,18 @@ export default function RepositoryAnalysisPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar /> 
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card className="shadow-lg">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <CardTitle className="text-3xl font-bold font-headline flex items-center gap-2">
-                    <GitPullRequest className="h-8 w-8 text-primary" /> 
+                    <CardTitle className="text-2xl sm:text-3xl font-bold font-headline flex items-center gap-2">
+                    <GitPullRequest className="h-7 w-7 sm:h-8 sm:w-8 text-primary" /> 
                     Pull Requests for {owner}/{repoName}
                     </CardTitle>
                     <CardDescription>Select a pull request to analyze or view existing analysis. Only open PRs can be analyzed.</CardDescription>
                 </div>
-                <Button variant="outline" className="mt-4 sm:mt-0" onClick={() => fetchPullRequests(true)} disabled={isRefreshing || loading || analyzingPR !== null}>
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => fetchPullRequests(true)} disabled={isRefreshing || loading || analyzingPR !== null}>
                     <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing && 'animate-spin'}`} />
                     {isRefreshing ? 'Refreshing...' : 'Refresh PRs'}
                 </Button>
@@ -202,13 +202,13 @@ export default function RepositoryAnalysisPage() {
                   <Card key={pr.id} className="hover:shadow-md transition-shadow">
                     <CardHeader className="pb-3">
                       <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
-                        <CardTitle className="text-xl hover:text-primary transition-colors">
+                        <CardTitle className="text-lg sm:text-xl hover:text-primary transition-colors">
                            <Link href={pr.html_url || '#'} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2">
                             <Github className="h-4 w-4 mt-1 opacity-70 flex-shrink-0"/>
                             <span>#{pr.number}: {pr.title}</span>
                            </Link>
                         </CardTitle>
-                        <Badge variant={pr.state.toLowerCase() === 'open' ? 'default' : 'destructive'} className={getStatusBadgeClasses(pr.state)}>
+                        <Badge variant={pr.state.toLowerCase() === 'open' ? 'default' : 'destructive'} className={`whitespace-nowrap ${getStatusBadgeClasses(pr.state)}`}>
                           {pr.state}
                         </Badge>
                       </div>
@@ -255,7 +255,7 @@ export default function RepositoryAnalysisPage() {
         </Card>
       </main>
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} codexair.
         </div>
       </footer>

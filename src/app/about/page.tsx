@@ -7,13 +7,13 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen bg-secondary/50 flex flex-col">
       <Navbar />
-      <main className="flex-1 container py-12 md:py-16">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
         <section className="text-center mb-16">
           <BarChartBig className="w-20 h-20 text-primary mx-auto mb-6" />
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4 font-headline">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4 font-headline">
             About codexair
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-md sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
             We are dedicated to revolutionizing the code review process through the power of artificial intelligence, helping teams build better, more secure software, faster.
           </p>
         </section>
@@ -23,7 +23,7 @@ export default function AboutPage() {
             <CardHeader>
               <div className="flex items-center gap-3 mb-2">
                 <Target className="w-10 h-10 text-primary" />
-                <CardTitle className="text-2xl font-headline">Our Mission</CardTitle>
+                <CardTitle className="text-xl md:text-2xl font-headline">Our Mission</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
@@ -37,7 +37,7 @@ export default function AboutPage() {
             <CardHeader>
               <div className="flex items-center gap-3 mb-2">
                 <Eye className="w-10 h-10 text-primary" />
-                <CardTitle className="text-2xl font-headline">Our Vision</CardTitle>
+                <CardTitle className="text-xl md:text-2xl font-headline">Our Vision</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
@@ -51,7 +51,7 @@ export default function AboutPage() {
             <CardHeader>
               <div className="flex items-center gap-3 mb-2">
                 <Users className="w-10 h-10 text-primary" />
-                <CardTitle className="text-2xl font-headline">The Team</CardTitle>
+                <CardTitle className="text-xl md:text-2xl font-headline">The Team</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
@@ -63,7 +63,7 @@ export default function AboutPage() {
         </div>
         
         <section className="mt-16 text-center">
-            <h2 className="text-2xl font-semibold text-foreground mb-4 font-headline">Get In Touch</h2>
+            <h2 className="text-xl md:text-2xl font-semibold text-foreground mb-4 font-headline">Get In Touch</h2>
             <p className="text-muted-foreground mb-6">
                 Have questions or want to learn more? We&apos;d love to hear from you.
             </p>
@@ -74,7 +74,7 @@ export default function AboutPage() {
 
       </main>
       <footer className="py-10 text-center text-sm text-muted-foreground border-t bg-background">
-        <div className="container mx-auto">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <p>&copy; {new Date().getFullYear()} codexair. All rights reserved.</p>
           <p className="mt-1">Empowering developers with AI-driven code intelligence.</p>
         </div>

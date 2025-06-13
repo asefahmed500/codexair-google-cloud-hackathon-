@@ -71,7 +71,7 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
-        <main className="flex-1 container py-8 flex items-center justify-center">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
           <Card className="w-full max-w-md shadow-lg">
             <CardHeader>
               <CardTitle className="text-destructive">Error Loading Dashboard</CardTitle>
@@ -83,7 +83,7 @@ export default function DashboardPage() {
           </Card>
         </main>
         <footer className="py-6 border-t bg-background">
-          <div className="container text-center text-sm text-muted-foreground">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} codexair.
           </div>
         </footer>
@@ -97,11 +97,11 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
-        <main className="flex-1 container py-8 flex items-center justify-center">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
           <Card className="w-full max-w-lg text-center shadow-xl">
             <CardHeader className="items-center">
               <BarChartBig className="w-16 h-16 text-primary mb-4" />
-              <CardTitle className="text-3xl font-headline text-primary">Welcome to codexair!</CardTitle>
+              <CardTitle className="text-2xl sm:text-3xl font-headline text-primary">Welcome to codexair!</CardTitle>
               <CardDescription className="text-md text-muted-foreground mt-2">
                 Your intelligent code review assistant.
               </CardDescription>
@@ -123,7 +123,7 @@ export default function DashboardPage() {
           </Card>
         </main>
         <footer className="py-6 border-t bg-background">
-          <div className="container text-center text-sm text-muted-foreground">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} codexair.
           </div>
         </footer>
@@ -134,11 +134,11 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-            <h1 className="text-3xl font-bold text-foreground font-headline">codexair Dashboard</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground font-headline">codexair Dashboard</h1>
             {session.user.role === 'admin' && (
-                <Button asChild variant="outline" className="shadow-sm hover:shadow-md transition-shadow">
+                <Button asChild variant="outline" className="shadow-sm hover:shadow-md transition-shadow w-full sm:w-auto">
                     <Link href="/admin">
                         <Shield className="mr-2 h-5 w-5 text-accent" />
                         Go to Admin Panel
@@ -166,11 +166,10 @@ export default function DashboardPage() {
         ) }
       </main>
        <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} codexair.
         </div>
       </footer>
     </div>
   );
 }
-    

@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Github, Zap } from 'lucide-react';
 
-// Google G logo SVG component
 const GoogleIcon = () => (
   <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="mr-3 h-6 w-6">
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
@@ -19,26 +18,26 @@ const GoogleIcon = () => (
 
 export default function LoginForm() {
   return (
-    <Card className="w-full max-w-md shadow-xl">
+    <Card className="w-full max-w-md shadow-xl mx-4 sm:mx-0">
       <CardHeader className="text-center items-center"> 
-        <Zap className="w-16 h-16 text-primary mx-auto mb-4" /> 
-        <CardTitle className="text-3xl font-bold font-headline">Welcome to codexair</CardTitle>
+        <Zap className="w-12 h-12 sm:w-16 sm:h-16 text-primary mx-auto mb-3 sm:mb-4" /> 
+        <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Welcome to codexair</CardTitle>
         <CardDescription>Sign in to access your AI-powered code analysis dashboard.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-2"> 
         <Button
           variant="default"
           size="lg"
-          className="w-full text-lg py-6 shadow-md hover:shadow-lg transition-shadow"
+          className="w-full text-md sm:text-lg py-3 sm:py-6 shadow-md hover:shadow-lg transition-shadow"
           onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
         >
-          <Github className="mr-3 h-6 w-6" />
+          <Github className="mr-3 h-5 w-5 sm:h-6 sm:w-6" />
           Sign in with GitHub
         </Button>
         <Button
           variant="outline"
           size="lg"
-          className="w-full text-lg py-6 shadow-md hover:shadow-lg transition-shadow border-input hover:bg-accent/50"
+          className="w-full text-md sm:text-lg py-3 sm:py-6 shadow-md hover:shadow-lg transition-shadow border-input hover:bg-accent/50"
           onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
         >
           <GoogleIcon />
@@ -48,4 +47,3 @@ export default function LoginForm() {
     </Card>
   );
 }
-

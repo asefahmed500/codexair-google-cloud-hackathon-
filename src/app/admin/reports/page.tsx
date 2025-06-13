@@ -14,7 +14,7 @@ import { Download, Eye, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { AnalysisReportItem } from '@/types';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge'; // Import Badge
+import { Badge } from '@/components/ui/badge';
 
 export default function AdminReportsPage() {
   const { data: session, status } = useSession();
@@ -105,7 +105,7 @@ export default function AdminReportsPage() {
     return (
       <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
-        <main className="flex-1 container py-8">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Card className="shadow-lg">
             <CardHeader>
               <Skeleton className="h-8 w-56 mb-1" />
@@ -128,7 +128,7 @@ export default function AdminReportsPage() {
     return (
         <div className="flex flex-col min-h-screen">
             <Navbar />
-            <main className="flex-1 container py-8 flex items-center justify-center">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
                 <Card className="text-center">
                 <CardHeader><CardTitle className="text-destructive">Access Denied</CardTitle></CardHeader>
                 <CardContent>
@@ -144,7 +144,7 @@ export default function AdminReportsPage() {
     return (
         <div className="flex flex-col min-h-screen bg-secondary/50">
             <Navbar />
-            <main className="flex-1 container py-8">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <Card className="text-center shadow-lg">
                     <CardHeader><CardTitle className="text-destructive">Error Loading Report</CardTitle></CardHeader>
                     <CardContent><p>{error}</p></CardContent>
@@ -157,15 +157,15 @@ export default function AdminReportsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card className="shadow-lg">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <CardTitle className="text-3xl font-bold font-headline">Analysis Summary Report</CardTitle>
+                    <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Analysis Summary Report</CardTitle>
                     <CardDescription>Overview of all analyzed pull requests in the system.</CardDescription>
                 </div>
-                <Button onClick={handleDownloadCSV} disabled={reportData.length === 0 || loading} className="mt-4 sm:mt-0">
+                <Button onClick={handleDownloadCSV} disabled={reportData.length === 0 || loading} className="w-full sm:w-auto">
                     <Download className="mr-2 h-4 w-4" />
                     Download CSV
                 </Button>
@@ -182,77 +182,75 @@ export default function AdminReportsPage() {
                 <p className="text-muted-foreground text-center py-10">No analyzed pull requests found to report.</p>
             )}
             {!loading && reportData.length > 0 && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[200px]">PR</TableHead>
-                  <TableHead>Repository</TableHead>
-                  <TableHead>Author</TableHead>
-                  <TableHead>Analysis Date</TableHead>
-                  <TableHead className="text-center">Quality</TableHead>
-                  <TableHead className="text-center">Crit. Issues</TableHead>
-                  <TableHead className="text-center">High Issues</TableHead>
-                  <TableHead className="text-center">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {reportData.map((item) => (
-                  <TableRow key={item.prId}>
-                    <TableCell className="font-medium">
-                        {item.analysisId && item.repositoryFullName !== 'N/A' && item.repositoryFullName.includes('/') ? (
-                             <Link href={`/analyze/${item.repositoryFullName}/${item.prNumber}/${item.analysisId}`} 
-                                  className="hover:underline text-primary"
-                                  title={item.prTitle}>
-                                #{item.prNumber}: {item.prTitle.substring(0, 30)}{item.prTitle.length > 30 ? '...' : ''}
-                            </Link>
-                        ) : (
-                            <span title={item.prTitle}>
-                                #{item.prNumber}: {item.prTitle.substring(0, 30)}{item.prTitle.length > 30 ? '...' : ''}
-                            </span>
-                        )}
-                    </TableCell>
-                    <TableCell>{item.repositoryFullName}</TableCell>
-                    <TableCell>{item.prAuthor}</TableCell>
-                    <TableCell>{format(new Date(item.analysisDate), 'MMM d, yyyy')}</TableCell>
-                    <TableCell className={`text-center font-semibold ${getQualityScoreColor(item.qualityScore)}`}>
-                      {item.qualityScore !== null ? item.qualityScore.toFixed(1) : <span className="text-muted-foreground">N/A</span>}
-                    </TableCell>
-                    <TableCell className={`text-center font-semibold ${item.criticalIssuesCount > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                      {item.criticalIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1" />}
-                      {item.criticalIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1" />}
-                      {item.criticalIssuesCount}
-                    </TableCell>
-                     <TableCell className={`text-center font-semibold ${item.highIssuesCount > 0 ? 'text-orange-500' : 'text-green-600'}`}>
-                      {item.highIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1" />}
-                      {item.highIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1" />}
-                      {item.highIssuesCount}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {item.analysisId && item.repositoryFullName !== 'N/A' && item.repositoryFullName.includes('/') && (
-                        <Button variant="ghost" size="sm" asChild>
-                           <Link href={`/analyze/${item.repositoryFullName}/${item.prNumber}/${item.analysisId}`}>
-                                <Eye className="mr-1 h-4 w-4" /> View
-                           </Link>
-                        </Button>
-                      )}
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[200px]">PR</TableHead>
+                    <TableHead>Repository</TableHead>
+                    <TableHead>Author</TableHead>
+                    <TableHead>Analysis Date</TableHead>
+                    <TableHead className="text-center">Quality</TableHead>
+                    <TableHead className="text-center">Crit. Issues</TableHead>
+                    <TableHead className="text-center">High Issues</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {reportData.map((item) => (
+                    <TableRow key={item.prId}>
+                      <TableCell className="font-medium">
+                          {item.analysisId && item.repositoryFullName !== 'N/A' && item.repositoryFullName.includes('/') ? (
+                               <Link href={`/analyze/${item.repositoryFullName}/${item.prNumber}/${item.analysisId}`} 
+                                    className="hover:underline text-primary"
+                                    title={item.prTitle}>
+                                  #{item.prNumber}: {item.prTitle.substring(0, 30)}{item.prTitle.length > 30 ? '...' : ''}
+                              </Link>
+                          ) : (
+                              <span title={item.prTitle}>
+                                  #{item.prNumber}: {item.prTitle.substring(0, 30)}{item.prTitle.length > 30 ? '...' : ''}
+                              </span>
+                          )}
+                      </TableCell>
+                      <TableCell>{item.repositoryFullName}</TableCell>
+                      <TableCell>{item.prAuthor}</TableCell>
+                      <TableCell className="whitespace-nowrap">{format(new Date(item.analysisDate), 'MMM d, yyyy')}</TableCell>
+                      <TableCell className={`text-center font-semibold ${getQualityScoreColor(item.qualityScore)}`}>
+                        {item.qualityScore !== null ? item.qualityScore.toFixed(1) : <span className="text-muted-foreground">N/A</span>}
+                      </TableCell>
+                      <TableCell className={`text-center font-semibold ${item.criticalIssuesCount > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                        {item.criticalIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1" />}
+                        {item.criticalIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1" />}
+                        {item.criticalIssuesCount}
+                      </TableCell>
+                       <TableCell className={`text-center font-semibold ${item.highIssuesCount > 0 ? 'text-orange-500' : 'text-green-600'}`}>
+                        {item.highIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1" />}
+                        {item.highIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1" />}
+                        {item.highIssuesCount}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {item.analysisId && item.repositoryFullName !== 'N/A' && item.repositoryFullName.includes('/') && (
+                          <Button variant="ghost" size="sm" asChild>
+                             <Link href={`/analyze/${item.repositoryFullName}/${item.prNumber}/${item.analysisId}`}>
+                                  <Eye className="mr-1 h-4 w-4" /> View
+                             </Link>
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
             )}
           </CardContent>
         </Card>
       </main>
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} codexair Admin Reports.
         </div>
       </footer>
     </div>
   );
 }
-
-    
-
-    

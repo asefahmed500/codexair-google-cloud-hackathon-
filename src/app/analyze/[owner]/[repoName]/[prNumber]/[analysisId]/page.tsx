@@ -103,7 +103,7 @@ export default function AnalysisDetailsPage() {
     return (
       <div className="flex flex-col min-h-screen">
         <Navbar />
-        <main className="flex-1 container py-8 flex items-center justify-center">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
             <Card className="w-full max-w-lg text-center">
             <CardHeader>
                 <CardTitle className="text-destructive">Error Loading Analysis</CardTitle>
@@ -145,17 +145,17 @@ export default function AnalysisDetailsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar /> 
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex justify-between items-center">
              <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>Back to PRs for {owner}/{repoName}</Button>
         </div>
 
         <Card className="mb-6 shadow-lg">
           <CardHeader>
-            <div className="flex justify-between items-start">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
                 <div>
-                    <CardTitle className="text-3xl font-bold font-headline flex items-center gap-2">
-                        <GitPullRequest className="h-8 w-8 text-primary" /> PR #{pullRequest.number}: {pullRequest.title}
+                    <CardTitle className="text-xl md:text-2xl lg:text-3xl font-bold font-headline flex items-center gap-2">
+                        <GitPullRequest className="h-7 w-7 sm:h-8 sm:w-8 text-primary" /> PR #{pullRequest.number}: {pullRequest.title}
                     </CardTitle>
                     <CardDescription className="mt-1">
                         Analysis for <Link href={`/analyze/${owner}/${repoName}`} className="text-primary hover:underline">{owner}/{repoName}</Link>
@@ -180,16 +180,16 @@ export default function AnalysisDetailsPage() {
 
         <Dialog>
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-6">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-6">
               <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="security">Security Issues ({analysis.securityIssues?.length || 0})</TabsTrigger>
+              <TabsTrigger value="security">Security ({analysis.securityIssues?.length || 0})</TabsTrigger>
               <TabsTrigger value="suggestions">Suggestions ({analysis.suggestions?.length || 0})</TabsTrigger>
               <TabsTrigger value="file-details">File Details ({analysis.fileAnalyses?.length || 0})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
               <Card>
-                <CardHeader><CardTitle>Overall Analysis Metrics</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl md:text-2xl">Overall Analysis Metrics</CardTitle></CardHeader>
                 <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <MetricCard Icon={Thermometer} title="Quality Score" value={analysis.qualityScore.toFixed(1)} unit="/ 10" />
                   <MetricCard Icon={Zap} title="Complexity Score" value={analysis.complexity.toFixed(1)} />
@@ -203,13 +203,13 @@ export default function AnalysisDetailsPage() {
 
             <TabsContent value="security">
               <Card>
-                <CardHeader><CardTitle>Security Issues</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl md:text-2xl">Security Issues</CardTitle></CardHeader>
                 <CardContent>
                   {analysis.securityIssues?.length > 0 ? (
                     <Accordion type="single" collapsible className="w-full">
                       {analysis.securityIssues.map((issue, index) => (
                         <AccordionItem value={`issue-${index}`} key={index}>
-                          <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md">
+                          <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md text-sm sm:text-base">
                             <div className="flex items-center justify-between w-full">
                               <span className="font-medium text-left">{issue.title}</span>
                               <div className="flex items-center gap-2">
@@ -251,13 +251,13 @@ export default function AnalysisDetailsPage() {
 
             <TabsContent value="suggestions">
                <Card>
-                <CardHeader><CardTitle>Improvement Suggestions</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl md:text-2xl">Improvement Suggestions</CardTitle></CardHeader>
                 <CardContent>
                   {analysis.suggestions?.length > 0 ? (
                     <Accordion type="single" collapsible className="w-full">
                       {analysis.suggestions.map((suggestion, index) => (
                         <AccordionItem value={`suggestion-${index}`} key={index}>
-                          <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md">
+                          <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md text-sm sm:text-base">
                            <div className="flex items-center justify-between w-full">
                               <span className="font-medium text-left">{suggestion.title}</span>
                                <div className="flex items-center gap-2">
@@ -303,13 +303,13 @@ export default function AnalysisDetailsPage() {
 
             <TabsContent value="file-details">
               <Card>
-                <CardHeader><CardTitle>File-by-File Analysis</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xl md:text-2xl">File-by-File Analysis</CardTitle></CardHeader>
                 <CardContent>
                   {analysis.fileAnalyses && analysis.fileAnalyses.length > 0 ? (
                     <Accordion type="single" collapsible className="w-full">
                       {analysis.fileAnalyses.map((file, index) => (
                         <AccordionItem value={`file-${index}`} key={index}>
-                          <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md">
+                          <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md text-sm sm:text-base">
                             <div className="flex items-center justify-between w-full">
                                <div className="flex items-center gap-2">
                                   <Code2 className="h-4 w-4 text-muted-foreground" />
@@ -427,7 +427,7 @@ export default function AnalysisDetailsPage() {
 
       </main>
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} codexair.
         </div>
       </footer>
@@ -457,7 +457,7 @@ function AnalysisDetailsLoadingSkeleton() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar /> 
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section Skeleton */}
         <div className="mb-6 flex justify-between items-center">
             <Skeleton className="h-10 w-48" /> {/* Back Button */}
@@ -466,7 +466,7 @@ function AnalysisDetailsLoadingSkeleton() {
         {/* Main PR Info Card Skeleton */}
         <Card className="mb-6 shadow-lg">
             <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
                     <div>
                         <Skeleton className="h-9 w-3/4 mb-2" /> {/* PR Title */}
                         <Skeleton className="h-5 w-1/2" /> {/* PR Description (owner/repo) */}
@@ -482,7 +482,7 @@ function AnalysisDetailsLoadingSkeleton() {
 
         {/* Tabs Skeleton */}
         <div className="w-full">
-            <Skeleton className="h-10 w-full grid grid-cols-4 mb-6 p-1 rounded-md bg-muted" /> {/* Tabs List */}
+            <Skeleton className="h-10 w-full grid grid-cols-2 sm:grid-cols-4 mb-6 p-1 rounded-md bg-muted" /> {/* Tabs List */}
             
             {/* Tab Content Skeleton (Showing Overview as example) */}
             <Card>
@@ -504,12 +504,10 @@ function AnalysisDetailsLoadingSkeleton() {
         </div>
       </main>
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
             <Skeleton className="h-4 w-1/3 mx-auto" />
         </div>
       </footer>
     </div>
   );
 }
-
-

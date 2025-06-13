@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
-import { usePathname, useRouter } from 'next/navigation'; 
+import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,10 +19,10 @@ import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileTe
 export default function Navbar() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const pathname = usePathname(); 
+  const pathname = usePathname();
 
   const handleScrollToFeatures = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
-    e.preventDefault(); 
+    e.preventDefault();
     if (pathname === '/') {
       const featuresSection = document.getElementById('features');
       if (featuresSection) {
@@ -111,7 +111,7 @@ export default function Navbar() {
                     <AvatarImage src={session.user?.image || undefined} alt={session.user?.name || 'User'} />
                     <AvatarFallback>{session.user?.name?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
                   </Avatar>
-                  <span className="hidden lg:inline text-sm font-medium text-foreground">{session.user?.name}</span>
+                  <span className="hidden lg:inline text-sm font-medium text-foreground truncate max-w-[150px]">{session.user?.name}</span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
@@ -128,7 +128,7 @@ export default function Navbar() {
                 <DropdownMenuItem onClick={() => router.push('/settings')}>
                   <Cog className="mr-2 h-4 w-4" /> Settings
                 </DropdownMenuItem>
-                
+
                 {session.user && session.user.role === 'admin' && (
                   <>
                     <DropdownMenuSeparator />

@@ -177,7 +177,7 @@ export default function AdminPage() {
     return (
       <div className="flex flex-col min-h-screen">
         <Navbar />
-        <main className="flex-1 container py-8">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Card>
             <CardHeader>
               <Skeleton className="h-8 w-48 mb-1" />
@@ -202,7 +202,7 @@ export default function AdminPage() {
     return (
         <div className="flex flex-col min-h-screen">
             <Navbar />
-            <main className="flex-1 container py-8 flex items-center justify-center">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
                 <Card className="text-center">
                 <CardHeader><CardTitle className="text-destructive">Access Denied</CardTitle></CardHeader>
                 <CardContent>
@@ -247,10 +247,10 @@ export default function AdminPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
-      <main className="flex-1 container py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card className="shadow-lg mb-8">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold font-headline">Admin Dashboard</CardTitle>
+            <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Admin Dashboard</CardTitle>
             <CardDescription>Manage users, roles, status, and view platform statistics.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -258,7 +258,7 @@ export default function AdminPage() {
             {loadingStats && <div className="grid md:grid-cols-3 gap-4 mb-6"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>}
             {errorStats && <p className="text-destructive mb-4">Error loading platform stats: {errorStats}</p>}
             {summaryStats && !loadingStats && (
-              <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8">
                 <StatCard Icon={Users} title="Total Users" value={summaryStats.totalUsers} />
                 <StatCard Icon={FolderGit2} title="Total Projects" value={summaryStats.totalRepositories} description="Repositories synced" />
                 <StatCard Icon={FileScan} title="Total PRs Analyzed" value={summaryStats.totalAnalyses} />
@@ -278,78 +278,81 @@ export default function AdminPage() {
                 <p className="text-muted-foreground">No users found.</p>
             )}
             {!loadingUsers && users.length > 0 && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                  <TableHead>Joined</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => {
-                  const isCurrentUser = session?.user?.id === user._id;
-                  const isLastAdmin = user.role === 'admin' && adminCount <= 1;
-                  const isLastActiveAdmin = user.role === 'admin' && user.status === 'active' && activeAdminCount <= 1;
-                  
-                  const disableRoleChange = updatingUserId === user._id || (isCurrentUser && isLastAdmin);
-                  const roleChangeTitle = (isCurrentUser && isLastAdmin) ? "Cannot change your own role as the last admin." : "";
-                  
-                  const disableStatusChange = updatingUserId === user._id || (isCurrentUser && isLastActiveAdmin && user.status === 'active');
-                  const statusChangeTitle = (isCurrentUser && isLastActiveAdmin && user.status === 'active') ? "Cannot suspend your own account as the last active admin." : (user.status === 'active' ? "Suspend User" : "Activate User");
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                    <TableHead>Joined</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => {
+                    const isCurrentUser = session?.user?.id === user._id;
+                    const isLastAdmin = user.role === 'admin' && adminCount <= 1;
+                    const isLastActiveAdmin = user.role === 'admin' && user.status === 'active' && activeAdminCount <= 1;
+                    
+                    const disableRoleChange = updatingUserId === user._id || (isCurrentUser && isLastAdmin);
+                    const roleChangeTitle = (isCurrentUser && isLastAdmin) ? "Cannot change your own role as the last admin." : "";
+                    
+                    const disableStatusChange = updatingUserId === user._id || (isCurrentUser && isLastActiveAdmin && user.status === 'active');
+                    const statusChangeTitle = (isCurrentUser && isLastActiveAdmin && user.status === 'active') ? "Cannot suspend your own account as the last active admin." : (user.status === 'active' ? "Suspend User" : "Activate User");
 
-                  return (
-                    <TableRow key={user._id}>
-                      <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
-                      <TableCell>{user.email || 'N/A'}</TableCell>
-                      <TableCell>
-                        <Select
-                          value={user.role}
-                          onValueChange={(newRole) => confirmRoleChange(user._id, newRole as 'user' | 'admin')}
-                          disabled={disableRoleChange}
-                        >
-                          <SelectTrigger className="w-[120px]" disabled={disableRoleChange} title={roleChangeTitle}>
-                            <SelectValue placeholder="Select role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">User</SelectItem>
-                            <SelectItem value="admin">
-                              Admin {isLastAdmin && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last admin account"/>}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                       <TableCell>
-                        <Badge variant={user.status === 'active' ? 'default' : 'destructive'} className={user.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-400' : 'bg-red-500/20 text-red-700 border-red-400'}>
-                          {user.status}
-                          {isLastActiveAdmin && user.status === 'active' && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last active admin account"/>}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                         <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => confirmStatusChange(user._id, user.status === 'active' ? 'suspended' : 'active')}
-                            disabled={disableStatusChange}
-                            title={statusChangeTitle}
-                         >
-                            {user.status === 'active' ? <UserX className="mr-1 h-4 w-4" /> : <UserCheck className="mr-1 h-4 w-4" />}
-                            {user.status === 'active' ? 'Suspend' : 'Activate'}
-                         </Button>
-                      </TableCell>
-                      <TableCell>
-                        {user.createdAt && !isNaN(new Date(user.createdAt).getTime())
-                          ? format(new Date(user.createdAt), 'PPP')
-                          : 'N/A'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                    return (
+                      <TableRow key={user._id}>
+                        <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
+                        <TableCell>{user.email || 'N/A'}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={user.role}
+                            onValueChange={(newRole) => confirmRoleChange(user._id, newRole as 'user' | 'admin')}
+                            disabled={disableRoleChange}
+                          >
+                            <SelectTrigger className="w-[120px]" disabled={disableRoleChange} title={roleChangeTitle}>
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user">User</SelectItem>
+                              <SelectItem value="admin">
+                                Admin {isLastAdmin && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last admin account"/>}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                         <TableCell>
+                          <Badge variant={user.status === 'active' ? 'default' : 'destructive'} className={`whitespace-nowrap ${user.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-400' : 'bg-red-500/20 text-red-700 border-red-400'}`}>
+                            {user.status}
+                            {isLastActiveAdmin && user.status === 'active' && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last active admin account"/>}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                           <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => confirmStatusChange(user._id, user.status === 'active' ? 'suspended' : 'active')}
+                              disabled={disableStatusChange}
+                              title={statusChangeTitle}
+                              className="whitespace-nowrap"
+                           >
+                              {user.status === 'active' ? <UserX className="mr-1 h-4 w-4" /> : <UserCheck className="mr-1 h-4 w-4" />}
+                              {user.status === 'active' ? 'Suspend' : 'Activate'}
+                           </Button>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {user.createdAt && !isNaN(new Date(user.createdAt).getTime())
+                            ? format(new Date(user.createdAt), 'PPP')
+                            : 'N/A'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
             )}
           </CardContent>
         </Card>
@@ -373,7 +376,7 @@ export default function AdminPage() {
       </AlertDialog>
 
       <footer className="py-6 border-t bg-background">
-        <div className="container text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
           &copy; {new Date().getFullYear()} codexair Admin.
         </div>
       </footer>
@@ -401,7 +404,3 @@ function StatCard({ Icon, title, value, description }: StatCardProps) {
     </Card>
   );
 }
-
-    
-
-    

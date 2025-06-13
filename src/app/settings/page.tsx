@@ -96,7 +96,6 @@ export default function SettingsPage() {
       }
       toast({ title: "Settings Updated", description: "Your name has been updated successfully." });
       setInitialData(prev => prev ? { ...prev, name: result.user.name } : null); // Update local state
-      // Trigger session update to reflect name change in Navbar immediately
       await updateSession({ user: { ...session?.user, name: result.user.name } }); 
     } catch (err: any) {
       setError(err.message);
@@ -110,7 +109,7 @@ export default function SettingsPage() {
     return (
       <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
-        <main className="flex-1 container py-12 md:py-16 flex justify-center">
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 flex justify-center">
           <Card className="w-full max-w-2xl shadow-lg">
             <CardHeader className="pb-6 border-b">
               <Skeleton className="h-8 w-40 mb-1" />
@@ -140,11 +139,11 @@ export default function SettingsPage() {
     );
   }
 
-  if (error && !initialData) { // Show main error if initial fetch failed
+  if (error && !initialData) { 
     return (
         <div className="flex flex-col min-h-screen bg-secondary/50">
             <Navbar />
-            <main className="flex-1 container py-8 flex items-center justify-center">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
                 <Card className="text-center p-6">
                     <CardHeader><CardTitle className="text-destructive">Error Loading Settings</CardTitle></CardHeader>
                     <CardContent>
@@ -157,11 +156,11 @@ export default function SettingsPage() {
     );
   }
   
-   if (!initialData) { // Fallback if initialData is still null after loading and no major error
+   if (!initialData) { 
      return (
         <div className="flex flex-col min-h-screen bg-secondary/50">
             <Navbar />
-            <main className="flex-1 container py-8 flex items-center justify-center">
+            <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex items-center justify-center">
                 <p>Loading settings...</p>
             </main>
         </div>
@@ -172,13 +171,13 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
-      <main className="flex-1 container py-12 md:py-16 flex justify-center">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16 flex justify-center">
         <Card className="w-full max-w-2xl shadow-xl">
           <CardHeader className="pb-6 border-b">
             <div className="flex items-center space-x-3">
               <Cog className="h-8 w-8 text-primary" />
               <div>
-                <CardTitle className="text-3xl font-bold font-headline text-foreground">
+                <CardTitle className="text-2xl sm:text-3xl font-bold font-headline text-foreground">
                   Settings
                 </CardTitle>
                 <CardDescription className="text-md text-muted-foreground">
@@ -221,7 +220,6 @@ export default function SettingsPage() {
                 {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
               </div>
 
-              {/* Placeholder for more settings */}
               <div className="space-y-2">
                 <Label className="text-md font-medium">Email Address</Label>
                 <Input
@@ -233,7 +231,7 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground">Email address is managed by your OAuth provider and cannot be changed here.</p>
               </div>
               
-              {error && ( // Display submission errors here
+              {error && ( 
                 <Alert variant="destructive" className="mt-4">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Update Error</AlertTitle>
@@ -259,7 +257,7 @@ export default function SettingsPage() {
         </Card>
       </main>
       <footer className="py-10 text-center text-sm text-muted-foreground border-t bg-background">
-        <div className="container mx-auto">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <p>&copy; {new Date().getFullYear()} codexair. All rights reserved.</p>
         </div>
       </footer>
