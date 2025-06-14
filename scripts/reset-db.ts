@@ -45,6 +45,9 @@ async function resetDatabase() {
     console.log('✅ Connected to MongoDB.');
 
     const dbName = mongoose.connection.name;
+    if (!mongoose.connection.db) {
+      throw new Error('MongoDB connection is not established or db is undefined.');
+    }
     await mongoose.connection.db.dropDatabase();
     console.log(`✅ Database "${dbName}" dropped successfully.`);
 
