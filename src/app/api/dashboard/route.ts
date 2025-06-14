@@ -68,26 +68,25 @@ export async function GET(request: NextRequest) {
         .sort({ createdAt: -1 }) 
         .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
       // Admins do not see a "connected repositories" list on their primary dashboard as they get redirected to /admin.
-      // If a list of all repos is needed on the admin dashboard, it would be a separate fetch.
     } else {
       const userPullRequestObjects = await PullRequest.find({ userId }).select('_id').lean();
       const userPullRequestIds = userPullRequestObjects.map(pr => pr._id);
       
-      if (userPullRequestIds.length === 0) {
-           // Fetch connected repositories even if no analyses yet
-           const userRepos = await Repository.find({ userId })
-             .sort({ updatedAt: -1 })
-             .limit(MAX_CONNECTED_REPOS_ON_DASHBOARD)
-             .lean();
-           connectedRepositories = userRepos.map(repo => ({
-             _id: repo._id.toString(),
-             fullName: repo.fullName,
-             language: repo.language,
-             owner: repo.owner,
-             name: repo.name,
-             updatedAt: repo.updatedAt,
-           }));
+      // Fetch connected repositories for regular users, regardless of analyses
+      const userRepos = await Repository.find({ userId })
+        .sort({ updatedAt: -1 })
+        .limit(MAX_CONNECTED_REPOS_ON_DASHBOARD)
+        .lean();
+      connectedRepositories = userRepos.map(repo => ({
+        _id: repo._id.toString(),
+        fullName: repo.fullName,
+        language: repo.language,
+        owner: repo.owner,
+        name: repo.name,
+        updatedAt: repo.updatedAt,
+      }));
 
+      if (userPullRequestIds.length === 0) {
            return NextResponse.json({
             overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
             recentAnalyses: [],
@@ -96,7 +95,7 @@ export async function GET(request: NextRequest) {
             topSuggestions: [],
             securityHotspots: [],
             teamMetrics: [],
-            connectedRepositories, // Return connected repos
+            connectedRepositories, 
         } as DashboardData);
       }
 
@@ -108,36 +107,9 @@ export async function GET(request: NextRequest) {
         })
         .sort({ createdAt: -1 }) 
         .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
-
-      // Fetch connected repositories for regular users
-      const userRepos = await Repository.find({ userId })
-        .sort({ updatedAt: -1 }) // Sort by most recently updated in our DB
-        .limit(MAX_CONNECTED_REPOS_ON_DASHBOARD)
-        .lean();
-      connectedRepositories = userRepos.map(repo => ({
-        _id: repo._id.toString(),
-        fullName: repo.fullName,
-        language: repo.language,
-        owner: repo.owner,
-        name: repo.name,
-        updatedAt: repo.updatedAt,
-      }));
     }
     
     if (relevantAnalyses.length === 0 && !isAdmin) { 
-        // Ensure connectedRepositories are included even if no analyses
-         const userRepos = await Repository.find({ userId })
-             .sort({ updatedAt: -1 })
-             .limit(MAX_CONNECTED_REPOS_ON_DASHBOARD)
-             .lean();
-           connectedRepositories = userRepos.map(repo => ({
-             _id: repo._id.toString(),
-             fullName: repo.fullName,
-             language: repo.language,
-             owner: repo.owner,
-             name: repo.name,
-             updatedAt: repo.updatedAt,
-           }));
         return NextResponse.json({
             overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
             recentAnalyses: [],
@@ -218,13 +190,13 @@ export async function GET(request: NextRequest) {
         }))
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    let trendsUp = true;
+    let trendsUp = false; // Default to false if no trend data
     if (qualityTrends.length >= 2) {
         const lastScore = qualityTrends[qualityTrends.length -1].quality;
         const secondLastScore = qualityTrends[qualityTrends.length -2].quality;
         trendsUp = lastScore >= secondLastScore;
     } else if (qualityTrends.length === 1){
-        trendsUp = qualityTrends[0].quality >= 7; 
+        trendsUp = qualityTrends[0].quality >= 7.0; // Trend considered positive if single score is good
     }
 
     const overview: DashboardOverview = {
@@ -344,3 +316,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
+

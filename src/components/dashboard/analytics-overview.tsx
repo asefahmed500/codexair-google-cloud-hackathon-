@@ -18,8 +18,7 @@ export default function AnalyticsOverview({ overview }: AnalyticsOverviewProps) 
           title="Total Analyses"
           value={overview.totalAnalyses}
           Icon={BarChart2}
-          trend={overview.trendsUp ? <TrendingUp className="h-5 w-5 text-green-500" /> : <TrendingDown className="h-5 w-5 text-destructive" />}
-          trendText="vs last month"
+          // Removed trend and trendText as overview.trendsUp is for quality score
         />
         <MetricCard
           title="Avg. Quality Score"
@@ -35,9 +34,9 @@ export default function AnalyticsOverview({ overview }: AnalyticsOverviewProps) 
         />
         <MetricCard
           title="Quality Trend"
-          value={overview.trendsUp ? "Improving" : "Needs Attention"}
-          Icon={overview.trendsUp ? TrendingUp : TrendingDown}
-          className={overview.trendsUp ? "text-green-600" : "text-amber-600"}
+          value={overview.trendsUp ? "Improving" : (overview.totalAnalyses > 0 ? "Needs Attention" : "No Trend Data")}
+          Icon={overview.trendsUp ? TrendingUp : (overview.totalAnalyses > 0 ? TrendingDown : Activity)}
+          className={overview.trendsUp ? "text-green-600" : (overview.totalAnalyses > 0 ? "text-amber-600" : "text-muted-foreground")}
         />
       </CardContent>
     </Card>
@@ -75,3 +74,4 @@ function MetricCard({ title, value, Icon, unit, trend, trendText, className }: M
     </Card>
   );
 }
+
