@@ -7,9 +7,6 @@ export async function getGithubClient() {
   const session = await getServerSession(authOptions);
   
   if (!session?.accessToken) {
-    // This could mean the token is not in the session or the session itself is null.
-    // If session is null, user is not logged in.
-    // If accessToken is missing, there's an issue with session callback or token persistence.
     console.error('GitHub access token missing from session:', session);
     throw new Error('No GitHub access token available. User might not be authenticated or token is missing.');
   }
@@ -23,13 +20,13 @@ export async function getUserRepositories(page = 1, perPage = 30) {
   const octokit = await getGithubClient();
   console.log(`[GitHub Lib] Fetching user repositories for page ${page}, perPage ${perPage} with type 'all'.`);
   const { data } = await octokit.rest.repos.listForAuthenticatedUser({
-    type: 'all', // Fetches all repositories the authenticated user has access to (owned, collaborator, org member)
-    sort: 'updated', // Sort by most recently updated
+    type: 'all', 
+    sort: 'updated', 
     direction: 'desc',
     page,
     per_page: perPage,
   });
-  console.log(`[GitHub Lib] Fetched ${data.length} repositories from GitHub API.`);
+  console.log(`[GitHub Lib] Fetched ${data.length} repositories from GitHub API for page ${page}.`);
   return data;
 }
 
@@ -72,7 +69,6 @@ export async function getPullRequestDetails(owner: string, repo: string, pullNum
 export async function getPullRequestFiles(owner: string, repo: string, pullNumber: number) {
   const octokit = await getGithubClient();
   
-  // Paginate to get all files if there are more than 100
   const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
     owner,
     repo,
@@ -94,26 +90,22 @@ export async function getFileContent(owner: string, repo: string, path: string, 
       ref,
     });
 
-    // Check if data is of type { content: string }
     if (typeof data === 'object' && data !== null && 'content' in data && typeof (data as any).content === 'string' && 'encoding' in data && (data as any).encoding === 'base64') {
       return Buffer.from((data as any).content, 'base64').toString('utf-8');
     }
     if (Array.isArray(data)) {
-      // It's a directory listing, or some other format. We expect file content.
-      console.warn(`Expected file content for ${path}, but received array.`);
+      console.warn(`Expected file content for ${path}, but received array (directory listing).`);
       return null;
     }
-    // Handle other cases if necessary
     console.warn(`Unexpected content format for ${path}:`, data);
     return null;
 
   } catch (error: any) {
-    // If it's a 404, the file might be a submodule or not found, which is not necessarily an error for this function
     if (error.status === 404) {
-      console.warn(`File not found or inaccessible (possibly a submodule): ${path} in ${owner}/${repo}`);
+      console.warn(`File not found or inaccessible: ${path} in ${owner}/${repo} (ref: ${ref}). May be a submodule or deleted.`);
       return null;
     }
     console.error(`Error fetching file content for ${path} in ${owner}/${repo} (ref: ${ref}):`, error.message);
-    return null; // Or throw, depending on desired error handling
+    return null;
   }
 }

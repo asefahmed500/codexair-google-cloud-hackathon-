@@ -26,8 +26,12 @@ export default function AnalyzePage() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const fetchRepositories = useCallback(async (page = 1, sync = false) => {
-    if (sync) setIsSyncing(true);
-    else setLoading(true); // Set loading true for non-sync fetches too
+    if (sync) {
+      setIsSyncing(true);
+      toast({ title: "Syncing Repositories...", description: "Fetching latest data from GitHub. This may take a moment." });
+    } else {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -45,15 +49,15 @@ export default function AnalyzePage() {
       
     } catch (err: any) {
       setError(err.message);
-      setRepositories([]); // Clear repositories on error to avoid displaying stale data
+      setRepositories([]); 
       setCurrentPage(1);
       setTotalPages(1);
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
-      setLoading(false);
       if (sync) setIsSyncing(false);
+      else setLoading(false);
     }
-  }, []); // Empty dependency array as it uses no external state directly
+  }, []); 
   
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -61,10 +65,9 @@ export default function AnalyzePage() {
     } else if (status === 'authenticated') {
       fetchRepositories(currentPage);
     }
-  }, [status, router, currentPage, fetchRepositories]); // Added fetchRepositories as dependency
+  }, [status, router, currentPage, fetchRepositories]); 
 
   const handleSync = () => {
-    // Reset to page 1 when syncing to get the freshest list
     setCurrentPage(1); 
     fetchRepositories(1, true);
   };
@@ -72,7 +75,6 @@ export default function AnalyzePage() {
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
       setCurrentPage(newPage);
-      // fetchRepositories(newPage) will be called by the useEffect due to currentPage change
     }
   };
 
@@ -116,7 +118,7 @@ export default function AnalyzePage() {
               </div>
             </div>
 
-            {loading && !repositories.length && !isSyncing ? ( // Show skeletons only if not syncing and no repos yet
+            {loading && !repositories.length && !isSyncing ? ( 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[...Array(3)].map((_, i) => (
                   <SkeletonRepoCard key={i} />
