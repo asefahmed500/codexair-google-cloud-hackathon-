@@ -3,8 +3,7 @@ import NextAuth, { type NextAuthOptions, type AuthProvider, type Adapter } from 
 import GithubProvider from 'next-auth/providers/github';
 import GoogleProvider from 'next-auth/providers/google';
 import { MongoDBAdapter } from '@next-auth/mongodb-adapter';
-import clientPromise from './mongodb';
-import { User as UserModel, Account as AccountModel, connectMongoose } from './mongodb';
+import clientPromise, { User as UserModel, connectMongoose } from './mongodb'; // UserModel for direct DB interaction
 import mongoose from 'mongoose';
 
 // Check critical NextAuth environment variables first
@@ -65,48 +64,53 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user, account, profile }) {
       await connectMongoose();
-      // console.log(`[JWT Callback Entry] token.id: ${token.id}, user?.id: ${user?.id}, account: ${!!account}, profile name: ${profile?.name}`);
+      // console.log(`[JWT Callback Entry] token.id: ${token.id}, user?.id: ${user?.id}, account: ${!!account}`);
 
-      // This block handles the initial sign-in flow when 'account' (from provider) and 'user' (from adapter) are present
+      // This block handles the initial sign-in flow or when user object is passed (e.g. by adapter)
       if (account && user && user.id) {
-        console.log(`[JWT Callback - Initial Sign-in Flow] User ID from adapter: ${user.id}, Provider: ${account.provider}`);
-        token.id = user.id; // This is the MongoDB _id as a string from adapter
-        token.sub = user.id; // Standard 'sub' claim
-        token.provider = account.provider;
-        if (account.access_token) token.accessToken = account.access_token;
-
-        const dbUserForToken = await UserModel.findById(user.id).select('role email status name image').lean();
-        if (dbUserForToken) {
-          // User's role is set by schema default ('user') on creation by adapter.
-          // We read it here. No automatic promotion to admin.
-          token.role = dbUserForToken.role || 'user'; 
-          token.status = dbUserForToken.status || 'active';
-          token.email = dbUserForToken.email;
-          token.name = dbUserForToken.name;
-          token.picture = dbUserForToken.image;
-
-          console.log(`[JWT Callback - Initial Sign-in] DB user ${user.id} fetched. Role from DB (and schema default for new users): '${dbUserForToken.role}', Status: '${dbUserForToken.status}'. Token updated accordingly.`);
+        // The `user.id` from the adapter IS the MongoDB `_id`.
+        // We fetch the user from DB to ensure we have the most current role, status, etc.
+        // This also verifies the user exists in the DB.
+        const dbUser = await UserModel.findById(user.id).select('_id role email status name image').lean();
+        if (dbUser) {
+          token.id = dbUser._id.toString(); // Ensure it's a string for consistency
+          token.sub = dbUser._id.toString();
+          token.role = dbUser.role || 'user'; // Default to 'user' if somehow null
+          token.status = dbUser.status || 'active'; // Default to 'active'
+          token.email = dbUser.email;
+          token.name = dbUser.name;
+          token.picture = dbUser.image;
+          if (account.access_token) token.accessToken = account.access_token;
+          // console.log(`[JWT Callback - Initial Sign-in] User ${dbUser._id.toString()} processed. Token updated with DB data. Role: ${token.role}, Status: ${token.status}`);
         } else {
-          console.error(`[JWT Callback - Initial Sign-in] CRITICAL: User ${user.id} not found in DB immediately after adapter processing. Cannot set role/status.`);
-          delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture;
+          // This case should ideally not be hit if the adapter is working correctly,
+          // as `user.id` implies the adapter found/created the user.
+          // If it is hit, it means a user ID was provided but the user isn't in the DB.
+          console.error(`[JWT Callback - Initial Sign-in] CRITICAL: User with id ${user.id} (from adapter) not found in DB. This should not happen if adapter is correct.`);
+          // Clear potentially stale/incorrect info from token
+          delete token.id; delete token.sub; delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture; delete token.accessToken;
         }
       }
       // This block handles subsequent JWT validations (session refresh, etc.)
+      // It relies on `token.id` having been correctly set to the MongoDB `_id` during initial sign-in.
       else if (token.id && typeof token.id === 'string' && mongoose.Types.ObjectId.isValid(token.id)) {
-        const dbUser = await UserModel.findById(token.id).select('role email status name image').lean();
+        const dbUser = await UserModel.findById(token.id).select('_id role email status name image').lean();
         if (dbUser) {
-          token.role = dbUser.role;
-          token.status = dbUser.status;
+          token.role = dbUser.role || 'user';
+          token.status = dbUser.status || 'active';
           token.email = dbUser.email;
           token.name = dbUser.name;
           token.picture = dbUser.image;
           // console.log(`[JWT Callback - Subsequent] Refreshed token for User ID: ${token.id}. Role: ${token.role}, Status: ${token.status}`);
         } else {
+          // This is the scenario from the user's log: "User with ID ... not found in DB"
           console.warn(`[JWT Callback - Subsequent] User with ID ${token.id} not found in DB. Clearing sensitive fields from token.`);
-          delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture; delete token.id; delete token.sub;
+          delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture;
+          // To be more aggressive, one might also delete token.id and token.sub here to force re-authentication,
+          // but NextAuth's session strategy might handle this by creating an unauthenticated session.
         }
-      } else if (token.id) { 
-        console.error(`[JWT Callback] Invalid token.id format: '${token.id}'. Clearing sensitive fields from token.`);
+      } else if (token.id) {
+        console.error(`[JWT Callback] Invalid token.id format or missing for subsequent call: '${token.id}'. Clearing sensitive fields.`);
         delete token.id; delete token.sub; delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture;
       }
       // console.log(`[JWT Callback Exit] Final token for id '${token.id}': role='${token.role}', status='${token.status}'`);
@@ -123,20 +127,20 @@ export const authOptions: NextAuthOptions = {
       }
       if (token.role && session.user) {
         session.user.role = token.role as 'user' | 'admin';
-      } else if (session.user && !token.role) { // Ensure role is not undefined in session
+      } else if (session.user) { // Ensure role is not undefined in session
         session.user.role = 'user'; // Fallback default if token.role is missing
       }
       
       if (token.status && session.user) {
         session.user.status = token.status as 'active' | 'suspended';
-      } else if (session.user && !token.status) { // Ensure status is not undefined
+      } else if (session.user) { // Ensure status is not undefined
         session.user.status = 'active'; // Fallback default if token.status is missing
       }
 
       if (token.email && session.user) {
         session.user.email = token.email as string;
-      } else if (session.user && !token.email) {
-         delete session.user.email;
+      } else if (session.user && session.user.email) { // Don't delete if already exists from another source
+         // delete session.user.email; 
       }
       
       if (token.name && session.user) {
@@ -153,7 +157,7 @@ export const authOptions: NextAuthOptions = {
       await connectMongoose();
       const userEmail = user?.email || profile?.email; 
       const provider = account?.provider || 'unknown';
-      console.log(`[SignIn Callback] Attempting sign-in for email: '${userEmail}', Provider: '${provider}'`);
+      // console.log(`[SignIn Callback] Attempting sign-in for email: '${userEmail}', Provider: '${provider}'`);
 
       if (!account || !userEmail) {
         console.error(`[SignIn Callback] Denied: Missing account details or profile email for provider '${provider}'.`);
@@ -166,7 +170,7 @@ export const authOptions: NextAuthOptions = {
         return `/auth/signin?error=AccountSuspended&email=${encodeURIComponent(userEmail)}`;
       }
       
-      console.log(`[SignIn Callback] Approved sign-in for email: '${userEmail}'. Adapter will handle DB operations. Initial DB role (if user exists): ${dbUser?.role || 'N/A (new user)'}. For new users, schema default ('user') applies.`);
+      // console.log(`[SignIn Callback] Approved sign-in for email: '${userEmail}'. Adapter will handle DB operations. Initial DB role (if user exists): ${dbUser?.role || 'N/A (new user)'}. For new users, schema default ('user') applies.`);
       return true; 
     }
   },
@@ -177,3 +181,5 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
 };
+
+    
