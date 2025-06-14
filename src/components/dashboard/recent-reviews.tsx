@@ -19,7 +19,7 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
     <Card className="shadow-lg h-full flex flex-col">
       <CardHeader>
         <CardTitle className="text-2xl font-semibold font-headline">Recent Analyses</CardTitle>
-        <CardDescription>Quick overview of the latest code reviews in the system.</CardDescription>
+        <CardDescription>Quick overview of the latest code reviews performed.</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
         {reviews.length === 0 ? (
@@ -31,17 +31,21 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
             </Button>
           </div>
         ) : (
-          <ScrollArea className="h-[350px] pr-3"> 
+          <ScrollArea className="h-[350px] pr-3">
             <div className="space-y-4">
               {reviews.map((review) => {
-                const owner = review.owner;
-                const repo = review.repo;
-                const prNumber = review.prNumber;
-                const analysisId = review.id; // This is the analysisId
-                const canLink = owner && owner !== 'N/A' && repo && repo !== 'N/A' && prNumber && analysisId;
-                
-                const displayTitle = review.pullRequestTitle || `PR #${prNumber || 'N/A'}`;
-                const displayRepoName = review.repositoryName && review.repositoryName !== 'N/A' ? `in ${review.repositoryName}` : '';
+                // review.id is analysisId
+                // review.owner is the repository owner login
+                // review.repo is the repository name (short name)
+                // review.prNumber is the pull request number
+                const canLink = review.owner && review.owner !== 'N/A' &&
+                                review.repo && review.repo !== 'N/A' &&
+                                review.prNumber && review.id;
+
+                const displayTitle = review.pullRequestTitle || `PR #${review.prNumber || 'N/A'}`;
+                const displayRepoName = review.repositoryName && review.repositoryName !== 'N/A'
+                                      ? `in ${review.repositoryName}`
+                                      : (review.prNumber ? `PR #${review.prNumber}` : 'N/A');
 
                 return (
                   <div key={review.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
@@ -49,7 +53,7 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
                       <div>
                         <h3 className="font-semibold text-md text-foreground truncate max-w-[200px] sm:max-w-xs" title={displayTitle}>
                           {canLink ? (
-                             <Link href={`/analyze/${owner}/${repo}/${prNumber}/${analysisId}`} className="hover:underline">
+                             <Link href={`/analyze/${review.owner}/${review.repo}/${review.prNumber}/${review.id}`} className="hover:underline">
                                {displayTitle}
                              </Link>
                           ) : (
@@ -57,12 +61,12 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
                           )}
                         </h3>
                         <p className="text-xs text-muted-foreground">
-                          {displayRepoName} {prNumber ? `#${prNumber}`: ''}
+                          {displayRepoName}
                         </p>
                       </div>
                       {canLink && (
                         <Button asChild variant="ghost" size="sm">
-                          <Link href={`/analyze/${owner}/${repo}/${prNumber}/${analysisId}`}>
+                          <Link href={`/analyze/${review.owner}/${review.repo}/${review.prNumber}/${review.id}`}>
                             <Eye className="mr-1.5 h-4 w-4" /> View
                           </Link>
                         </Button>
@@ -90,4 +94,3 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
     </Card>
   );
 }
-    
