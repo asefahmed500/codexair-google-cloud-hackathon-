@@ -77,6 +77,4 @@ export default function TeamMetrics({ metrics }: TeamMetricsProps) {
     </Card>
   );
 }
-
     
-

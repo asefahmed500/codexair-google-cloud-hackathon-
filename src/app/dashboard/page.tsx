@@ -25,16 +25,15 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (status === 'loading') return; // Wait until session status is determined
+    if (status === 'loading') return; 
 
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
     } else if (status === 'authenticated') {
       if (session?.user?.role === 'admin') {
-        router.replace('/admin'); // Redirect admins to the admin panel
-        return; // Stop further execution for admins on this page
+        router.replace('/admin'); 
+        return; 
       }
-      // For regular users, fetch dashboard data
       fetchDashboardData();
     }
   }, [status, session, router]);
@@ -69,11 +68,9 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }
-
-  // If admin, this page content shouldn't render due to redirect. 
-  // But as a fallback or during transition, show loading or null.
-  if (session?.user?.role === 'admin') {
-    return <DashboardLoading />; // Or a simple loading message, or null
+  
+  if (session?.user?.role === 'admin' && status === 'authenticated') {
+    return <DashboardLoading />; 
   }
 
   if (status === 'loading' || (loading && !dashboardData && !error)) {
@@ -104,7 +101,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!session) return null; // Should be caught by unauthenticated redirect
+  if (!session) return null; 
 
   if (!loading && !error && (!dashboardData || dashboardData.overview.totalAnalyses === 0)) {
     return (
@@ -150,7 +147,6 @@ export default function DashboardPage() {
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground font-headline">codexair Dashboard</h1>
-            {/* Admin button removed here as admins are redirected from this page */}
         </div>
         
         {dashboardData && ( 

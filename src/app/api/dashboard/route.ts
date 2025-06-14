@@ -17,7 +17,7 @@ function getTopItems(
   titleExtractor: (item: SecurityIssue | Suggestion) => string,
   severityExtractor?: (item: SecurityIssue) => SecurityIssue['severity'],
   priorityExtractor?: (item: Suggestion) => Suggestion['priority'],
-  typeExtractor?: (item: SecurityIssue | Suggestion) => Suggestion['type'] | Suggestion['type']
+  typeExtractor?: (item: SecurityIssue | Suggestion) => Suggestion['type'] | SecurityIssue['type']
 ): TopIssueItem[] {
   const itemCounts: Record<string, TopIssueItem> = {};
 
@@ -122,16 +122,19 @@ export async function GET(request: NextRequest) {
       if (!analysis || !analysis.pullRequestId) return null; 
 
       let repoFullNameDisplay = 'N/A';
-      let ownerDisplay = analysis.pullRequestId.owner || 'N/A'; // From PR doc
-      let actualRepoName = analysis.pullRequestId.repoName || 'N/A'; // From PR doc
+      let ownerDisplay = analysis.pullRequestId.owner || 'N/A'; 
+      let actualRepoName = analysis.pullRequestId.repoName || 'N/A'; 
 
       // If repositoryId is populated and an object, use its details
-      if (analysis.pullRequestId.repositoryId && typeof analysis.pullRequestId.repositoryId === 'object') {
+      if (analysis.pullRequestId.repositoryId && typeof analysis.pullRequestId.repositoryId === 'object' && analysis.pullRequestId.repositoryId.fullName) {
         const repoObj = analysis.pullRequestId.repositoryId as RepoType;
-        if (repoObj.fullName) repoFullNameDisplay = repoObj.fullName;
-        // If owner/repoName are directly on PR doc, they might be more reliable or up-to-date for the specific PR instance
-        // if (repoObj.owner) ownerDisplay = repoObj.owner; 
-        // if (repoObj.name) actualRepoName = repoObj.name;
+        repoFullNameDisplay = repoObj.fullName;
+        // Use owner/name from the populated RepoType if available and more specific
+        ownerDisplay = repoObj.owner || ownerDisplay;
+        actualRepoName = repoObj.name || actualRepoName;
+      } else if (ownerDisplay !== 'N/A' && actualRepoName !== 'N/A') {
+        // Fallback to construct fullName if individual owner/repoName exist on PR but not full object
+        repoFullNameDisplay = `${ownerDisplay}/${actualRepoName}`;
       }
       
       return {

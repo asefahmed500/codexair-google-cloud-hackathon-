@@ -63,6 +63,4 @@ export default function SecurityHotspots({ hotspots }: SecurityHotspotsProps) {
     </Card>
   );
 }
-
     
-

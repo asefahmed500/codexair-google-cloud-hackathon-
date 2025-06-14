@@ -38,7 +38,7 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
                 const repo = review.repo;
                 const prNumber = review.prNumber;
                 const analysisId = review.id; // This is the analysisId
-                const canLink = owner && repo && prNumber && analysisId;
+                const canLink = owner && owner !== 'N/A' && repo && repo !== 'N/A' && prNumber && analysisId;
                 
                 const displayTitle = review.pullRequestTitle || `PR #${prNumber || 'N/A'}`;
                 const displayRepoName = review.repositoryName && review.repositoryName !== 'N/A' ? `in ${review.repositoryName}` : '';
@@ -78,7 +78,7 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 text-right">
-                      {formatDistanceToNow(new Date(review.createdAt), { addSuffix: true })}
+                      {review.createdAt ? formatDistanceToNow(new Date(review.createdAt), { addSuffix: true }) : 'Date N/A'}
                     </p>
                   </div>
                 );
@@ -91,4 +91,3 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
   );
 }
     
-

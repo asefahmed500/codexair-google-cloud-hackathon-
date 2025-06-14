@@ -75,4 +75,3 @@ function MetricCard({ title, value, Icon, unit, trend, trendText, className }: M
     </Card>
   );
 }
-

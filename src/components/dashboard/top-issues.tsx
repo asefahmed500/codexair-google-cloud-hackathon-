@@ -62,8 +62,8 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
                       {issue.count} {issue.count === 1 ? 'occurrence' : 'occurrences'}
                     </Badge>
                   </div>
-                  {(issue.severity || issue.priority) && (
-                    <div className="mt-1">
+                  {(issue.severity || issue.priority || issue.type) && (
+                    <div className="mt-1 flex flex-wrap gap-1">
                       {issueType === 'security' && issue.severity && (
                         <Badge variant={getSeverityBadgeVariant(issue.severity as SecurityIssue['severity'])} className="text-xs">
                           {issue.severity}
@@ -75,8 +75,8 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
                         </Badge>
                       )}
                        {issue.type && (
-                         <Badge variant="outline" className="text-xs ml-1 capitalize">
-                          {issue.type}
+                         <Badge variant="outline" className="text-xs capitalize">
+                          {issue.type.replace(/_/g, ' ')}
                         </Badge>
                       )}
                     </div>
@@ -90,4 +90,3 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
     </Card>
   );
 }
-
