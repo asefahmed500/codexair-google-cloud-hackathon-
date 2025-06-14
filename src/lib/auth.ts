@@ -26,7 +26,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      allowDangerousEmailAccountLinking: true, // Allow linking if email matches
+      allowDangerousEmailAccountLinking: true,
     })
   );
   console.info("[Auth Setup] Google OAuth Provider configured.");
@@ -44,7 +44,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
           scope: 'repo read:user user:email',
         },
       },
-      allowDangerousEmailAccountLinking: true, // Allow linking if email matches
+      allowDangerousEmailAccountLinking: true,
     })
   );
   console.info("[Auth Setup] GitHub OAuth Provider configured.");
@@ -65,18 +65,18 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async signIn({ user, account, profile }) {
+      // This callback is for access control, not primarily for user creation when using an adapter.
+      // The adapter handles creating/linking the user.
       await connectMongoose();
-      // The `user` object here might be from the provider OR from the DB if account already linked by adapter
       const userEmail = user?.email || (profile as any)?.email; // (profile as any) to access potential email if not on User type
-      const provider = account?.provider;
 
-      if (!userEmail || !provider) {
-        console.error(`[SignIn Callback] Critical: Missing email or provider from OAuth response. Email: ${userEmail}, Provider: ${provider}`);
-        return `/auth/signin?error=SignInError&reason=provider_data_missing`;
+      if (!userEmail) {
+        console.error("[SignIn Callback] Critical: Missing email from OAuth profile.", { user, profile });
+        // User will be redirected to an error page by NextAuth if false is returned or an error string starting with /
+        return `/auth/signin?error=EmailMissing`;
       }
-      console.log(`[SignIn Callback] Processing sign-in for email: '${userEmail}', Provider: '${provider}'`);
+      console.log(`[SignIn Callback] Attempting sign-in for email: '${userEmail}', Provider: '${account?.provider}'`);
 
-      // Check if user exists by email and their status
       const existingUserInDB = await UserModel.findOne({ email: userEmail }).select('_id status').lean();
 
       if (existingUserInDB) {
@@ -85,8 +85,6 @@ export const authOptions: NextAuthOptions = {
           console.warn(`[SignIn Callback] Denied: Account for email '${userEmail}' is suspended.`);
           return `/auth/signin?error=AccountSuspended&email=${encodeURIComponent(userEmail)}`;
         }
-        // If user exists and is active, adapter will attempt to link the new OAuth account (if different provider)
-        // or sign in the user (if same provider). `allowDangerousEmailAccountLinking: true` helps here.
       } else {
         // User does not exist with this email.
         // The MongoDBAdapter will handle creating the new user with schema defaults (role: 'user', status: 'active').
@@ -94,21 +92,20 @@ export const authOptions: NextAuthOptions = {
       }
       
       // Return true to allow the sign-in process (and adapter linking/creation) to continue.
+      console.log(`[SignIn Callback] Approved sign-in for email: '${userEmail}'. Adapter will handle user creation/linking.`);
       return true;
     },
 
     async jwt({ token, user, account }) {
       await connectMongoose();
-      // console.log(`[JWT Callback Entry] token.sub: ${token.sub}, user?.id: ${user?.id}, account: ${!!account}`);
 
       if (account && user && user.id) {
         // Initial sign-in. `user.id` is the MongoDB _id provided by the adapter.
-        // `user` object here contains fields like id, name, email, image from the adapter's user object.
         const dbUser = await UserModel.findById(user.id).select('_id role email status name image').lean();
         if (dbUser) {
-          token.id = dbUser._id.toString(); // MongoDB _id as string
-          token.role = dbUser.role || 'user'; // Ensure role is set
-          token.status = dbUser.status || 'active'; // Ensure status is set
+          token.id = dbUser._id.toString();
+          token.role = dbUser.role || 'user';
+          token.status = dbUser.status || 'active';
           token.email = dbUser.email;
           token.name = dbUser.name;
           token.picture = dbUser.image; // NextAuth uses 'picture' in token for image
@@ -116,7 +113,8 @@ export const authOptions: NextAuthOptions = {
           console.log(`[JWT Callback - Initial Sign-in] User ${token.id} processed. Token updated with DB data. Role: ${token.role}, Status: ${token.status}`);
         } else {
           console.error(`[JWT Callback - Initial Sign-in] CRITICAL: User with id ${user.id} (from adapter) not found in DB. This might happen if signIn callback failed silently or DB issue.`);
-          delete token.id; delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture; delete token.accessToken;
+          // Clear token to force re-authentication or show error
+          token = {}; // Effectively invalidates the token for session creation
         }
       } else if (token.id && typeof token.id === 'string' && mongoose.Types.ObjectId.isValid(token.id)) {
         // Subsequent JWT calls, token.id should be the MongoDB _id.
@@ -133,9 +131,10 @@ export const authOptions: NextAuthOptions = {
           console.warn(`[JWT Callback - Subsequent] User with ID ${token.id} not found in DB. Clearing sensitive fields from token.`);
           delete token.role;
           delete token.status;
+          // Consider also deleting token.id or other user-specific fields to effectively invalidate the session
+          // For now, just clearing role/status. If this leads to issues, might need to clear more.
         }
       }
-      // console.log(`[JWT Callback Exit] Final token for id '${token.id}': role='${token.role}', status='${token.status}'`);
       return token;
     },
 
@@ -151,15 +150,16 @@ export const authOptions: NextAuthOptions = {
       if (token.role && session.user) {
         session.user.role = token.role as 'user' | 'admin';
       } else if (session.user) {
-        session.user.role = 'user'; 
+        session.user.role = 'user'; // Default if not in token (should be, but as a safeguard)
       }
       
       if (token.status && session.user) {
         session.user.status = token.status as 'active' | 'suspended';
       } else if (session.user) {
-        session.user.status = 'active'; 
+        session.user.status = 'active'; // Default if not in token
       }
 
+      // Populate other user fields into the session from the token
       if (token.email && session.user) {
         session.user.email = token.email as string;
       }
@@ -170,13 +170,12 @@ export const authOptions: NextAuthOptions = {
         session.user.image = token.picture as string;
       }
       
-      // console.log("[Session Callback] Session object created/updated:", JSON.stringify(session, null, 2));
       return session;
     },
   },
   pages: {
     signIn: '/auth/signin',
-    error: '/auth/signin', // Redirect to sign-in page on error, consider a custom error page if needed
+    error: '/auth/signin', 
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
