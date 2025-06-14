@@ -314,7 +314,7 @@ export default function AdminPage() {
       description = `Are you sure you want to change ${userToUpdate.email}'s role to ${newRole}?`;
       if (newRole === 'user' && userToUpdate.role === 'admin') {
         if (adminCount <= 1) {
-          description += `\n\n⚠️ WARNING: This is the last admin account. Demoting this user will result in NO ADMINS on the system. This action is extremely dangerous and may require database intervention to fix if you proceed. The system will attempt to prevent this.`;
+          description += `\n\n?? WARNING: This is the last admin account. Demoting this user will result in NO ADMINS on the system. This action is extremely dangerous and may require database intervention to fix if you proceed. The system will attempt to prevent this.`;
         } else if (session?.user?.id === userId) {
           description += `\n\nWarning: You are about to change your own role. You will lose admin privileges.`;
         }
@@ -323,7 +323,7 @@ export default function AdminPage() {
       description = `Are you sure you want to change ${userToUpdate.email}'s status to ${newStatus}?`;
       if (newStatus === 'suspended' && userToUpdate.role === 'admin' && userToUpdate.status === 'active') {
         if (activeAdminCount <= 1) {
-         description += `\n\n⚠️ WARNING: This is the last active admin account. Suspending this user may lock out all admin functionality if no other admin can re-activate accounts. The system will attempt to prevent this.`;
+         description += `\n\n?? WARNING: This is the last active admin account. Suspending this user may lock out all admin functionality if no other admin can re-activate accounts. The system will attempt to prevent this.`;
         } else if (session?.user?.id === userId) {
           description += `\n\nWarning: You are about to suspend your own account. You will be logged out and lose admin access.`;
         }
@@ -456,3 +456,6 @@ function StatCard({ Icon, title, value, description }: StatCardProps) {
     </Card>
   );
 }
+
+
+    
