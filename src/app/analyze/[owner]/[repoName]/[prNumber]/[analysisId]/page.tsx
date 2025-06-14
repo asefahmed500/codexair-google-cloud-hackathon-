@@ -148,9 +148,10 @@ export default function AnalysisDetailsPage() {
   const getIssueTypeBadgeVariant = (type: Suggestion['type'] | SecurityIssue['type']) => {
       switch (type) {
           case 'bug': case 'vulnerability': return 'destructive';
-          case 'performance': case 'optimization': return 'default'; // Using 'default' for accent like orange
+          case 'performance': case 'optimization': return 'default';
           case 'style': case 'code_smell': return 'secondary';
-          case 'feature': return 'outline';
+          case 'feature': return 'outline'; // Less common, but good to have
+          case 'warning': case 'info': return 'secondary'; // For security issue types
           default: return 'outline';
       }
   };
@@ -180,11 +181,11 @@ export default function AnalysisDetailsPage() {
                 </Link>
             </div>
           </CardHeader>
-           {analysis.aiInsights && (
+           {(analysis.aiInsights || displayAiInsights === FALLBACK_SUMMARY_MESSAGE) && ( // Ensure footer is always shown if there's any summary text
             <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-muted/30">
                 <h3 className="font-semibold text-lg flex items-center gap-2"><Lightbulb className="h-5 w-5 text-accent" />AI Review Summary (Overall PR):</h3>
                 <ScrollArea className="h-auto max-h-48 w-full rounded-md border p-4 bg-background shadow">
-                    <pre className={`text-sm whitespace-pre-wrap font-mono ${analysis.aiInsights === FALLBACK_SUMMARY_MESSAGE || analysis.aiInsights.trim() === "" ? 'text-muted-foreground italic' : 'text-foreground'}`}>
+                    <pre className={`text-sm whitespace-pre-wrap font-mono ${analysis.aiInsights === FALLBACK_SUMMARY_MESSAGE || !analysis.aiInsights || analysis.aiInsights.trim() === "" ? 'text-muted-foreground italic' : 'text-foreground'}`}>
                         {displayAiInsights}
                     </pre>
                 </ScrollArea>
@@ -208,8 +209,8 @@ export default function AnalysisDetailsPage() {
                   <MetricCard Icon={Thermometer} title="Quality Score" value={analysis.qualityScore.toFixed(1)} unit="/ 10" />
                   <MetricCard Icon={Zap} title="Complexity Score" value={analysis.complexity.toFixed(1)} />
                   <MetricCard Icon={Activity} title="Maintainability Score" value={analysis.maintainability.toFixed(1)} />
-                  <MetricCard Icon={ShieldCheck} title="Security Issues" value={analysis.securityIssues?.length || 0} />
-                  <MetricCard Icon={Lightbulb} title="Suggestions" value={analysis.suggestions?.length || 0} />
+                  <MetricCard Icon={ShieldCheck} title="Total Security Issues" value={analysis.securityIssues?.length || 0} />
+                  <MetricCard Icon={Lightbulb} title="Total Suggestions" value={analysis.suggestions?.length || 0} />
                   <MetricCard Icon={FileText} title="Lines of Code Analyzed" value={analysis.metrics?.linesOfCode || 0} />
                 </CardContent>
               </Card>
@@ -542,3 +543,4 @@ function AnalysisDetailsLoadingSkeleton() {
   );
 }
 
+    

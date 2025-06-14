@@ -20,13 +20,13 @@ const SummarizePrAnalysisInputSchema = z.object({
   fileCount: z.number().describe('Number of files analyzed in this PR.'),
   perFileSummaries: z.array(z.object({
     filename: z.string(),
-    insight: z.string().describe('The AI-generated summary for an individual file.'),
+    insight: z.string().describe('The AI-generated summary for an individual file. This insight is typically a few sentences long, in a format like "## AI Review Summary\\n✅ [score]/10 quality score\\n⚠️ [X] Critical Issues ([types])\\n💡 [Y] Optimizations Available". Use these to inform the overall PR summary by identifying themes or critical points.'),
   })).describe('A list of summaries for each analyzed file. Use these to inform the overall PR summary.'),
 });
 export type SummarizePrAnalysisInput = z.infer<typeof SummarizePrAnalysisInputSchema>;
 
 const SummarizePrAnalysisOutputSchema = z.object({
-  prSummary: z.string().describe('A concise, holistic AI-generated summary for the entire pull request, highlighting key findings, overall quality, major risks, and top recommendations. Aim for 2-4 impactful sentences. Format this as a plain string, not Markdown initially.'),
+  prSummary: z.string().describe('A concise, holistic AI-generated summary for the entire pull request, highlighting key findings, overall quality, major risks, and top recommendations. Aim for 2-4 impactful sentences. Format this as a plain string, not Markdown initially. This summary should provide a narrative-level explanation to help developers understand what to prioritize.'),
 });
 export type SummarizePrAnalysisOutput = z.infer<typeof SummarizePrAnalysisOutputSchema>;
 
@@ -39,7 +39,7 @@ const prompt = ai.definePrompt({
   input: {schema: SummarizePrAnalysisInputSchema},
   output: {schema: SummarizePrAnalysisOutputSchema},
   prompt: `You are an expert Code Review AI Lead. You have received analysis results for a pull request titled "{{prTitle}}".
-Your task is to generate a concise, high-level summary for the *entire pull request*.
+Your task is to generate a concise, high-level summary for the *entire pull request*. This summary should be a narrative explanation that helps developers understand what to prioritize.
 
 Key aggregated metrics for the PR:
 - Overall Quality Score: {{overallQualityScore.toFixed(1)}}/10 (across {{fileCount}} files)
@@ -47,7 +47,7 @@ Key aggregated metrics for the PR:
 - High-Severity Security Issues: {{totalHighIssues}}
 - Total Improvement Suggestions: {{totalSuggestions}}
 
-Individual file insights (consider these for thematic summary):
+Individual file insights (consider these for thematic summary, common issues, or critical file-specific problems):
 {{#if perFileSummaries.length}}
 {{#each perFileSummaries}}
 - File: {{this.filename}}
@@ -59,17 +59,18 @@ Individual file insights (consider these for thematic summary):
 
 Based on all the above, provide a holistic summary for the pull request.
 Focus on:
-1.  Overall code health and quality impression.
-2.  The most significant risks or concerns (if any).
-3.  Key positive aspects or important improvements made (if evident).
-4.  A brief concluding remark or overall recommendation.
+1.  **Overall code health and quality impression:** Start with a general statement about the PR's quality based on the score.
+2.  **The most significant risks or concerns:** Clearly state if there are critical/high security issues and in which files if they are particularly notable.
+3.  **Key positive aspects or important improvements made:** If evident from the data or file insights.
+4.  **A brief concluding remark or overall recommendation:** What should the developer prioritize? Is it ready for merge after fixes, or does it need more significant work?
 
 Make the summary concise (2-4 impactful sentences) and easy to understand for a developer or team lead.
-Avoid simply restating the numbers; interpret them.
-Example: "This PR introduces several valuable improvements but requires attention to X critical security vulnerabilities in Y and Z files. Overall quality is decent (7.5/10), though addressing the identified risks should be a priority before merging."
-Another Example: "Excellent work on this PR! The changes are well-structured, leading to a high quality score (9.0/10) with no critical issues found across the {{fileCount}} analyzed files. This looks good to merge after reviewing minor suggestions."
+Avoid simply restating the numbers; *interpret* them into a narrative.
+Example 1 (issues present): "This PR introduces several valuable improvements but requires immediate attention to {{totalCriticalIssues}} critical security vulnerabilities, notably in {{#if perFileSummaries.[0]}}{{perFileSummaries.[0].filename}}{{else}}key files{{/if}}. Overall quality is {{overallQualityScore.toFixed(1)}}/10. Prioritize addressing the identified security risks before merging."
+Example 2 (good quality): "Excellent work on this PR! The changes are well-structured, leading to a high quality score of {{overallQualityScore.toFixed(1)}}/10 with no critical issues found across the {{fileCount}} analyzed files. This looks good to merge after reviewing the {{totalSuggestions}} minor suggestions."
+Example 3 (mixed): "The PR achieves its main goals with an average quality score of {{overallQualityScore.toFixed(1)}}/10. While there are no critical security issues, address the {{totalHighIssues}} high-severity warnings and review the {{totalSuggestions}} suggestions for maintainability, particularly in files like {{#if perFileSummaries.[0]}}{{perFileSummaries.[0].filename}}{{/if}}."
 
-Generate the prSummary.
+Generate the prSummary. Ensure it is a narrative explanation suitable for display at the top of a detailed analysis view.
 `,
 });
 
@@ -83,7 +84,14 @@ const summarizePrAnalysisFlow = ai.defineFlow(
     // Potentially add pre-processing for perFileSummaries if they are too verbose for the prompt context window
     // For now, we pass them as is.
     const {output} = await prompt(input);
+    if (!output || !output.prSummary || output.prSummary.trim() === "") {
+        console.warn("[summarizePrAnalysisFlow] AI failed to generate a summary. Falling back.");
+        return { prSummary: FALLBACK_SUMMARY_MESSAGE };
+    }
     return output!;
   }
 );
 
+const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated for this pull request.";
+
+    
