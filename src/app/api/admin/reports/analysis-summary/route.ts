@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { PullRequest, Analysis, connectMongoose, Repository } from '@/lib/mongodb';
+import { PullRequest, Analysis, connectMongoose, Repository, AuditLog, type AuditLogActionType } from '@/lib/mongodb';
 import type { AnalysisReportItem, SecurityIssue, PullRequest as PRType, CodeAnalysis as AnalysisDocType, Repository as RepoType } from '@/types';
 import mongoose from 'mongoose';
 
@@ -17,8 +17,8 @@ interface PopulatedPR extends Omit<PRType, 'analysis' | 'repositoryId'> {
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!session?.user || session.user.role !== 'admin' || !session.user.id || !session.user.email) {
+      return NextResponse.json({ error: 'Forbidden or invalid admin session' }, { status: 403 });
     }
 
     await connectMongoose();
@@ -43,12 +43,11 @@ export async function GET(request: NextRequest) {
       }
       
       let repoFullName = "N/A";
-      let ownerName = pr.owner || "N/A"; // from PR schema directly
-      let actualRepoName = pr.repoName || "N/A"; // from PR schema directly
+      let ownerName = pr.owner || "N/A"; 
+      let actualRepoName = pr.repoName || "N/A"; 
 
       if (pr.repositoryId && pr.repositoryId.fullName) {
           repoFullName = pr.repositoryId.fullName;
-          // Override with more specific data if repositoryId is populated
           if (pr.repositoryId.owner) ownerName = pr.repositoryId.owner;
           if (pr.repositoryId.name) actualRepoName = pr.repositoryId.name;
       } else if (pr.owner && pr.repoName) { 
@@ -60,9 +59,9 @@ export async function GET(request: NextRequest) {
         prId: pr._id.toString(),
         prNumber: pr.number,
         prTitle: pr.title,
-        repositoryFullName: repoFullName, // For display
-        owner: ownerName, // For link construction
-        repoName: actualRepoName, // For link construction
+        repositoryFullName: repoFullName, 
+        owner: ownerName, 
+        repoName: actualRepoName, 
         prAuthor: pr.author?.login || 'N/A',
         analysisDate: analysis?.createdAt || pr.updatedAt, 
         qualityScore: analysis?.qualityScore !== undefined && analysis.qualityScore !== null ? parseFloat(analysis.qualityScore.toFixed(1)) : null,
@@ -71,6 +70,16 @@ export async function GET(request: NextRequest) {
         analysisId: analysis?._id?.toString(),
       };
     });
+
+    // Create audit log entry for fetching the report
+    await new AuditLog({
+        adminUserId: new mongoose.Types.ObjectId(session.user.id),
+        adminUserEmail: session.user.email,
+        action: 'ADMIN_ANALYSIS_SUMMARY_REPORT_FETCHED' as AuditLogActionType,
+        details: { reportItemCount: reportItems.length },
+        timestamp: new Date(),
+    }).save();
+
 
     return NextResponse.json({ reportItems });
 
@@ -82,4 +91,3 @@ export async function GET(request: NextRequest) {
     
 
     
-

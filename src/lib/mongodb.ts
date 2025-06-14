@@ -103,9 +103,9 @@ const repositorySchema = new mongoose.Schema<RepoType>({
   language: String,
   stars: Number,
   isPrivate: Boolean,
-  userId: { type: String, required: true }, // This should be mongoose.Schema.Types.ObjectId if linking to User model
+  userId: { type: String, required: true }, 
 }, { timestamps: true });
-repositorySchema.index({ userId: 1, updatedAt: -1 }); // Added index
+repositorySchema.index({ userId: 1, updatedAt: -1 }); 
 
 const codeFileSchema = new mongoose.Schema({
   filename: String,
@@ -153,7 +153,7 @@ const fileAnalysisItemSchema = new mongoose.Schema<FileAnalysisItem>({
   securityIssues: [securityIssueSubSchema],
   suggestions: [suggestionSubSchema],
   metrics: codeAnalysisMetricsSubSchema,
-  aiInsights: String,
+  aiInsights: String, 
   vectorEmbedding: { type: [Number], default: undefined },
 }, { _id: false });
 
@@ -166,14 +166,14 @@ const analysisSchema = new mongoose.Schema<AnalysisType>({
   securityIssues: [securityIssueSubSchema],
   suggestions: [suggestionSubSchema],
   metrics: codeAnalysisMetricsSubSchema,
-  aiInsights: String,
+  aiInsights: String, 
   fileAnalyses: [fileAnalysisItemSchema],
 }, { timestamps: true });
 analysisSchema.index({ createdAt: -1 }); 
 
 
 const pullRequestSchema = new mongoose.Schema<PRType>({
-  repositoryId: { type: String, required: true }, // Refers to Repository._id
+  repositoryId: { type: String, required: true }, 
   owner: { type: String, required: true }, 
   repoName: { type: String, required: true }, 
   githubId: { type: Number, required: true },
@@ -187,28 +187,34 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   },
   files: [codeFileSchema],
   analysis: { type: mongoose.Schema.Types.ObjectId, ref: 'Analysis' },
-  userId: { type: String, required: true }, // This should be mongoose.Schema.Types.ObjectId if linking to User model
+  userId: { type: String, required: true }, 
 }, {
   timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
   indexes: [{ fields: { repositoryId: 1, number: 1 }, unique: true }]
 });
 
-const auditLogSchemaDefinition: Record<keyof AuditLogType, any> = {
+const AUDIT_LOG_ACTIONS = [
+  'USER_ROLE_CHANGED',
+  'USER_STATUS_CHANGED_ACTIVE',
+  'USER_STATUS_CHANGED_SUSPENDED',
+  'ADMIN_ANALYSIS_SUMMARY_REPORT_FETCHED',
+] as const;
+export type AuditLogActionType = typeof AUDIT_LOG_ACTIONS[number];
+
+const auditLogSchemaDefinition: Record<keyof Omit<AuditLogType, '_id'>, any> = {
   timestamp: { type: Date, default: Date.now, required: true },
   adminUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   adminUserEmail: { type: String, required: true },
-  action: { type: String, required: true, enum: [
-    'USER_ROLE_CHANGED',
-    'USER_STATUS_CHANGED_ACTIVE',
-    'USER_STATUS_CHANGED_SUSPENDED',
-  ]},
-  targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  targetUserEmail: { type: String },
-  details: { type: mongoose.Schema.Types.Mixed },
+  action: { type: String, required: true, enum: AUDIT_LOG_ACTIONS },
+  targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
+  targetUserEmail: { type: String, required: false },
+  details: { type: mongoose.Schema.Types.Mixed, required: false },
 };
 
-const auditLogSchema = new mongoose.Schema(auditLogSchemaDefinition, { timestamps: false });
+const auditLogSchema = new mongoose.Schema(auditLogSchemaDefinition, { timestamps: false }); // No Mongoose timestamps needed, we have our own.
 auditLogSchema.index({ timestamp: -1 }); 
+auditLogSchema.index({ adminUserId: 1 });
+auditLogSchema.index({ action: 1 });
 
 
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
@@ -243,3 +249,4 @@ export const connectMongoose = async () => {
 };
 
 connectMongoose();
+

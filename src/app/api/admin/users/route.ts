@@ -2,20 +2,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { User, AuditLog, connectMongoose } from '@/lib/mongodb'; 
+import { User, AuditLog, connectMongoose, type AuditLogActionType } from '@/lib/mongodb'; 
 import type { AdminUserView } from '@/types';
 import mongoose from 'mongoose';
 
-async function createAuditLog(adminUser: { id: string, email?: string | null }, action: string, targetUser?: any, details?: any) {
+async function createAuditLog(
+    adminUser: { id: string; email?: string | null }, 
+    action: AuditLogActionType, 
+    targetUser?: any, 
+    details?: any
+) {
   try {
     await connectMongoose();
     await new AuditLog({
-      adminUserId: adminUser.id,
+      adminUserId: new mongoose.Types.ObjectId(adminUser.id),
       adminUserEmail: adminUser.email || 'N/A',
       action,
-      targetUserId: targetUser?._id,
+      targetUserId: targetUser?._id ? new mongoose.Types.ObjectId(targetUser._id) : undefined,
       targetUserEmail: targetUser?.email,
       details,
+      timestamp: new Date(), // Ensure timestamp is explicitly set on creation
     }).save();
   } catch (error) {
     console.error('Failed to create audit log:', error);
@@ -89,38 +95,42 @@ export async function PATCH(request: NextRequest) {
     let message = 'User updated successfully.';
     const originalRole = targetUser.role;
     const originalStatus = targetUser.status;
+    let roleChanged = false;
+    let statusChanged = false;
 
     if (newRole && targetUser.role !== newRole) {
-      // Check if demoting an admin user
       if (targetUser.role === 'admin' && newRole === 'user') {
         const adminCount = await User.countDocuments({ role: 'admin' });
         if (adminCount <= 1) {
-            // This check covers both demoting self as last admin and demoting another user who is the last admin.
             return NextResponse.json({ error: 'Cannot change role: This is the last admin account. At least one admin must remain.' }, { status: 400 });
         }
       }
       targetUser.role = newRole;
-      message = 'User role updated successfully.';
-      await createAuditLog(session.user, 'USER_ROLE_CHANGED', targetUser, { previousRole: originalRole, newRole });
+      roleChanged = true;
     }
 
     if (newStatus && targetUser.status !== newStatus) {
-      // Check if suspending an active admin user
       if (targetUser.role === 'admin' && targetUser.status === 'active' && newStatus === 'suspended') {
         const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
         if (activeAdminCount <= 1) {
-            // This check covers both suspending self as last active admin and suspending another user who is the last active admin.
             return NextResponse.json({ error: 'Cannot change status: This is the last active admin account. At least one active admin must remain.' }, { status: 400 });
         }
       }
       targetUser.status = newStatus;
-      message = (newRole && targetUser.role !== originalRole) ? message + ' User status updated successfully.' : 'User status updated successfully.';
-      const action = newStatus === 'active' ? 'USER_STATUS_CHANGED_ACTIVE' : 'USER_STATUS_CHANGED_SUSPENDED';
-      await createAuditLog(session.user, action, targetUser, { previousStatus: originalStatus, newStatus });
+      statusChanged = true;
     }
 
-    if ( (newRole && targetUser.role !== originalRole) || (newStatus && targetUser.status !== originalStatus) ) {
+    if (roleChanged || statusChanged) {
         await targetUser.save();
+        if (roleChanged) {
+            await createAuditLog(session.user, 'USER_ROLE_CHANGED', targetUser, { previousRole: originalRole, newRole: targetUser.role });
+            message = newStatus ? 'User role and status updated successfully.' : 'User role updated successfully.';
+        }
+        if (statusChanged) {
+            const actionType: AuditLogActionType = newStatus === 'active' ? 'USER_STATUS_CHANGED_ACTIVE' : 'USER_STATUS_CHANGED_SUSPENDED';
+            await createAuditLog(session.user, actionType, targetUser, { previousStatus: originalStatus, newStatus: targetUser.status });
+            message = roleChanged ? 'User role and status updated successfully.' : 'User status updated successfully.';
+        }
     } else {
         message = "No changes applied. User already has the specified role/status.";
     }

@@ -23,8 +23,6 @@ export async function GET(request: NextRequest) {
       .sort({ timestamp: -1 })
       .skip(skip)
       .limit(limit)
-      // .populate('adminUserId', 'name email') // Optional: to get admin user details
-      // .populate('targetUserId', 'name email') // Optional: to get target user details
       .lean();
 
     const totalLogs = await AuditLog.countDocuments();

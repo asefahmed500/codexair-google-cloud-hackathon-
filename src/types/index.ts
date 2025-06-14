@@ -1,4 +1,5 @@
 
+import type { AuditLogActionType } from '@/lib/mongodb';
 
 export interface Repository {
   _id: string;
@@ -201,10 +202,10 @@ export interface AnalysisReportItem {
   prNumber: number;
   prTitle: string;
   repositoryFullName: string; 
-  owner: string; // Added for easier link construction
-  repoName: string; // Added for easier link construction
+  owner: string; 
+  repoName: string; 
   prAuthor: string;
-  analysisDate: Date | null; // Can be null if analysis object or its date is missing
+  analysisDate: Date | null; 
   qualityScore: number | null;
   criticalIssuesCount: number;
   highIssuesCount: number;
@@ -214,13 +215,10 @@ export interface AnalysisReportItem {
 export interface AuditLogEntry {
   _id: string;
   timestamp: Date;
-  adminUserId?: string; 
-  adminUserEmail: string;
-  action: string;
-  targetUserId?: string; 
-  targetUserEmail?: string;
-  details?: any; 
+  adminUserId: string; // Should be ObjectId string from User model
+  adminUserEmail: string; // Email of the admin who performed the action
+  action: AuditLogActionType; // The type of action performed
+  targetUserId?: string; // ObjectId string from User model, if action targets a user
+  targetUserEmail?: string; // Email of the target user, if applicable
+  details?: any; // Flexible object for action-specific details
 }
-
-
-
