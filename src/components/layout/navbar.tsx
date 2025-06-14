@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield, SearchCode } from 'lucide-react'; // Added SearchCode
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -99,6 +99,12 @@ export default function Navbar() {
                 <Link href="/analyze">
                   <GitFork className="mr-2 h-4 w-4" />
                   Analyze Repository
+                </Link>
+              </Button>
+              <Button asChild variant="ghost">
+                <Link href="/search">
+                  <SearchCode className="mr-2 h-4 w-4" />
+                  Semantic Search
                 </Link>
               </Button>
             </>
