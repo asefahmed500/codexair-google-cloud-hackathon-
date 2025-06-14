@@ -59,7 +59,7 @@ const CodeAnalysisOutputSchema = z.object({
       duplicateBlocks: z.number().describe('Number of detected duplicate code blocks.'),
     })
     .describe('Key code metrics.'),
-  aiInsights: z.string().describe('Overall insights and summarization of findings for this specific file. Format this like: "## AI Review Summary\n✅ [score]/10 quality score\n⚠️ [X] Critical Issues ([types])\n💡 [Y] Optimizations Available". Be concise and impactful.'),
+  aiInsights: z.string().describe('Overall insights and summarization of findings for this specific file. Format this like: "## AI Review Summary\\n✅ [score]/10 quality score\\n⚠️ [X] Critical Issues ([types])\\n💡 [Y] Optimizations Available". Be concise and impactful.'),
 });
 export type CodeAnalysisOutput = z.infer<typeof CodeAnalysisOutputSchema>;
 
@@ -143,4 +143,3 @@ const analyzeCodeFlow = ai.defineFlow(
     return output!;
   }
 );
-
