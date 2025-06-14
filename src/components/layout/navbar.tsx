@@ -23,14 +23,16 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield, SearchCode, Menu } from 'lucide-react';
 
-interface NavItem {
+interface NavItemDefinition {
   key: string;
   href?: string;
   text: string;
   icon: JSX.Element;
-  onClick?: (event?: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => void;
+  onClick?: (event?: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => void;
   isAnchor?: boolean;
-  show: () => boolean; // Function to determine if the link should be shown
+  show: () => boolean; 
+  adminOnly?: boolean;
+  userOnly?: boolean; // For links that should only show for logged-in non-admins
 }
 
 export default function Navbar() {
@@ -43,7 +45,7 @@ export default function Navbar() {
     setIsMobileMenuOpen(false);
   };
 
-  const handleScrollToFeatures = (e?: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
+  const handleScrollToFeatures = (e?: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
     if (e) e.preventDefault();
     if (pathname === '/') {
       const featuresSection = document.getElementById('features');
@@ -57,38 +59,60 @@ export default function Navbar() {
   };
 
   const isAdmin = session?.user?.role === 'admin';
+  const isAuthenticated = !!session;
 
-  const navItems: NavItem[] = [
+  const navItemsDefinition: NavItemDefinition[] = [
     { key: 'home', href: '/', text: 'Home', icon: <Home className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => true },
     pathname === '/'
       ? { key: 'features-anchor', href: '#features', text: 'Features', icon: <LayoutGrid className="mr-2 h-4 w-4" />, onClick: handleScrollToFeatures, isAnchor: true, show: () => true }
       : { key: 'features-link', href: '/features', text: 'Features', icon: <LayoutGrid className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => true },
     { key: 'about', href: '/about', text: 'About Us', icon: <Info className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => true },
-    { key: 'dashboard', href: '/dashboard', text: 'Dashboard', icon: <BarChartBig className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && !isAdmin },
-    { key: 'explain', href: '/explain', text: 'Explain Code', icon: <Lightbulb className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && !isAdmin },
-    { key: 'analyze', href: '/analyze', text: 'Analyze Repository', icon: <GitFork className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && !isAdmin },
-    { key: 'search', href: '/search', text: 'Semantic Search', icon: <SearchCode className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && !isAdmin },
-    { key: 'admin', href: '/admin', text: 'Admin Panel', icon: <Shield className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && isAdmin },
+    { key: 'dashboard', href: '/dashboard', text: 'Dashboard', icon: <BarChartBig className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && !isAdmin, userOnly: true },
+    { key: 'explain', href: '/explain', text: 'Explain Code', icon: <Lightbulb className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && !isAdmin, userOnly: true },
+    { key: 'analyze', href: '/analyze', text: 'Analyze Repository', icon: <GitFork className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && !isAdmin, userOnly: true },
+    { key: 'search', href: '/search', text: 'Semantic Search', icon: <SearchCode className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && !isAdmin, userOnly: true },
+    // Admin specific main nav items
+    { key: 'admin-dashboard', href: '/admin', text: 'Admin Panel', icon: <Shield className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
+    { key: 'admin-reports', href: '/admin/reports', text: 'Reports', icon: <FileText className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
+    { key: 'admin-audit', href: '/admin/audit', text: 'Audit Logs', icon: <BookCheck className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
   ];
 
-  const renderNavItem = (item: NavItem, isMobile: boolean) => {
-    const button = (
-      <Button asChild variant="ghost" onClick={item.onClick as React.MouseEventHandler<HTMLButtonElement>}>
-        {item.href && !item.isAnchor ? (
-          <Link href={item.href}>
-            {item.icon} {item.text}
-          </Link>
-        ) : (
-          <a href={item.isAnchor ? item.href : undefined} onClick={item.onClick}>
-            {item.icon} {item.text}
-          </a>
-        )}
-      </Button>
+  const renderNavItem = (item: NavItemDefinition, isMobile: boolean) => {
+    const commonProps = {
+      variant: "ghost" as const,
+      className: isMobile ? "w-full justify-start" : "",
+      onClick: item.onClick as React.MouseEventHandler<HTMLButtonElement>,
+    };
+
+    const linkContent = (
+      <>
+        {item.icon} {item.text}
+      </>
     );
-    if (isMobile) {
-      return <SheetClose asChild key={item.key}>{button}</SheetClose>;
+
+    let buttonElement: JSX.Element;
+
+    if (item.href && !item.isAnchor) {
+      buttonElement = (
+        <Button {...commonProps} asChild>
+          <Link href={item.href}>{linkContent}</Link>
+        </Button>
+      );
+    } else if (item.isAnchor && item.href) {
+      buttonElement = (
+        <Button {...commonProps} asChild>
+          <a href={item.href}>{linkContent}</a>
+        </Button>
+      );
+    } else {
+       buttonElement = (
+        <Button {...commonProps}>
+          {linkContent}
+        </Button>
+      );
     }
-    return React.cloneElement(button, { key: item.key });
+    
+    return isMobile ? <SheetClose asChild key={item.key}>{buttonElement}</SheetClose> : React.cloneElement(buttonElement, { key: item.key });
   };
 
 
@@ -100,7 +124,7 @@ export default function Navbar() {
             <BarChartBig className="h-7 w-7 text-primary" />
             <span className="font-bold text-xl text-foreground font-headline">codexair</span>
           </div>
-          <div className="h-10 w-10 bg-muted rounded-full animate-pulse"></div> {/* Skeleton for avatar */}
+          <div className="h-10 w-10 bg-muted rounded-full animate-pulse"></div>
         </div>
       </header>
     );
@@ -109,19 +133,20 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
-        <Link href="/" className="flex items-center gap-2 mr-auto md:mr-6">
+        <Link href="/" className="flex items-center gap-2 mr-auto">
           <BarChartBig className="h-7 w-7 text-primary" />
           <span className="font-bold text-xl text-foreground font-headline">codexair</span>
         </Link>
 
-        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-1">
-          {navItems.filter(item => item.show()).map(item => renderNavItem(item, false))}
+          {navItemsDefinition.filter(item => item.show() && !item.adminOnly && !item.userOnly).map(item => renderNavItem(item, false))}
+          {isAuthenticated && !isAdmin && navItemsDefinition.filter(item => item.show() && item.userOnly).map(item => renderNavItem(item, false))}
+          {isAuthenticated && isAdmin && navItemsDefinition.filter(item => item.show() && item.adminOnly).map(item => renderNavItem(item, false))}
         </nav>
 
-        <div className="flex items-center justify-end space-x-2 md:space-x-4 ml-auto md:ml-0">
+        <div className="flex items-center justify-end space-x-2 ml-4"> {/* Removed md:space-x-4 and md:ml-0 which might conflict */}
           {!session ? (
-            <Button onClick={() => router.push('/auth/signin')} variant="default">
+            <Button onClick={() => router.push('/auth/signin')} variant="default" className="hidden md:inline-flex">
               Sign In / Sign Up
             </Button>
           ) : (
@@ -141,28 +166,12 @@ export default function Navbar() {
                 {session.user?.email && <DropdownMenuLabel className="text-xs font-normal text-muted-foreground -mt-1.5">{session.user.email}</DropdownMenuLabel>}
                 <DropdownMenuSeparator />
                 
-                <DropdownMenuItem onClick={() => { router.push('/profile'); handleLinkClick(); }}>
+                <DropdownMenuItem onClick={() => { router.push('/profile'); }}>
                   <UserCircle className="mr-2 h-4 w-4" /> My Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { router.push('/settings'); handleLinkClick(); }}>
+                <DropdownMenuItem onClick={() => { router.push('/settings'); }}>
                   <Cog className="mr-2 h-4 w-4" /> My Settings
                 </DropdownMenuItem>
-
-                {isAdmin && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Admin Tools</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => { router.push('/admin'); handleLinkClick(); }}>
-                      <Users className="mr-2 h-4 w-4" /> User Management
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { router.push('/admin/reports'); handleLinkClick(); }}>
-                      <FileText className="mr-2 h-4 w-4" /> Reports
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { router.push('/admin/audit'); handleLinkClick(); }}>
-                      <BookCheck className="mr-2 h-4 w-4" /> Audit Logs
-                    </DropdownMenuItem>
-                  </>
-                )}
                 
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })}>
@@ -173,7 +182,6 @@ export default function Navbar() {
             </DropdownMenu>
           )}
 
-          {/* Mobile Navigation Trigger */}
           <div className="md:hidden">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
@@ -183,14 +191,49 @@ export default function Navbar() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-[280px] sm:w-[320px] pt-10">
-                <nav className="flex flex-col space-y-2">
+                <nav className="flex flex-col space-y-1 h-full">
                   <SheetClose asChild>
                     <Link href="/" className="flex items-center gap-2 mb-6 px-2" onClick={handleLinkClick}>
                       <BarChartBig className="h-7 w-7 text-primary" />
                       <span className="font-bold text-xl text-foreground font-headline">codexair</span>
                     </Link>
                   </SheetClose>
-                  {navItems.filter(item => item.show()).map(item => renderNavItem(item, true))}
+                  
+                  {/* Main navigation items */}
+                  {navItemsDefinition.filter(item => item.show()).map(item => renderNavItem(item, true))}
+                  
+                  <div className="mt-auto pt-4 border-t border-border">
+                    {!session ? (
+                        <SheetClose asChild>
+                        <Button 
+                            variant="default" 
+                            className="w-full"
+                            onClick={() => { router.push('/auth/signin'); handleLinkClick(); }}
+                        >
+                            Sign In / Sign Up
+                        </Button>
+                        </SheetClose>
+                    ) : (
+                        <>
+                        <SheetClose asChild>
+                            <Button asChild variant="ghost" className="w-full justify-start" onClick={() => { router.push('/profile'); handleLinkClick(); }}>
+                            <Link href="/profile"><UserCircle className="mr-2 h-4 w-4" /> My Profile</Link>
+                            </Button>
+                        </SheetClose>
+                        <SheetClose asChild>
+                            <Button asChild variant="ghost" className="w-full justify-start" onClick={() => { router.push('/settings'); handleLinkClick(); }}>
+                            <Link href="/settings"><Cog className="mr-2 h-4 w-4" /> My Settings</Link>
+                            </Button>
+                        </SheetClose>
+                        <DropdownMenuSeparator className="my-2" />
+                        <SheetClose asChild>
+                            <Button variant="ghost" onClick={() => { signOut({ callbackUrl: '/' }); handleLinkClick(); }} className="w-full justify-start">
+                            <LogOut className="mr-2 h-4 w-4" /> Log out
+                            </Button>
+                        </SheetClose>
+                        </>
+                    )}
+                  </div>
                 </nav>
               </SheetContent>
             </Sheet>
