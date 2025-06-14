@@ -6,15 +6,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User, ExternalLink, CompareArrows } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import Navbar from '@/components/layout/navbar'; 
 import { Skeleton } from '@/components/ui/skeleton';
 
-// This interface should match the structure returned by the API endpoint
 interface DisplayablePullRequest {
   id: number | string; // GitHub ID
   _id?: string; // Our DB's PullRequest document _id
@@ -22,6 +22,7 @@ interface DisplayablePullRequest {
   title: string;
   html_url?: string;
   created_at: string;
+  updated_at: string; // Added for "Last Updated" column
   user?: { login: string; avatar_url?: string };
   author?: { login: string; avatar?: string }; // From our DB
   branch?: string; // Source branch name
@@ -42,8 +43,10 @@ export default function RepositoryAnalysisPage() {
   const [pullRequests, setPullRequests] = useState<DisplayablePullRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [analyzingPR, setAnalyzingPR] = useState<number | null>(null); // Stores the number of the PR being analyzed
+  const [analyzingPR, setAnalyzingPR] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedPRsForCompare, setSelectedPRsForCompare] = useState<number[]>([]);
+
 
   const fetchPullRequestsData = useCallback(async (showRefreshToast = false) => {
     if (showRefreshToast) setIsRefreshing(true);
@@ -95,7 +98,7 @@ export default function RepositoryAnalysisPage() {
         body: JSON.stringify({ owner, repoName, pullNumber }),
       });
       
-      const result = await response.json(); // Always try to parse JSON
+      const result = await response.json();
 
       if (!response.ok) {
         setPullRequests(prevPRs => 
@@ -105,7 +108,6 @@ export default function RepositoryAnalysisPage() {
       }
       
       toast({ title: "Analysis Complete", description: `Analysis for PR #${pullNumber} is complete. Redirecting...` });
-      // Update the specific PR in the list with new analysis data
       setPullRequests(prevPRs => 
         prevPRs.map(pr => pr.number === pullNumber ? { 
             ...pr, 
@@ -125,13 +127,28 @@ export default function RepositoryAnalysisPage() {
       setAnalyzingPR(null);
     }
   };
-  
-  const getGHStateBadgeClasses = (prState: string) => {
-    switch (prState.toLowerCase()) {
-      case 'open': return 'bg-green-100 text-green-700 border-green-400 hover:bg-green-200';
-      case 'closed': return 'bg-red-100 text-red-700 border-red-400 hover:bg-red-200';
-      case 'merged': return 'bg-purple-100 text-purple-700 border-purple-400 hover:bg-purple-200';
-      default: return 'border-muted-foreground text-muted-foreground';
+
+  const togglePRForCompare = (prNumber: number) => {
+    setSelectedPRsForCompare(prevSelected => {
+      if (prevSelected.includes(prNumber)) {
+        return prevSelected.filter(num => num !== prNumber);
+      } else {
+        if (prevSelected.length < 2) {
+          return [...prevSelected, prNumber];
+        } else {
+          // If already 2 selected, replace the first one with the new one
+          toast({ title: "Limit Reached", description: "You can select up to 2 PRs for comparison. Replacing the first selection.", variant: "default" });
+          return [prevSelected[1], prNumber];
+        }
+      }
+    });
+  };
+
+  const handleComparePRs = () => {
+    if (selectedPRsForCompare.length === 2) {
+      router.push(`/analyze/${owner}/${repoName}/compare/${selectedPRsForCompare[0]}/vs/${selectedPRsForCompare[1]}`);
+    } else {
+      toast({ title: "Selection Needed", description: "Please select exactly two pull requests to compare.", variant: "destructive" });
     }
   };
 
@@ -146,7 +163,7 @@ export default function RepositoryAnalysisPage() {
     switch (pr.analysisStatus) {
       case 'analyzed':
         return (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 text-xs sm:text-sm">
             <CheckCircle className="h-4 w-4 text-green-500" />
             <span className="text-green-600">Analyzed</span>
             {pr.qualityScore !== null && pr.qualityScore !== undefined && (
@@ -157,15 +174,15 @@ export default function RepositoryAnalysisPage() {
           </div>
         );
       case 'pending':
-        return <span className="flex items-center gap-1 text-amber-500"><Clock className="h-4 w-4 animate-spin-slow" /> Pending...</span>;
+        return <span className="flex items-center gap-1 text-amber-500 text-xs sm:text-sm"><Clock className="h-4 w-4 animate-spin-slow" /> Pending...</span>;
       case 'failed':
-        return <span className="flex items-center gap-1 text-destructive"><ShieldAlert className="h-4 w-4" /> Failed</span>;
+        return <span className="flex items-center gap-1 text-destructive text-xs sm:text-sm"><ShieldAlert className="h-4 w-4" /> Failed</span>;
       default: // not_started or undefined
-        return <span className="flex items-center gap-1 text-muted-foreground"><XCircle className="h-4 w-4" /> Not Analyzed</span>;
+        return <span className="flex items-center gap-1 text-muted-foreground text-xs sm:text-sm"><XCircle className="h-4 w-4" /> Not Analyzed</span>;
     }
   };
 
-  if (status === 'loading' ) {
+  if (status === 'loading') {
      return <div className="flex flex-col min-h-screen"><Navbar /><div className="flex-1 flex items-center justify-center">Loading session...</div></div>;
   }
   if (!session) return null;
@@ -174,126 +191,144 @@ export default function RepositoryAnalysisPage() {
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar /> 
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <div>
-                 <h1 className="text-2xl sm:text-3xl font-bold text-foreground font-headline flex items-center gap-2">
-                    <GitPullRequest className="h-7 w-7 sm:h-8 sm:w-8 text-primary" /> 
-                    Pull Requests: {owner}/{repoName}
-                </h1>
-                <Button variant="link" onClick={() => router.push('/analyze')} className="p-0 h-auto text-sm text-primary hover:underline">
-                    &larr; Back to Repositories
-                </Button>
+        <Card className="shadow-lg">
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-foreground font-headline flex items-center gap-2">
+                        <GitPullRequest className="h-7 w-7 sm:h-8 sm:w-8 text-primary" /> 
+                        Pull Requests: {owner}/{repoName}
+                    </h1>
+                    <Button variant="link" onClick={() => router.push('/analyze')} className="p-0 h-auto text-sm text-primary hover:underline">
+                        &larr; Back to Repositories
+                    </Button>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <Button variant="outline" className="w-full sm:w-auto" onClick={() => fetchPullRequestsData(true)} disabled={isRefreshing || loading || analyzingPR !== null}>
+                      <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing && 'animate-spin'}`} />
+                      {isRefreshing ? 'Refreshing...' : 'Refresh PRs'}
+                  </Button>
+                  <Button 
+                    onClick={handleComparePRs} 
+                    disabled={selectedPRsForCompare.length !== 2 || loading || isRefreshing}
+                    className="w-full sm:w-auto"
+                    title={selectedPRsForCompare.length !== 2 ? "Select two PRs to compare" : "Compare selected PRs"}
+                  >
+                    <CompareArrows className="mr-2 h-4 w-4" /> Compare ({selectedPRsForCompare.length}/2)
+                  </Button>
+                </div>
             </div>
-            <Button variant="outline" className="w-full sm:w-auto" onClick={() => fetchPullRequestsData(true)} disabled={isRefreshing || loading || analyzingPR !== null}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing && 'animate-spin'}`} />
-                {isRefreshing ? 'Refreshing...' : 'Refresh PRs'}
-            </Button>
-        </div>
-
-        {loading && !isRefreshing && !pullRequests.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(3)].map((_, i) => <SkeletonPRCard key={i} />)}
-            </div>
-        ) : error ? (
-            <p className="text-destructive text-center py-8">{error}</p>
-        ) : pullRequests.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">No open pull requests found for this repository. Try refreshing or check GitHub.</p>
-        ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {pullRequests.map(pr => (
-                <Card key={pr.id} className="hover:shadow-md transition-shadow flex flex-col">
-                <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start gap-2">
-                    <CardTitle className="text-lg sm:text-xl hover:text-primary transition-colors flex-grow">
-                        <Link href={pr.html_url || '#'} target="_blank" rel="noopener noreferrer" className="flex items-start gap-1.5">
-                        <Github className="h-4 w-4 mt-1 opacity-70 flex-shrink-0"/>
-                        <span className="truncate" title={`#${pr.number}: ${pr.title}`}>#{pr.number}: {pr.title}</span>
-                        </Link>
-                    </CardTitle>
-                    <Badge variant="outline" className={`whitespace-nowrap text-xs ${getGHStateBadgeClasses(pr.state)}`}>
-                        {pr.state}
-                    </Badge>
-                    </div>
-                    <CardDescription className="mt-1 text-xs space-y-0.5">
-                        <span className="flex items-center gap-1">
-                           <User className="h-3 w-3" /> Author: {pr.user?.login || pr.author?.login || 'N/A'}
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <GitBranch className="h-3 w-3" /> Branch: {pr.branch || 'N/A'}
-                        </span>
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0 pb-3 text-xs text-muted-foreground flex-grow">
-                    Opened {formatDistanceToNow(new Date(pr.created_at), { addSuffix: true })}
-                </CardContent>
-                <CardFooter className="flex flex-col items-start gap-2 border-t pt-3">
-                    <div className="text-xs w-full">
-                        {getAnalysisStatusContent(pr)}
-                    </div>
-                    <div className="flex gap-2 w-full justify-end">
-                    {pr.analysisStatus === 'analyzed' && pr.analysisId ? (
-                        <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
-                        <Link href={`/analyze/${owner}/${repoName}/${pr.number}/${pr.analysisId}`}>
-                            <Eye className="mr-2 h-4 w-4" /> View Analysis
-                        </Link>
-                        </Button>
-                    ) : (
-                        <Button
-                        onClick={() => handleAnalyzePR(pr.number)}
-                        disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open' || pr.analysisStatus === 'pending' || pr.analysisStatus === 'failed'}
-                        title={pr.state.toLowerCase() !== 'open' ? "Can only analyze open PRs" : (pr.analysisStatus === 'pending' ? "Analysis in progress..." : (pr.analysisStatus === 'failed' ? "Analysis failed, try again?" : `Analyze PR #${pr.number}`))}
-                        size="sm"
-                        variant={pr.analysisStatus === 'failed' ? 'destructive' : 'default'}
-                        className="w-full sm:w-auto"
-                        >
-                        {analyzingPR === pr.number || pr.analysisStatus === 'pending' ? (
-                            <><Clock className="mr-2 h-4 w-4 animate-spin-slow" /> Analyzing...</>
-                        ) : pr.analysisStatus === 'failed' ? (
-                            <><RefreshCw className="mr-2 h-4 w-4" /> Retry Analysis</>
-                        ) : (
-                            <><GitPullRequest className="mr-2 h-4 w-4" /> Analyze PR</>
-                        )}
-                        </Button>
-                    )}
-                    </div>
-                </CardFooter>
-                </Card>
-            ))}
-            </div>
-        )}
-        </main>
-        <footer className="py-6 border-t bg-background">
+          </CardHeader>
+          <CardContent>
+            {loading && !isRefreshing && !pullRequests.length ? (
+                <div className="space-y-3">
+                    <Skeleton className="h-10 w-full" />
+                    {[...Array(5)].map((_, i) => <SkeletonPRRow key={i} />)}
+                </div>
+            ) : error ? (
+                <p className="text-destructive text-center py-8">{error}</p>
+            ) : pullRequests.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No open pull requests found for this repository. Try refreshing or check GitHub.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]"></TableHead> {/* Checkbox column */}
+                      <TableHead>PR</TableHead>
+                      <TableHead>Branch</TableHead>
+                      <TableHead>Author</TableHead>
+                      <TableHead>Last Updated</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pullRequests.map(pr => (
+                      <TableRow key={pr.id} className={selectedPRsForCompare.includes(pr.number) ? 'bg-primary/10' : ''}>
+                        <TableCell>
+                          <input 
+                            type="checkbox"
+                            className="form-checkbox h-4 w-4 text-primary border-muted-foreground rounded focus:ring-primary"
+                            checked={selectedPRsForCompare.includes(pr.number)}
+                            onChange={() => togglePRForCompare(pr.number)}
+                            disabled={selectedPRsForCompare.length >= 2 && !selectedPRsForCompare.includes(pr.number)}
+                            title={selectedPRsForCompare.length >= 2 && !selectedPRsForCompare.includes(pr.number) ? "Unselect another PR first to select this one" : `Select PR #${pr.number} for comparison`}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <Link href={pr.html_url || '#'} target="_blank" rel="noopener noreferrer" className="hover:underline text-primary flex items-center gap-1.5" title={pr.title}>
+                            #{pr.number} <span className="truncate max-w-[200px] sm:max-w-xs">{pr.title}</span> <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                           <span className="flex items-center gap-1" title={pr.branch}><GitBranch className="h-3.5 w-3.5"/> {pr.branch || 'N/A'}</span>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                           <span className="flex items-center gap-1" title={pr.user?.login || pr.author?.login}><User className="h-3.5 w-3.5"/> {pr.user?.login || pr.author?.login || 'N/A'}</span>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(pr.updated_at), { addSuffix: true })}
+                        </TableCell>
+                        <TableCell>{getAnalysisStatusContent(pr)}</TableCell>
+                        <TableCell className="text-right space-x-2">
+                          {pr.analysisStatus === 'analyzed' && pr.analysisId ? (
+                            <Button asChild variant="outline" size="sm">
+                              <Link href={`/analyze/${owner}/${repoName}/${pr.number}/${pr.analysisId}`}>
+                                <Eye className="mr-1 h-4 w-4" /> View
+                              </Link>
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => handleAnalyzePR(pr.number)}
+                              disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open' || pr.analysisStatus === 'pending' || pr.analysisStatus === 'failed'}
+                              title={pr.state.toLowerCase() !== 'open' ? "Can only analyze open PRs" : (pr.analysisStatus === 'pending' ? "Analysis in progress..." : (pr.analysisStatus === 'failed' ? "Analysis failed, try again?" : `Analyze PR #${pr.number}`))}
+                              size="sm"
+                              variant={pr.analysisStatus === 'failed' ? 'destructive' : 'default'}
+                            >
+                              {analyzingPR === pr.number || pr.analysisStatus === 'pending' ? (
+                                <><Clock className="mr-1 h-4 w-4 animate-spin-slow" /> Analyzing...</>
+                              ) : pr.analysisStatus === 'failed' ? (
+                                <><RefreshCw className="mr-1 h-4 w-4" /> Retry</>
+                              ) : (
+                                <><GitPullRequest className="mr-1 h-4 w-4" /> Analyze</>
+                              )}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+      <footer className="py-6 border-t bg-background">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} codexair.
+          &copy; {new Date().getFullYear()} codexair.
         </div>
-        </footer>
+      </footer>
     </div>
-    );
+  );
 }
 
-function SkeletonPRCard() {
-    return (
-      <Card className="animate-pulse">
-        <CardHeader className="pb-3">
-          <div className="flex justify-between items-start gap-2">
-            <div className="space-y-2 w-3/4">
-              <Skeleton className="h-6 w-full " /> 
-              <Skeleton className="h-4 w-1/2" /> 
-            </div>
-            <Skeleton className="h-6 w-16 rounded-md" /> 
-          </div>
-           <div className="space-y-1 mt-1">
-              <Skeleton className="h-3 w-20" /> 
-              <Skeleton className="h-3 w-24" /> 
-            </div>
-        </CardHeader>
-        <CardContent className="pt-0 pb-3">
-          <Skeleton className="h-3 w-28" />
-        </CardContent>
-        <CardFooter className="flex flex-col items-start gap-2 border-t pt-3">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-9 w-full" />
-        </CardFooter>
-      </Card>
-    )
+function SkeletonPRRow() {
+  return (
+    <div className="flex items-center space-x-4 p-4 border-b">
+      <Skeleton className="h-4 w-4" /> {/* Checkbox Skeleton */}
+      <div className="flex-1 space-y-1">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
+      </div>
+      <Skeleton className="h-4 w-24 hidden sm:block" /> {/* Branch Skeleton */}
+      <Skeleton className="h-4 w-20 hidden md:block" /> {/* Author Skeleton */}
+      <Skeleton className="h-4 w-24 hidden lg:block" /> {/* Last Updated Skeleton */}
+      <Skeleton className="h-4 w-28" /> {/* Status Skeleton */}
+      <Skeleton className="h-8 w-20" /> {/* Actions Skeleton */}
+    </div>
+  )
 }
+
+    
