@@ -1,7 +1,7 @@
 
 import { MongoClient } from 'mongodb';
 import mongoose from 'mongoose';
-import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType, FileAnalysisItem, AdminUserView as AdminUserViewType } from '@/types';
+import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType, FileAnalysisItem, AdminUserView as AdminUserViewType, AuditLogEntry as AuditLogType } from '@/types';
 
 const RAW_MONGODB_URI_FROM_ENV = process.env.MONGODB_URI;
 console.log(`[MongoDB Setup] Attempting to use MONGODB_URI. Value read from environment: "${RAW_MONGODB_URI_FROM_ENV}"`);
@@ -56,10 +56,10 @@ export default clientPromise;
 
 const userSchema = new mongoose.Schema({
   name: String,
-  email: { type: String, unique: true },
+  email: { type: String, unique: true, required: true }, // Email is required for linking accounts
   emailVerified: Date,
   image: String,
-  role: { type: String, default: 'user', enum: ['user', 'admin'] },
+  role: { type: String, default: 'user', enum: ['user', 'admin'], required: true },
   status: { type: String, enum: ['active', 'suspended'], default: 'active', required: true },
   accounts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Account' }],
   sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Session' }],
@@ -103,7 +103,7 @@ const repositorySchema = new mongoose.Schema<RepoType>({
   language: String,
   stars: Number,
   isPrivate: Boolean,
-  userId: { type: String, required: true },
+  userId: { type: String, required: true }, // This should be mongoose.Schema.Types.ObjectId if linking to User model
 }, { timestamps: true });
 repositorySchema.index({ userId: 1, updatedAt: -1 }); // Added index
 
@@ -169,13 +169,13 @@ const analysisSchema = new mongoose.Schema<AnalysisType>({
   aiInsights: String,
   fileAnalyses: [fileAnalysisItemSchema],
 }, { timestamps: true });
-analysisSchema.index({ createdAt: -1 }); // Added index
+analysisSchema.index({ createdAt: -1 }); 
 
 
 const pullRequestSchema = new mongoose.Schema<PRType>({
   repositoryId: { type: String, required: true }, // Refers to Repository._id
-  owner: { type: String, required: true }, // Added for easier linking and display
-  repoName: { type: String, required: true }, // Added for easier linking and display
+  owner: { type: String, required: true }, 
+  repoName: { type: String, required: true }, 
   githubId: { type: Number, required: true },
   number: { type: Number, required: true },
   title: String,
@@ -187,27 +187,28 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   },
   files: [codeFileSchema],
   analysis: { type: mongoose.Schema.Types.ObjectId, ref: 'Analysis' },
-  userId: String,
+  userId: { type: String, required: true }, // This should be mongoose.Schema.Types.ObjectId if linking to User model
 }, {
   timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
   indexes: [{ fields: { repositoryId: 1, number: 1 }, unique: true }]
 });
 
-const auditLogSchema = new mongoose.Schema({
-  timestamp: { type: Date, default: Date.now },
+const auditLogSchemaDefinition: Record<keyof AuditLogType, any> = {
+  timestamp: { type: Date, default: Date.now, required: true },
   adminUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   adminUserEmail: { type: String, required: true },
   action: { type: String, required: true, enum: [
     'USER_ROLE_CHANGED',
     'USER_STATUS_CHANGED_ACTIVE',
     'USER_STATUS_CHANGED_SUSPENDED',
-    // Add more actions here as needed, e.g., 'USER_DELETED', 'CONFIG_UPDATED'
   ]},
   targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   targetUserEmail: { type: String },
-  details: { type: mongoose.Schema.Types.Mixed }, // For storing arbitrary details like { previousRole: 'user', newRole: 'admin' }
-}, { timestamps: false }); // Audit logs have their own timestamp field
-auditLogSchema.index({ timestamp: -1 }); // Added index
+  details: { type: mongoose.Schema.Types.Mixed },
+};
+
+const auditLogSchema = new mongoose.Schema(auditLogSchemaDefinition, { timestamps: false });
+auditLogSchema.index({ timestamp: -1 }); 
 
 
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
@@ -218,7 +219,7 @@ export const VerificationToken = mongoose.models.VerificationToken || mongoose.m
 export const Repository = mongoose.models.Repository || mongoose.model<RepoType>('Repository', repositorySchema);
 export const PullRequest = mongoose.models.PullRequest || mongoose.model<PRType>('PullRequest', pullRequestSchema);
 export const Analysis = mongoose.models.Analysis || mongoose.model<AnalysisType>('Analysis', analysisSchema);
-export const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', auditLogSchema);
+export const AuditLog = mongoose.models.AuditLog || mongoose.model<AuditLogType>('AuditLog', auditLogSchema);
 
 
 export const connectMongoose = async () => {
@@ -242,5 +243,3 @@ export const connectMongoose = async () => {
 };
 
 connectMongoose();
-
-    

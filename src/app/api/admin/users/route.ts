@@ -90,56 +90,41 @@ export async function PATCH(request: NextRequest) {
     const originalRole = targetUser.role;
     const originalStatus = targetUser.status;
 
-    if (newRole) {
+    if (newRole && targetUser.role !== newRole) {
       // Check if demoting an admin user
       if (targetUser.role === 'admin' && newRole === 'user') {
-        // Prevent demoting self if current user is the last admin
-        if (targetUser._id.toString() === session.user.id) {
-            const adminCount = await User.countDocuments({ role: 'admin' });
-            if (adminCount <= 1) {
-              return NextResponse.json({ error: 'As the sole admin, you cannot change your own role to user.' }, { status: 400 });
-            }
-        } else {
-            // Prevent demoting another admin if they are the last one
-            const adminCount = await User.countDocuments({ role: 'admin' });
-            if (adminCount <= 1) {
-                return NextResponse.json({ error: 'Cannot demote the last admin account.' }, { status: 400 });
-            }
+        const adminCount = await User.countDocuments({ role: 'admin' });
+        if (adminCount <= 1) {
+            // This check covers both demoting self as last admin and demoting another user who is the last admin.
+            return NextResponse.json({ error: 'Cannot change role: This is the last admin account. At least one admin must remain.' }, { status: 400 });
         }
       }
       targetUser.role = newRole;
       message = 'User role updated successfully.';
-      if (originalRole !== newRole) {
-        await createAuditLog(session.user, 'USER_ROLE_CHANGED', targetUser, { previousRole: originalRole, newRole });
-      }
+      await createAuditLog(session.user, 'USER_ROLE_CHANGED', targetUser, { previousRole: originalRole, newRole });
     }
 
-    if (newStatus) {
+    if (newStatus && targetUser.status !== newStatus) {
       // Check if suspending an active admin user
       if (targetUser.role === 'admin' && targetUser.status === 'active' && newStatus === 'suspended') {
-        // Prevent suspending self if current user is the last active admin
-        if (targetUser._id.toString() === session.user.id) {
-            const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
-            if (activeAdminCount <= 1) {
-              return NextResponse.json({ error: 'Cannot suspend your own account as the last active admin.' }, { status: 400 });
-            }
-        } else {
-            // Prevent suspending another admin if they are the last active one
-            const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
-            if (activeAdminCount <= 1) {
-                 return NextResponse.json({ error: 'Cannot suspend the last active admin account.' }, { status: 400 });
-            }
+        const activeAdminCount = await User.countDocuments({ role: 'admin', status: 'active' });
+        if (activeAdminCount <= 1) {
+            // This check covers both suspending self as last active admin and suspending another user who is the last active admin.
+            return NextResponse.json({ error: 'Cannot change status: This is the last active admin account. At least one active admin must remain.' }, { status: 400 });
         }
       }
       targetUser.status = newStatus;
-      message = newRole ? message + ' User status updated successfully.' : 'User status updated successfully.';
-      if (originalStatus !== newStatus) {
-        const action = newStatus === 'active' ? 'USER_STATUS_CHANGED_ACTIVE' : 'USER_STATUS_CHANGED_SUSPENDED';
-        await createAuditLog(session.user, action, targetUser, { previousStatus: originalStatus, newStatus });
-      }
+      message = (newRole && targetUser.role !== originalRole) ? message + ' User status updated successfully.' : 'User status updated successfully.';
+      const action = newStatus === 'active' ? 'USER_STATUS_CHANGED_ACTIVE' : 'USER_STATUS_CHANGED_SUSPENDED';
+      await createAuditLog(session.user, action, targetUser, { previousStatus: originalStatus, newStatus });
     }
 
-    await targetUser.save();
+    if ( (newRole && targetUser.role !== originalRole) || (newStatus && targetUser.status !== originalStatus) ) {
+        await targetUser.save();
+    } else {
+        message = "No changes applied. User already has the specified role/status.";
+    }
+
 
     const updatedUser: AdminUserView = {
       _id: targetUser._id.toString(),
@@ -159,5 +144,3 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-
-    

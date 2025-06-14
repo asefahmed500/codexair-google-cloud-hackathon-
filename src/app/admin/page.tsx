@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, type ChangeEvent } from 'react'; // Import React
+import React, { useEffect, useState, type ChangeEvent, useCallback } from 'react'; 
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/layout/navbar';
@@ -18,10 +18,9 @@ import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX } from 'lucide-react';
 
-// Interface for UserTableRow props
 interface UserTableRowProps {
   user: AdminUserView;
-  currentSessionUser: AdminUserView | undefined | null; // Updated to reflect session.user structure
+  currentSessionUserId: string | undefined;
   adminCount: number;
   activeAdminCount: number;
   updatingUserId: string | null;
@@ -29,28 +28,36 @@ interface UserTableRowProps {
   onStatusChange: (userId: string, newStatus: 'active' | 'suspended') => void;
 }
 
-// Memoized UserTableRow component
 const UserTableRow = React.memo(function UserTableRow({
   user,
-  currentSessionUser,
+  currentSessionUserId,
   adminCount,
   activeAdminCount,
   updatingUserId,
   onRoleChange,
   onStatusChange,
 }: UserTableRowProps) {
-  const isCurrentUser = currentSessionUser?.id === user._id; // Assuming session user has 'id'
+  const isCurrentUser = currentSessionUserId === user._id;
+  
+  // Is this the last admin account overall?
   const isLastAdmin = user.role === 'admin' && adminCount <= 1;
+  // Is this the last *active* admin account?
   const isLastActiveAdmin = user.role === 'admin' && user.status === 'active' && activeAdminCount <= 1;
 
-  const disableRoleChange = updatingUserId === user._id || (isCurrentUser && isLastAdmin);
+  const disableRoleChange = 
+    updatingUserId === user._id || 
+    (isCurrentUser && isLastAdmin); // Cannot demote self if last admin
   const roleChangeTitle = (isCurrentUser && isLastAdmin) ? "Cannot change your own role as the last admin." : "";
 
-  const disableStatusChange = updatingUserId === user._id || (isCurrentUser && isLastActiveAdmin && user.status === 'active');
-  const statusChangeTitle = (isCurrentUser && isLastActiveAdmin && user.status === 'active') ? "Cannot suspend your own account as the last active admin." : (user.status === 'active' ? "Suspend User" : "Activate User");
+  const disableStatusChange = 
+    updatingUserId === user._id || 
+    (isCurrentUser && isLastActiveAdmin && user.status === 'active'); // Cannot suspend self if last active admin
+  const statusChangeTitle = (isCurrentUser && isLastActiveAdmin && user.status === 'active') 
+    ? "Cannot suspend your own account as the last active admin." 
+    : (user.status === 'active' ? `Suspend user ${user.email}` : `Activate user ${user.email}`);
 
   return (
-    <TableRow key={user._id}>
+    <TableRow key={user._id} className={updatingUserId === user._id ? 'opacity-50' : ''}>
       <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
       <TableCell>{user.email || 'N/A'}</TableCell>
       <TableCell>
@@ -64,7 +71,7 @@ const UserTableRow = React.memo(function UserTableRow({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="user">User</SelectItem>
-            <SelectItem value="admin">
+            <SelectItem value="admin" disabled={isLastAdmin && user.role === 'admin' && !isCurrentUser /* Can't make someone else non-admin if they're the last one */}>
               Admin {isLastAdmin && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last admin account"/>}
             </SelectItem>
           </SelectContent>
@@ -117,16 +124,16 @@ export default function AdminPage() {
   const [adminCount, setAdminCount] = useState(0);
   const [activeAdminCount, setActiveAdminCount] = useState(0);
 
-  const updateAdminCounts = (currentUsers: AdminUserView[]) => {
+  const updateAdminCounts = useCallback((currentUsers: AdminUserView[]) => {
     setAdminCount(currentUsers.filter(u => u.role === 'admin').length);
     setActiveAdminCount(currentUsers.filter(u => u.role === 'admin' && u.status === 'active').length);
-  };
+  }, []);
 
   useEffect(() => {
     if (sessionStatus === 'loading') return;
 
     if (!session || session.user.role !== 'admin') {
-      router.replace('/auth/signin'); // Or router.replace('/dashboard');
+      router.replace('/auth/signin'); 
       return;
     }
 
@@ -173,7 +180,7 @@ export default function AdminPage() {
     if (session && session.user.role === 'admin') {
       fetchAdminData();
     }
-  }, [session, sessionStatus, router]);
+  }, [session, sessionStatus, router, updateAdminCounts]);
 
   const confirmRoleChange = (userId: string, newRole: 'user' | 'admin') => {
     const userToUpdate = users.find(u => u._id === userId);
@@ -183,13 +190,12 @@ export default function AdminPage() {
         toast({ title: "No Change", description: "The selected role is the same as the current role.", variant: "default"});
         return;
     }
-
-    // Client-side check: prevent current admin from demoting themselves if they are the last admin
+    
+    // Client-side pre-check for demoting self as last admin (backend also checks this)
     if (session?.user?.id === userId && userToUpdate.role === 'admin' && newRole === 'user' && adminCount <= 1) {
-        toast({ title: "Action Prohibited", description: "You cannot change your own role as the last admin.", variant: "destructive"});
+        toast({ title: "Action Prohibited", description: "You cannot change your own role as the last admin. The system requires at least one admin.", variant: "destructive"});
         return;
     }
-
 
     setAlertAction({ userId, newRole, actionType: 'role' });
     setIsAlertOpen(true);
@@ -204,9 +210,9 @@ export default function AdminPage() {
         return;
     }
 
-    // Client-side check: prevent current admin from suspending themselves if they are the last active admin
+    // Client-side pre-check for suspending self as last active admin (backend also checks this)
     if (session?.user?.id === userId && userToUpdate.role === 'admin' && userToUpdate.status === 'active' && newStatus === 'suspended' && activeAdminCount <= 1) {
-        toast({ title: "Action Prohibited", description: "You cannot suspend your own account as the last active admin.", variant: "destructive"});
+        toast({ title: "Action Prohibited", description: "You cannot suspend your own account as the last active admin. The system requires at least one active admin.", variant: "destructive"});
         return;
     }
 
@@ -241,7 +247,7 @@ export default function AdminPage() {
         const updatedUsers = prevUsers.map(u =>
             (u._id === userId ? { ...u, ... (newRole && {role: newRole}), ...(newStatus && {status: newStatus}) } : u)
         );
-        updateAdminCounts(updatedUsers); // Recalculate admin counts after update
+        updateAdminCounts(updatedUsers); 
         return updatedUsers;
       });
 
@@ -308,18 +314,18 @@ export default function AdminPage() {
       description = `Are you sure you want to change ${userToUpdate.email}'s role to ${newRole}?`;
       if (newRole === 'user' && userToUpdate.role === 'admin') {
         if (adminCount <= 1) {
-          description += ` Warning: This is the last admin account. Demoting this user will remove all admin access from the system. This action is irreversible without database intervention.`;
+          description += `\n\n⚠️ WARNING: This is the last admin account. Demoting this user will result in NO ADMINS on the system. This action is extremely dangerous and may require database intervention to fix if you proceed. The system will attempt to prevent this.`;
         } else if (session?.user?.id === userId) {
-          description += ` Warning: You are about to change your own role. You will lose admin privileges.`;
+          description += `\n\nWarning: You are about to change your own role. You will lose admin privileges.`;
         }
       }
     } else if (actionType === 'status') {
       description = `Are you sure you want to change ${userToUpdate.email}'s status to ${newStatus}?`;
       if (newStatus === 'suspended' && userToUpdate.role === 'admin' && userToUpdate.status === 'active') {
         if (activeAdminCount <= 1) {
-         description += ` Warning: This is the last active admin account. Suspending this user may lock out all admin functionality. This action is irreversible without database intervention if no other active admins exist.`;
+         description += `\n\n⚠️ WARNING: This is the last active admin account. Suspending this user may lock out all admin functionality if no other admin can re-activate accounts. The system will attempt to prevent this.`;
         } else if (session?.user?.id === userId) {
-          description += ` Warning: You are about to suspend your own account. You will be logged out and lose admin access.`;
+          description += `\n\nWarning: You are about to suspend your own account. You will be logged out and lose admin access.`;
         }
       }
     }
@@ -378,7 +384,7 @@ export default function AdminPage() {
                     <UserTableRow
                       key={user._id}
                       user={user}
-                      currentSessionUser={session?.user as AdminUserView | undefined | null} // Cast session.user
+                      currentSessionUserId={session?.user?.id}
                       adminCount={adminCount}
                       activeAdminCount={activeAdminCount}
                       updatingUserId={updatingUserId}
@@ -404,7 +410,17 @@ export default function AdminPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => {setAlertAction(null); setIsAlertOpen(false);}}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleUpdate} disabled={updatingUserId === alertAction?.userId}>
+            <AlertDialogAction 
+                onClick={handleUpdate} 
+                disabled={updatingUserId === alertAction?.userId}
+                className={
+                    alertAction &&
+                    ((alertAction.actionType === 'role' && alertAction.newRole === 'user' && users.find(u => u._id === alertAction.userId)?.role === 'admin' && adminCount <=1 ) ||
+                     (alertAction.actionType === 'status' && alertAction.newStatus === 'suspended' && users.find(u => u._id === alertAction.userId)?.role === 'admin' && users.find(u => u._id === alertAction.userId)?.status === 'active' && activeAdminCount <=1 ))
+                    ? 'bg-destructive hover:bg-destructive/90'
+                    : ''
+                }
+            >
               {updatingUserId === alertAction?.userId ? 'Updating...' : 'Confirm'}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -440,4 +456,3 @@ function StatCard({ Icon, title, value, description }: StatCardProps) {
     </Card>
   );
 }
-    
