@@ -18,11 +18,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
-    const sync = searchParams.get('sync') === 'true'; // Optional sync flag
+    const sync = searchParams.get('sync') === 'true';
 
     if (sync) {
-      // Fetch from GitHub and sync with MongoDB
-      // This part remains user-specific: an admin syncing is syncing *for themselves*
+      // Fetch from GitHub and sync with MongoDB for the current user
+      console.log(`[API/Repositories] Syncing GitHub repositories for user: ${session.user.id}, page: ${page}, limit: ${limit}`);
       const githubRepos = await getUserRepositories(page, limit);
 
       const repos = await Promise.all(
@@ -35,26 +35,27 @@ export async function GET(request: NextRequest) {
             language: ghRepo.language || 'N/A',
             stars: ghRepo.stargazers_count || 0,
             isPrivate: ghRepo.private,
-            userId: session.user.id!, // Sync for the current user
+            userId: session.user.id!, 
           };
 
           return Repository.findOneAndUpdate(
-            { githubId: ghRepo.id, userId: session.user.id! }, // Ensure uniqueness per user-repo
+            { githubId: ghRepo.id, userId: session.user.id! }, 
             { $set: repoData },
             { upsert: true, new: true, setDefaultsOnInsert: true }
           );
         })
       );
-      // When syncing, we return the newly synced/updated repos for that user.
-      // If admin is syncing, it's for their own association.
-      const userSyncedReposQuery: any = { userId: session.user.id! };
       
+      // After syncing, return the current page of repositories for THIS USER from DB
+      const userSyncedReposQuery = { userId: session.user.id! };
       const userSyncedRepos = await Repository.find(userSyncedReposQuery)
         .sort({ updatedAt: -1 }) 
-        .skip((page - 1) * limit)
+        .skip((page - 1) * limit) // Pagination should apply to the DB query result
         .limit(limit)
         .lean();
       const totalUserSyncedRepos = await Repository.countDocuments(userSyncedReposQuery);
+      
+      console.log(`[API/Repositories] Sync complete. Found ${githubRepos.length} from GitHub API. Returning ${userSyncedRepos.length} for user from DB page ${page}. Total synced for user: ${totalUserSyncedRepos}`);
 
       return NextResponse.json({
         repositories: userSyncedRepos,
@@ -63,15 +64,12 @@ export async function GET(request: NextRequest) {
       });
 
     } else {
-      // Fetch from MongoDB only
+      // Fetch from MongoDB only, for the current user
       const skip = (page - 1) * limit;
-      const query: any = {}; 
-
-      if (session.user.role !== 'admin') { 
-        query.userId = session.user.id!;
-      }
-      // For admins, the query remains empty (if not explicitly filtering further), thus fetching all repositories.
-
+      // Always filter by the current session user's ID for this endpoint
+      const query = { userId: session.user.id! }; 
+      
+      console.log(`[API/Repositories] Fetching from DB for user: ${session.user.id}, page: ${page}, limit: ${limit}`);
       const fetchedRepositories = await Repository.find(query) 
         .sort({ updatedAt: -1 })
         .skip(skip)
@@ -79,6 +77,7 @@ export async function GET(request: NextRequest) {
         .lean(); 
       
       const totalRepos = await Repository.countDocuments(query); 
+      console.log(`[API/Repositories] DB fetch complete. Returning ${fetchedRepositories.length} for user. Total for user: ${totalRepos}`);
       
       return NextResponse.json({ 
         repositories: fetchedRepositories,
@@ -88,7 +87,7 @@ export async function GET(request: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('Error in /api/repositories GET:', error);
+    console.error('[API/Repositories GET] Error:', error.message, error.stack);
     if (error.message.includes('GitHub API error') || error.status === 401 || error.status === 403) {
       return NextResponse.json({ error: `GitHub API interaction failed: ${error.message}` }, { status: error.status || 500 });
     }

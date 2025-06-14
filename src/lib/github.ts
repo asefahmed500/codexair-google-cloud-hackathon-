@@ -21,7 +21,7 @@ export async function getGithubClient() {
 
 export async function getUserRepositories(page = 1, perPage = 30) {
   const octokit = await getGithubClient();
-  
+  console.log(`[GitHub Lib] Fetching user repositories for page ${page}, perPage ${perPage} with type 'all'.`);
   const { data } = await octokit.rest.repos.listForAuthenticatedUser({
     type: 'all', // Fetches all repositories the authenticated user has access to (owned, collaborator, org member)
     sort: 'updated', // Sort by most recently updated
@@ -29,7 +29,7 @@ export async function getUserRepositories(page = 1, perPage = 30) {
     page,
     per_page: perPage,
   });
-
+  console.log(`[GitHub Lib] Fetched ${data.length} repositories from GitHub API.`);
   return data;
 }
 
@@ -117,4 +117,3 @@ export async function getFileContent(owner: string, repo: string, path: string, 
     return null; // Or throw, depending on desired error handling
   }
 }
-
