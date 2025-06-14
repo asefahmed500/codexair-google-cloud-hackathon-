@@ -3,7 +3,7 @@ import NextAuth, { type NextAuthOptions, type AuthProvider, type Adapter } from 
 import GithubProvider from 'next-auth/providers/github';
 import GoogleProvider from 'next-auth/providers/google';
 import { MongoDBAdapter } from '@next-auth/mongodb-adapter';
-import clientPromise, { User as UserModel, connectMongoose, Account as AccountModel } from './mongodb';
+import clientPromise, { User as UserModel, connectMongoose, Account as AccountModel } from './mongodb'; // AccountModel import added
 import mongoose from 'mongoose';
 
 // Check critical NextAuth environment variables first
@@ -26,6 +26,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      allowDangerousEmailAccountLinking: true, // Allow linking if email matches
     })
   );
   console.info("[Auth Setup] Google OAuth Provider configured.");
@@ -43,6 +44,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
           scope: 'repo read:user user:email',
         },
       },
+      allowDangerousEmailAccountLinking: true, // Allow linking if email matches
     })
   );
   console.info("[Auth Setup] GitHub OAuth Provider configured.");
@@ -64,50 +66,34 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       await connectMongoose();
-      const userEmail = user?.email || profile?.email; // User object from OAuth provider profile
-      const provider = account?.provider || 'unknown';
-      console.log(`[SignIn Callback] Attempting sign-in for email: '${userEmail}', Provider: '${provider}'`);
+      // The `user` object here might be from the provider OR from the DB if account already linked by adapter
+      const userEmail = user?.email || (profile as any)?.email; // (profile as any) to access potential email if not on User type
+      const provider = account?.provider;
 
-      if (!account || !userEmail) {
-        console.error(`[SignIn Callback] Denied: Missing account details or profile email for provider '${provider}'.`);
-        // Redirect to sign-in page with a generic error or a more specific one if desired.
-        return `/auth/signin?error=SignInError&reason=missing_provider_details`;
+      if (!userEmail || !provider) {
+        console.error(`[SignIn Callback] Critical: Missing email or provider from OAuth response. Email: ${userEmail}, Provider: ${provider}`);
+        return `/auth/signin?error=SignInError&reason=provider_data_missing`;
       }
+      console.log(`[SignIn Callback] Processing sign-in for email: '${userEmail}', Provider: '${provider}'`);
 
-      // Check if user exists in our database
-      let dbUser = await UserModel.findOne({ email: userEmail });
+      // Check if user exists by email and their status
+      const existingUserInDB = await UserModel.findOne({ email: userEmail }).select('_id status').lean();
 
-      if (!dbUser) {
-        console.log(`[SignIn Callback] User with email '${userEmail}' not found. Creating new user.`);
-        try {
-          // Create the user with default role and status
-          // The MongoDBAdapter would also do this, but explicitly creating here ensures
-          // the role and status are set as per our application logic immediately.
-          dbUser = await UserModel.create({
-            name: user.name,
-            email: userEmail,
-            image: user.image,
-            role: "user", // Explicitly default to "user"
-            status: "active", // Explicitly default to "active"
-          });
-          console.log(`[SignIn Callback] New user created with ID: ${dbUser._id}, Role: ${dbUser.role}, Status: ${dbUser.status}`);
-        } catch (error) {
-          console.error(`[SignIn Callback] Error creating new user for email '${userEmail}':`, error);
-          return `/auth/signin?error=UserCreationError`; // Redirect to sign-in page with error
-        }
-      } else {
-        // User exists, check their status
-        console.log(`[SignIn Callback] Existing user found with ID: ${dbUser._id}, Role: ${dbUser.role}, Status: ${dbUser.status}`);
-        if (dbUser.status === 'suspended') {
+      if (existingUserInDB) {
+        console.log(`[SignIn Callback] Existing user found in DB: ${existingUserInDB._id}, Status: ${existingUserInDB.status}`);
+        if (existingUserInDB.status === 'suspended') {
           console.warn(`[SignIn Callback] Denied: Account for email '${userEmail}' is suspended.`);
           return `/auth/signin?error=AccountSuspended&email=${encodeURIComponent(userEmail)}`;
         }
-        // If user exists and is active, proceed.
+        // If user exists and is active, adapter will attempt to link the new OAuth account (if different provider)
+        // or sign in the user (if same provider). `allowDangerousEmailAccountLinking: true` helps here.
+      } else {
+        // User does not exist with this email.
+        // The MongoDBAdapter will handle creating the new user with schema defaults (role: 'user', status: 'active').
+        console.log(`[SignIn Callback] User with email '${userEmail}' not found in DB. Adapter will create this user.`);
       }
       
-      // Return true to allow NextAuth.js to proceed with linking the account
-      // (if it's a new provider for an existing user) and creating the session.
-      console.log(`[SignIn Callback] Approved sign-in for email: '${userEmail}'. User ID (from DB or new): ${dbUser._id}`);
+      // Return true to allow the sign-in process (and adapter linking/creation) to continue.
       return true;
     },
 
@@ -130,7 +116,6 @@ export const authOptions: NextAuthOptions = {
           console.log(`[JWT Callback - Initial Sign-in] User ${token.id} processed. Token updated with DB data. Role: ${token.role}, Status: ${token.status}`);
         } else {
           console.error(`[JWT Callback - Initial Sign-in] CRITICAL: User with id ${user.id} (from adapter) not found in DB. This might happen if signIn callback failed silently or DB issue.`);
-          // Clear potentially problematic fields if user somehow doesn't exist after signIn logic
           delete token.id; delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture; delete token.accessToken;
         }
       } else if (token.id && typeof token.id === 'string' && mongoose.Types.ObjectId.isValid(token.id)) {
@@ -138,18 +123,14 @@ export const authOptions: NextAuthOptions = {
         // Refresh user data from DB to ensure role/status are up-to-date.
         const dbUser = await UserModel.findById(token.id).select('_id role email status name image').lean();
         if (dbUser) {
-          token.role = dbUser.role || 'user'; // Refresh role
-          token.status = dbUser.status || 'active'; // Refresh status
-          token.email = dbUser.email; // Keep email consistent
-          token.name = dbUser.name; // Keep name consistent
-          token.picture = dbUser.image; // Keep picture consistent
+          token.role = dbUser.role || 'user'; 
+          token.status = dbUser.status || 'active'; 
+          token.email = dbUser.email; 
+          token.name = dbUser.name; 
+          token.picture = dbUser.image; 
           // console.log(`[JWT Callback - Subsequent] Refreshed token for User ID: ${token.id}. Role: ${token.role}, Status: ${token.status}`);
         } else {
-          // User ID was in token, but user no longer in DB (e.g., DB dropped manually).
           console.warn(`[JWT Callback - Subsequent] User with ID ${token.id} not found in DB. Clearing sensitive fields from token.`);
-          // Clear role and status, but keep other potentially identifying info if needed for re-auth flows.
-          // Or, depending on security policy, you might invalidate the token by returning null or an empty object.
-          // For now, just clearing role/status to prevent unauthorized access based on stale data.
           delete token.role;
           delete token.status;
         }
@@ -160,34 +141,32 @@ export const authOptions: NextAuthOptions = {
 
     async session({ session, token }) {
       // The token object here is the output of the jwt callback
-      if (token.accessToken) { // Ensure accessToken is string
+      if (token.accessToken) { 
         session.accessToken = token.accessToken as string;
       }
       if (token.id && session.user) {
         session.user.id = token.id as string;
       }
       
-      // Ensure role and status are always present in the session, defaulting if somehow missing from token
       if (token.role && session.user) {
         session.user.role = token.role as 'user' | 'admin';
       } else if (session.user) {
-        session.user.role = 'user'; // Default to 'user'
+        session.user.role = 'user'; 
       }
       
       if (token.status && session.user) {
         session.user.status = token.status as 'active' | 'suspended';
       } else if (session.user) {
-        session.user.status = 'active'; // Default to 'active'
+        session.user.status = 'active'; 
       }
 
-      // Make sure email, name, image are consistently passed from token to session.user
       if (token.email && session.user) {
         session.user.email = token.email as string;
       }
       if (token.name && session.user) {
         session.user.name = token.name as string;
       }
-      if (token.picture && session.user) { // token uses 'picture', session.user uses 'image'
+      if (token.picture && session.user) { 
         session.user.image = token.picture as string;
       }
       
@@ -197,7 +176,7 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/auth/signin',
-    error: '/auth/signin', // Redirect to sign-in page on error
+    error: '/auth/signin', // Redirect to sign-in page on error, consider a custom error page if needed
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
@@ -206,4 +185,5 @@ export const authOptions: NextAuthOptions = {
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };
+    
     
