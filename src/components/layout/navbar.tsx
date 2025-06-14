@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
+import React, { useState } from 'react'; // Added useState for mobile menu
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,13 +14,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetClose, // Added SheetClose
+} from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield, SearchCode } from 'lucide-react'; // Added SearchCode
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield, SearchCode, Menu } from 'lucide-react'; // Added Menu
 
 export default function Navbar() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleScrollToFeatures = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
     e.preventDefault();
@@ -31,9 +39,96 @@ export default function Navbar() {
     } else {
       router.push('/#features');
     }
+    setIsMobileMenuOpen(false); // Close mobile menu on scroll
+  };
+
+  const handleLinkClick = () => {
+    setIsMobileMenuOpen(false); // Close mobile menu on link click
   };
 
   const isAdmin = session?.user?.role === 'admin';
+
+  const navLinks = (
+    <>
+      <SheetClose asChild>
+        <Button asChild variant="ghost" onClick={handleLinkClick}>
+          <Link href="/">
+            <Home className="mr-2 h-4 w-4" /> Home
+          </Link>
+        </Button>
+      </SheetClose>
+      {pathname === '/' ? (
+        <SheetClose asChild>
+          <Button asChild variant="ghost">
+            <a href="#features" onClick={handleScrollToFeatures}>
+                <LayoutGrid className="mr-2 h-4 w-4" /> Features
+            </a>
+          </Button>
+        </SheetClose>
+      ) : (
+        <SheetClose asChild>
+          <Button asChild variant="ghost" onClick={handleLinkClick}>
+            <Link href="/features">
+                <LayoutGrid className="mr-2 h-4 w-4" /> Features
+            </Link>
+          </Button>
+        </SheetClose>
+      )}
+      <SheetClose asChild>
+        <Button asChild variant="ghost" onClick={handleLinkClick}>
+          <Link href="/about">
+            <Info className="mr-2 h-4 w-4" /> About Us
+          </Link>
+        </Button>
+      </SheetClose>
+
+      {session && !isAdmin && (
+        <>
+          <SheetClose asChild>
+            <Button asChild variant="ghost" onClick={handleLinkClick}>
+              <Link href="/dashboard">
+                <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
+              </Link>
+            </Button>
+          </SheetClose>
+          <SheetClose asChild>
+            <Button asChild variant="ghost" onClick={handleLinkClick}>
+              <Link href="/explain">
+                <Lightbulb className="mr-2 h-4 w-4" />
+                Explain Code
+              </Link>
+            </Button>
+          </SheetClose>
+          <SheetClose asChild>
+            <Button asChild variant="ghost" onClick={handleLinkClick}>
+              <Link href="/analyze">
+                <GitFork className="mr-2 h-4 w-4" />
+                Analyze Repository
+              </Link>
+            </Button>
+          </SheetClose>
+          <SheetClose asChild>
+            <Button asChild variant="ghost" onClick={handleLinkClick}>
+              <Link href="/search">
+                <SearchCode className="mr-2 h-4 w-4" />
+                Semantic Search
+              </Link>
+            </Button>
+          </SheetClose>
+        </>
+      )}
+      {session && isAdmin && (
+        <SheetClose asChild>
+          <Button asChild variant="ghost" onClick={handleLinkClick}>
+            <Link href="/admin">
+              <Shield className="mr-2 h-4 w-4" /> Admin Panel
+            </Link>
+          </Button>
+        </SheetClose>
+      )}
+    </>
+  );
+
 
   if (status === "loading") {
     return (
@@ -52,73 +147,17 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
-        <Link href="/" className="flex items-center gap-2 mr-6">
+        <Link href="/" className="flex items-center gap-2 mr-auto md:mr-6"> {/* Changed mr-6 to mr-auto md:mr-6 */}
           <BarChartBig className="h-7 w-7 text-primary" />
           <span className="font-bold text-xl text-foreground font-headline">codexair</span>
         </Link>
 
+        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-1">
-          <Button asChild variant="ghost">
-            <Link href="/">
-              <Home className="mr-2 h-4 w-4" /> Home
-            </Link>
-          </Button>
-          {pathname === '/' ? (
-             <Button asChild variant="ghost">
-                <a href="#features" onClick={handleScrollToFeatures}>
-                    <LayoutGrid className="mr-2 h-4 w-4" /> Features
-                </a>
-             </Button>
-          ) : (
-            <Button asChild variant="ghost">
-                <Link href="/features">
-                    <LayoutGrid className="mr-2 h-4 w-4" /> Features
-                </Link>
-            </Button>
-          )}
-          <Button asChild variant="ghost">
-            <Link href="/about">
-              <Info className="mr-2 h-4 w-4" /> About Us
-            </Link>
-          </Button>
-
-          {session && !isAdmin && ( // Only show these for non-admin users
-            <>
-              <Button asChild variant="ghost">
-                <Link href="/dashboard">
-                  <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
-                </Link>
-              </Button>
-              <Button asChild variant="ghost">
-                <Link href="/explain">
-                  <Lightbulb className="mr-2 h-4 w-4" />
-                  Explain Code
-                </Link>
-              </Button>
-              <Button asChild variant="ghost">
-                <Link href="/analyze">
-                  <GitFork className="mr-2 h-4 w-4" />
-                  Analyze Repository
-                </Link>
-              </Button>
-              <Button asChild variant="ghost">
-                <Link href="/search">
-                  <SearchCode className="mr-2 h-4 w-4" />
-                  Semantic Search
-                </Link>
-              </Button>
-            </>
-          )}
-           {session && isAdmin && ( // Admin-specific main nav link
-            <Button asChild variant="ghost">
-              <Link href="/admin">
-                <Shield className="mr-2 h-4 w-4" /> Admin Panel
-              </Link>
-            </Button>
-          )}
+          {navLinks}
         </nav>
 
-        <div className="flex flex-1 items-center justify-end space-x-4">
+        <div className="flex items-center justify-end space-x-2 md:space-x-4 ml-auto md:ml-0"> {/* Use ml-auto on main div, remove from Link */}
           {!session ? (
             <Button onClick={() => router.push('/auth/signin')} variant="default">
               Sign In / Sign Up
@@ -140,39 +179,29 @@ export default function Navbar() {
                 {session.user?.email && <DropdownMenuLabel className="text-xs font-normal text-muted-foreground -mt-1.5">{session.user.email}</DropdownMenuLabel>}
                 <DropdownMenuSeparator />
                 
-                {/* Common links for both user and admin for their own account management */}
-                <DropdownMenuItem onClick={() => router.push('/profile')}>
+                <DropdownMenuItem onClick={() => { router.push('/profile'); handleLinkClick(); }}>
                   <UserCircle className="mr-2 h-4 w-4" /> My Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/settings')}>
+                <DropdownMenuItem onClick={() => { router.push('/settings'); handleLinkClick(); }}>
                   <Cog className="mr-2 h-4 w-4" /> My Settings
                 </DropdownMenuItem>
 
-
-                {isAdmin && ( // Admin-specific links
+                {isAdmin && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Admin Tools</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => router.push('/admin')}>
+                    <DropdownMenuItem onClick={() => { router.push('/admin'); handleLinkClick(); }}>
                       <Users className="mr-2 h-4 w-4" /> User Management
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/admin/reports')}>
+                    <DropdownMenuItem onClick={() => { router.push('/admin/reports'); handleLinkClick(); }}>
                       <FileText className="mr-2 h-4 w-4" /> Reports
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/admin/audit')}>
+                    <DropdownMenuItem onClick={() => { router.push('/admin/audit'); handleLinkClick(); }}>
                       <BookCheck className="mr-2 h-4 w-4" /> Audit Logs
                     </DropdownMenuItem>
                   </>
                 )}
                 
-                {!isAdmin && ( // Non-admin specific links (if any beyond profile/settings are needed here)
-                     <>
-                        {/* Example: could add quick link to dashboard if not already prominent */}
-                        {/* For now, profile/settings cover basic user actions in dropdown for non-admins */}
-                     </>
-                )}
-
-
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })}>
                   <LogOut className="mr-2 h-4 w-4" />
@@ -181,6 +210,30 @@ export default function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+
+          {/* Mobile Navigation Trigger */}
+          <div className="md:hidden">
+            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-6 w-6" />
+                  <span className="sr-only">Toggle navigation menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[280px] sm:w-[320px] pt-10"> {/* Added pt-10 for spacing */}
+                <nav className="flex flex-col space-y-2">
+                   {/* App Logo/Name in Sheet */}
+                  <SheetClose asChild>
+                    <Link href="/" className="flex items-center gap-2 mb-6 px-2" onClick={handleLinkClick}>
+                      <BarChartBig className="h-7 w-7 text-primary" />
+                      <span className="font-bold text-xl text-foreground font-headline">codexair</span>
+                    </Link>
+                  </SheetClose>
+                  {navLinks}
+                </nav>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </div>
     </header>
