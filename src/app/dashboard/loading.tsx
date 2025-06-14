@@ -31,6 +31,24 @@ export default function DashboardLoading() {
         </Card>
 
         <div className="grid md:grid-cols-2 gap-6 mb-6">
+          {/* Connected Repositories Skeleton */}
+          <Card className="h-[400px]">
+            <CardHeader>
+              <Skeleton className="h-6 w-1/2 mb-2" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={`conn-repo-skel-${i}`} className="flex items-center justify-between p-2 rounded-md border">
+                  <div>
+                    <Skeleton className="h-5 w-40 mb-1" />
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                  <Skeleton className="h-8 w-20" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
           {/* Recent Reviews Skeleton */}
           <Card className="h-[400px]">
             <CardHeader>
@@ -38,7 +56,7 @@ export default function DashboardLoading() {
             </CardHeader>
             <CardContent className="space-y-4">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="flex items-center justify-between p-2 rounded-md border">
+                <div key={`recent-rev-skel-${i}`} className="flex items-center justify-between p-2 rounded-md border">
                   <div>
                     <Skeleton className="h-5 w-32 mb-1" />
                     <Skeleton className="h-3 w-24" />
@@ -48,7 +66,9 @@ export default function DashboardLoading() {
               ))}
             </CardContent>
           </Card>
+        </div>
 
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
           {/* Quality Trends Skeleton */}
           <Card className="h-[400px]">
             <CardHeader>
@@ -58,7 +78,21 @@ export default function DashboardLoading() {
               <Skeleton className="h-64 w-full" /> {/* Chart Skeleton */}
             </CardContent>
           </Card>
+          
+          {/* Security Hotspots Skeleton */}
+          <Card className="h-[400px]">
+            <CardHeader><Skeleton className="h-6 w-1/2 mb-2" /></CardHeader>
+            <CardContent className="space-y-3">
+                {[...Array(3)].map((_, j) => (
+                    <div key={`hotspot-skel-${j}`} className="p-3 border rounded-md">
+                        <Skeleton className="h-4 w-3/4 mb-1" />
+                        <Skeleton className="h-3 w-1/4" />
+                    </div>
+                ))}
+            </CardContent>
+          </Card>
         </div>
+
 
         <div className="grid md:grid-cols-2 gap-6 mb-6">
             {/* Top Issues (Security/Suggestions) Skeleton */}
@@ -67,7 +101,7 @@ export default function DashboardLoading() {
                     <CardHeader><Skeleton className="h-6 w-1/2 mb-2" /></CardHeader>
                     <CardContent className="space-y-3">
                         {[...Array(3)].map((_, j) => (
-                            <div key={j} className="p-3 border rounded-md">
+                            <div key={`top-issue-item-skel-${j}`} className="p-3 border rounded-md">
                                 <Skeleton className="h-4 w-3/4 mb-1" />
                                 <Skeleton className="h-3 w-1/4" />
                             </div>
@@ -76,21 +110,18 @@ export default function DashboardLoading() {
                 </Card>
             ))}
         </div>
-         <div className="grid md:grid-cols-2 gap-6">
-            {/* Security Hotspots & Team Metrics Skeleton */}
-             {[...Array(2)].map((_, i) => (
-                 <Card key={`extra-metrics-${i}`} className="h-[350px]">
-                    <CardHeader><Skeleton className="h-6 w-1/2 mb-2" /></CardHeader>
-                     <CardContent className="space-y-3">
-                        {[...Array(3)].map((_, j) => (
-                            <div key={j} className="p-3 border rounded-md">
-                                <Skeleton className="h-4 w-full mb-1" />
-                                <Skeleton className="h-3 w-1/2" />
-                            </div>
-                        ))}
-                    </CardContent>
-                </Card>
-            ))}
+         <div className="grid md:grid-cols-1 gap-6"> {/* Team Metrics can take full width */}
+            <Card className="h-[350px]">
+              <CardHeader><Skeleton className="h-6 w-1/2 mb-2" /></CardHeader>
+              <CardContent className="space-y-3">
+                  {[...Array(3)].map((_, j) => (
+                      <div key={`team-metric-skel-${j}`} className="p-3 border rounded-md">
+                          <Skeleton className="h-4 w-full mb-1" />
+                          <Skeleton className="h-3 w-1/2" />
+                      </div>
+                  ))}
+              </CardContent>
+            </Card>
         </div>
       </main>
       <footer className="py-6 border-t bg-background">
@@ -101,5 +132,3 @@ export default function DashboardLoading() {
     </div>
   );
 }
-
-

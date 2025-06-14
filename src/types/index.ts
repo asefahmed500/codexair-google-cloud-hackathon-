@@ -150,6 +150,15 @@ export interface TeamMemberMetric {
   totalHighIssues: number; 
 }
 
+export interface ConnectedRepositoryItem {
+  _id: string;
+  fullName: string;
+  language: string | null;
+  owner: string;
+  name: string;
+  updatedAt: Date; // from our DB, reflects sync time or GitHub's last update time if we store that
+}
+
 export interface DashboardData {
   overview: DashboardOverview;
   recentAnalyses: RecentAnalysisItem[];
@@ -158,6 +167,7 @@ export interface DashboardData {
   topSuggestions: TopIssueItem[];
   securityHotspots: SecurityHotspotItem[];
   teamMetrics: TeamMemberMetric[];
+  connectedRepositories: ConnectedRepositoryItem[]; // Added this line
 }
 
 export interface SimilarCodeResult {

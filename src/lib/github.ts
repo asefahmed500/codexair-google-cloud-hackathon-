@@ -23,8 +23,8 @@ export async function getUserRepositories(page = 1, perPage = 30) {
   const octokit = await getGithubClient();
   
   const { data } = await octokit.rest.repos.listForAuthenticatedUser({
-    type: 'all', // Changed from 'owner' to 'all'
-    sort: 'updated',
+    type: 'all', // Fetches all repositories the authenticated user has access to (owned, collaborator, org member)
+    sort: 'updated', // Sort by most recently updated
     direction: 'desc',
     page,
     per_page: perPage,

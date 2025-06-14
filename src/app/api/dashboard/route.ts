@@ -3,16 +3,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { Analysis, PullRequest, Repository, connectMongoose } from '@/lib/mongodb'; // Added Repository
-import type { DashboardData, RecentAnalysisItem, QualityTrendItem, DashboardOverview, TopIssueItem, SecurityIssue, Suggestion, SecurityHotspotItem, TeamMemberMetric, FileAnalysisItem, PullRequest as PRType, CodeAnalysis as AnalysisDocType, Repository as RepoType } from '@/types';
+import type { DashboardData, RecentAnalysisItem, QualityTrendItem, DashboardOverview, TopIssueItem, SecurityIssue, Suggestion, SecurityHotspotItem, TeamMemberMetric, FileAnalysisItem, PullRequest as PRType, CodeAnalysis as AnalysisDocType, Repository as RepoType, ConnectedRepositoryItem } from '@/types';
 import mongoose from 'mongoose';
 
 
 const MAX_TOP_ISSUES = 5;
 const MAX_HOTSPOTS = 5;
-const MAX_TEAM_MEMBERS = 10; // For admin view, might show more if desired
+const MAX_TEAM_MEMBERS = 10; 
+const MAX_CONNECTED_REPOS_ON_DASHBOARD = 5;
 
 function getTopItems(
-  analyses: any[], // Should be Array<AnalysisDocType & { pullRequestId: PRType | null}>
+  analyses: any[], 
   itemSelector: (analysis: any) => (SecurityIssue[] | Suggestion[]),
   titleExtractor: (item: SecurityIssue | Suggestion) => string,
   severityExtractor?: (item: SecurityIssue) => SecurityIssue['severity'],
@@ -25,7 +26,7 @@ function getTopItems(
     if (!analysis) return; 
     const items = itemSelector(analysis) || [];
     items.forEach((item: SecurityIssue | Suggestion) => {
-      if (!item || !item.title) return; // Ensure item and title exist
+      if (!item || !item.title) return; 
       const title = titleExtractor(item);
       if (!itemCounts[title]) {
         itemCounts[title] = { title, count: 0 };
@@ -55,21 +56,38 @@ export async function GET(request: NextRequest) {
     const isAdmin = session.user.role === 'admin';
 
     let relevantAnalyses: (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
+    let connectedRepositories: ConnectedRepositoryItem[] = [];
 
     if (isAdmin) {
       relevantAnalyses = await Analysis.find({})
         .populate<{ pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null }>({
           path: 'pullRequestId',
-          select: 'title repositoryId number author createdAt owner repoName state', // ensure owner, repoName, state are selected
+          select: 'title repositoryId number author createdAt owner repoName state', 
           populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' } 
         })
         .sort({ createdAt: -1 }) 
         .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
+      // Admins do not see a "connected repositories" list on their primary dashboard as they get redirected to /admin.
+      // If a list of all repos is needed on the admin dashboard, it would be a separate fetch.
     } else {
       const userPullRequestObjects = await PullRequest.find({ userId }).select('_id').lean();
       const userPullRequestIds = userPullRequestObjects.map(pr => pr._id);
       
       if (userPullRequestIds.length === 0) {
+           // Fetch connected repositories even if no analyses yet
+           const userRepos = await Repository.find({ userId })
+             .sort({ updatedAt: -1 })
+             .limit(MAX_CONNECTED_REPOS_ON_DASHBOARD)
+             .lean();
+           connectedRepositories = userRepos.map(repo => ({
+             _id: repo._id.toString(),
+             fullName: repo.fullName,
+             language: repo.language,
+             owner: repo.owner,
+             name: repo.name,
+             updatedAt: repo.updatedAt,
+           }));
+
            return NextResponse.json({
             overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
             recentAnalyses: [],
@@ -78,20 +96,48 @@ export async function GET(request: NextRequest) {
             topSuggestions: [],
             securityHotspots: [],
             teamMetrics: [],
+            connectedRepositories, // Return connected repos
         } as DashboardData);
       }
 
       relevantAnalyses = await Analysis.find({ pullRequestId: { $in: userPullRequestIds } })
         .populate<{ pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null }>({
           path: 'pullRequestId',
-          select: 'title repositoryId number author createdAt owner repoName state', // ensure owner, repoName, state are selected
+          select: 'title repositoryId number author createdAt owner repoName state', 
           populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' }
         })
         .sort({ createdAt: -1 }) 
         .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
+
+      // Fetch connected repositories for regular users
+      const userRepos = await Repository.find({ userId })
+        .sort({ updatedAt: -1 }) // Sort by most recently updated in our DB
+        .limit(MAX_CONNECTED_REPOS_ON_DASHBOARD)
+        .lean();
+      connectedRepositories = userRepos.map(repo => ({
+        _id: repo._id.toString(),
+        fullName: repo.fullName,
+        language: repo.language,
+        owner: repo.owner,
+        name: repo.name,
+        updatedAt: repo.updatedAt,
+      }));
     }
     
-    if (relevantAnalyses.length === 0 && !isAdmin) { // Also check for !isAdmin here
+    if (relevantAnalyses.length === 0 && !isAdmin) { 
+        // Ensure connectedRepositories are included even if no analyses
+         const userRepos = await Repository.find({ userId })
+             .sort({ updatedAt: -1 })
+             .limit(MAX_CONNECTED_REPOS_ON_DASHBOARD)
+             .lean();
+           connectedRepositories = userRepos.map(repo => ({
+             _id: repo._id.toString(),
+             fullName: repo.fullName,
+             language: repo.language,
+             owner: repo.owner,
+             name: repo.name,
+             updatedAt: repo.updatedAt,
+           }));
         return NextResponse.json({
             overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
             recentAnalyses: [],
@@ -100,6 +146,7 @@ export async function GET(request: NextRequest) {
             topSuggestions: [],
             securityHotspots: [],
             teamMetrics: [],
+            connectedRepositories,
         } as DashboardData);
     }
 
@@ -125,22 +172,19 @@ export async function GET(request: NextRequest) {
       let ownerDisplay = analysis.pullRequestId.owner || 'N/A'; 
       let actualRepoName = analysis.pullRequestId.repoName || 'N/A'; 
 
-      // If repositoryId is populated and an object, use its details
       if (analysis.pullRequestId.repositoryId && typeof analysis.pullRequestId.repositoryId === 'object' && analysis.pullRequestId.repositoryId.fullName) {
         const repoObj = analysis.pullRequestId.repositoryId as RepoType;
         repoFullNameDisplay = repoObj.fullName;
-        // Use owner/name from the populated RepoType if available and more specific
         ownerDisplay = repoObj.owner || ownerDisplay;
         actualRepoName = repoObj.name || actualRepoName;
       } else if (ownerDisplay !== 'N/A' && actualRepoName !== 'N/A') {
-        // Fallback to construct fullName if individual owner/repoName exist on PR but not full object
         repoFullNameDisplay = `${ownerDisplay}/${actualRepoName}`;
       }
       
       return {
         id: analysis._id.toString(),
         pullRequestTitle: analysis.pullRequestId.title || 'N/A',
-        repositoryName: repoFullNameDisplay, // This is fullName, e.g., "owner/repo"
+        repositoryName: repoFullNameDisplay,
         prNumber: analysis.pullRequestId.number,
         owner: ownerDisplay, 
         repo: actualRepoName,
@@ -158,7 +202,7 @@ export async function GET(request: NextRequest) {
 
     qualityTrendsData.forEach((analysis) => {
         if (!analysis) return;
-        const dateStr = new Date(analysis.createdAt).toISOString().split('T')[0]; // YYYY-MM-DD
+        const dateStr = new Date(analysis.createdAt).toISOString().split('T')[0]; 
         if (!qualityTrendsAggMap[dateStr]) {
             qualityTrendsAggMap[dateStr] = { totalQuality: 0, count: 0 };
         }
@@ -213,7 +257,6 @@ export async function GET(request: NextRequest) {
       if (!analysis) return;
       (analysis.fileAnalyses || []).forEach((file: FileAnalysisItem) => {
         if (!file.filename) return;
-        // Using only filename as key for aggregation across PRs
         const fileKey = file.filename;
 
         if (!fileIssueCounts[fileKey]) {
@@ -221,8 +264,8 @@ export async function GET(request: NextRequest) {
             filename: file.filename,
             criticalIssues: 0,
             highIssues: 0,
-            totalIssuesInFile: 0, // This will be sum of issues from all PRs for this file
-            relatedPrIds: [], // Collect unique PR IDs where this file was problematic
+            totalIssuesInFile: 0, 
+            relatedPrIds: [], 
             lastOccurrence: new Date(0),
           };
         }
@@ -292,6 +335,7 @@ export async function GET(request: NextRequest) {
       topSuggestions,
       securityHotspots,
       teamMetrics,
+      connectedRepositories,
     };
 
     return NextResponse.json(dashboardData);

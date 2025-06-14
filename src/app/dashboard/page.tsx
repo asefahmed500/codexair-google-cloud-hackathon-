@@ -10,12 +10,13 @@ import QualityTrends from '@/components/dashboard/quality-trends';
 import TopIssues from '@/components/dashboard/top-issues';
 import SecurityHotspots from '@/components/dashboard/security-hotspots'; 
 import TeamMetrics from '@/components/dashboard/team-metrics'; 
+import ConnectedRepositories from '@/components/dashboard/connected-repositories'; // New import
 import { DashboardData } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import Link from 'next/link';
 import Navbar from '@/components/layout/navbar';
 import DashboardLoading from './loading'; 
-import { BarChartBig, Shield } from 'lucide-react'; 
+import { BarChartBig, Shield, GitFork } from 'lucide-react'; 
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -70,6 +71,7 @@ export default function DashboardPage() {
   }
   
   if (session?.user?.role === 'admin' && status === 'authenticated') {
+    // Admins are redirected, but if somehow they reach here, show loading
     return <DashboardLoading />; 
   }
 
@@ -103,7 +105,7 @@ export default function DashboardPage() {
 
   if (!session) return null; 
 
-  if (!loading && !error && (!dashboardData || dashboardData.overview.totalAnalyses === 0)) {
+  if (!loading && !error && (!dashboardData || (dashboardData.overview.totalAnalyses === 0 && dashboardData.connectedRepositories.length === 0) ) ) {
     return (
       <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
@@ -118,13 +120,13 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <p className="text-lg text-muted-foreground">
-                It looks like you haven't analyzed any pull requests yet.
+                It looks like you haven't analyzed any pull requests or connected any repositories yet.
               </p>
               <p className="text-md">
                 Get started by connecting a repository and analyzing your first PR to unlock powerful code insights.
               </p>
               <Button asChild size="lg" className="shadow-md hover:shadow-lg transition-shadow bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Link href="/analyze">Start Your First Analysis</Link>
+                <Link href="/analyze">Connect Repositories & Start Analyzing</Link>
               </Button>
             </CardContent>
              <CardFooter className="justify-center pt-4">
@@ -152,17 +154,21 @@ export default function DashboardPage() {
         {dashboardData && ( 
           <div className="grid gap-6">
             <AnalyticsOverview overview={dashboardData.overview} />
+             {/* Connected Repositories and Recent Analyses side-by-side or stacked based on content */}
             <div className="grid md:grid-cols-2 gap-6">
+              <ConnectedRepositories repositories={dashboardData.connectedRepositories} />
               <RecentReviews reviews={dashboardData.recentAnalyses} />
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
               <QualityTrends trends={dashboardData.qualityTrends} />
+              <SecurityHotspots hotspots={dashboardData.securityHotspots} />
             </div>
             <div className="grid md:grid-cols-2 gap-6">
               <TopIssues title="Top Security Issues" issues={dashboardData.topSecurityIssues} issueType="security" />
               <TopIssues title="Top Improvement Suggestions" issues={dashboardData.topSuggestions} issueType="suggestion" />
             </div>
-            <div className="grid md:grid-cols-2 gap-6">
-              <SecurityHotspots hotspots={dashboardData.securityHotspots} />
-              <TeamMetrics metrics={dashboardData.teamMetrics} />
+             <div className="grid md:grid-cols-1 gap-6"> {/* Team Metrics can take full width if it's the last row */}
+                <TeamMetrics metrics={dashboardData.teamMetrics} />
             </div>
           </div>
         ) }
