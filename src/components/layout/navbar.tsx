@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
-import React, { useState } from 'react'; // Added useState for mobile menu
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -18,10 +18,20 @@ import {
   Sheet,
   SheetContent,
   SheetTrigger,
-  SheetClose, // Added SheetClose
+  SheetClose,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield, SearchCode, Menu } from 'lucide-react'; // Added Menu
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield, SearchCode, Menu } from 'lucide-react';
+
+interface NavItem {
+  key: string;
+  href?: string;
+  text: string;
+  icon: JSX.Element;
+  onClick?: (event?: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => void;
+  isAnchor?: boolean;
+  show: () => boolean; // Function to determine if the link should be shown
+}
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -29,8 +39,12 @@ export default function Navbar() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const handleScrollToFeatures = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
-    e.preventDefault();
+  const handleLinkClick = () => {
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleScrollToFeatures = (e?: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
+    if (e) e.preventDefault();
     if (pathname === '/') {
       const featuresSection = document.getElementById('features');
       if (featuresSection) {
@@ -39,95 +53,43 @@ export default function Navbar() {
     } else {
       router.push('/#features');
     }
-    setIsMobileMenuOpen(false); // Close mobile menu on scroll
-  };
-
-  const handleLinkClick = () => {
-    setIsMobileMenuOpen(false); // Close mobile menu on link click
+    setIsMobileMenuOpen(false);
   };
 
   const isAdmin = session?.user?.role === 'admin';
 
-  const navLinks = (
-    <>
-      <SheetClose asChild>
-        <Button asChild variant="ghost" onClick={handleLinkClick}>
-          <Link href="/">
-            <Home className="mr-2 h-4 w-4" /> Home
-          </Link>
-        </Button>
-      </SheetClose>
-      {pathname === '/' ? (
-        <SheetClose asChild>
-          <Button asChild variant="ghost">
-            <a href="#features" onClick={handleScrollToFeatures}>
-                <LayoutGrid className="mr-2 h-4 w-4" /> Features
-            </a>
-          </Button>
-        </SheetClose>
-      ) : (
-        <SheetClose asChild>
-          <Button asChild variant="ghost" onClick={handleLinkClick}>
-            <Link href="/features">
-                <LayoutGrid className="mr-2 h-4 w-4" /> Features
-            </Link>
-          </Button>
-        </SheetClose>
-      )}
-      <SheetClose asChild>
-        <Button asChild variant="ghost" onClick={handleLinkClick}>
-          <Link href="/about">
-            <Info className="mr-2 h-4 w-4" /> About Us
-          </Link>
-        </Button>
-      </SheetClose>
+  const navItems: NavItem[] = [
+    { key: 'home', href: '/', text: 'Home', icon: <Home className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => true },
+    pathname === '/'
+      ? { key: 'features-anchor', href: '#features', text: 'Features', icon: <LayoutGrid className="mr-2 h-4 w-4" />, onClick: handleScrollToFeatures, isAnchor: true, show: () => true }
+      : { key: 'features-link', href: '/features', text: 'Features', icon: <LayoutGrid className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => true },
+    { key: 'about', href: '/about', text: 'About Us', icon: <Info className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => true },
+    { key: 'dashboard', href: '/dashboard', text: 'Dashboard', icon: <BarChartBig className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && !isAdmin },
+    { key: 'explain', href: '/explain', text: 'Explain Code', icon: <Lightbulb className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && !isAdmin },
+    { key: 'analyze', href: '/analyze', text: 'Analyze Repository', icon: <GitFork className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && !isAdmin },
+    { key: 'search', href: '/search', text: 'Semantic Search', icon: <SearchCode className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && !isAdmin },
+    { key: 'admin', href: '/admin', text: 'Admin Panel', icon: <Shield className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => !!session && isAdmin },
+  ];
 
-      {session && !isAdmin && (
-        <>
-          <SheetClose asChild>
-            <Button asChild variant="ghost" onClick={handleLinkClick}>
-              <Link href="/dashboard">
-                <BarChartBig className="mr-2 h-4 w-4" /> Dashboard
-              </Link>
-            </Button>
-          </SheetClose>
-          <SheetClose asChild>
-            <Button asChild variant="ghost" onClick={handleLinkClick}>
-              <Link href="/explain">
-                <Lightbulb className="mr-2 h-4 w-4" />
-                Explain Code
-              </Link>
-            </Button>
-          </SheetClose>
-          <SheetClose asChild>
-            <Button asChild variant="ghost" onClick={handleLinkClick}>
-              <Link href="/analyze">
-                <GitFork className="mr-2 h-4 w-4" />
-                Analyze Repository
-              </Link>
-            </Button>
-          </SheetClose>
-          <SheetClose asChild>
-            <Button asChild variant="ghost" onClick={handleLinkClick}>
-              <Link href="/search">
-                <SearchCode className="mr-2 h-4 w-4" />
-                Semantic Search
-              </Link>
-            </Button>
-          </SheetClose>
-        </>
-      )}
-      {session && isAdmin && (
-        <SheetClose asChild>
-          <Button asChild variant="ghost" onClick={handleLinkClick}>
-            <Link href="/admin">
-              <Shield className="mr-2 h-4 w-4" /> Admin Panel
-            </Link>
-          </Button>
-        </SheetClose>
-      )}
-    </>
-  );
+  const renderNavItem = (item: NavItem, isMobile: boolean) => {
+    const button = (
+      <Button asChild variant="ghost" onClick={item.onClick as React.MouseEventHandler<HTMLButtonElement>}>
+        {item.href && !item.isAnchor ? (
+          <Link href={item.href}>
+            {item.icon} {item.text}
+          </Link>
+        ) : (
+          <a href={item.isAnchor ? item.href : undefined} onClick={item.onClick}>
+            {item.icon} {item.text}
+          </a>
+        )}
+      </Button>
+    );
+    if (isMobile) {
+      return <SheetClose asChild key={item.key}>{button}</SheetClose>;
+    }
+    return React.cloneElement(button, { key: item.key });
+  };
 
 
   if (status === "loading") {
@@ -147,17 +109,17 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
-        <Link href="/" className="flex items-center gap-2 mr-auto md:mr-6"> {/* Changed mr-6 to mr-auto md:mr-6 */}
+        <Link href="/" className="flex items-center gap-2 mr-auto md:mr-6">
           <BarChartBig className="h-7 w-7 text-primary" />
           <span className="font-bold text-xl text-foreground font-headline">codexair</span>
         </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-1">
-          {navLinks}
+          {navItems.filter(item => item.show()).map(item => renderNavItem(item, false))}
         </nav>
 
-        <div className="flex items-center justify-end space-x-2 md:space-x-4 ml-auto md:ml-0"> {/* Use ml-auto on main div, remove from Link */}
+        <div className="flex items-center justify-end space-x-2 md:space-x-4 ml-auto md:ml-0">
           {!session ? (
             <Button onClick={() => router.push('/auth/signin')} variant="default">
               Sign In / Sign Up
@@ -220,16 +182,15 @@ export default function Navbar() {
                   <span className="sr-only">Toggle navigation menu</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[280px] sm:w-[320px] pt-10"> {/* Added pt-10 for spacing */}
+              <SheetContent side="left" className="w-[280px] sm:w-[320px] pt-10">
                 <nav className="flex flex-col space-y-2">
-                   {/* App Logo/Name in Sheet */}
                   <SheetClose asChild>
                     <Link href="/" className="flex items-center gap-2 mb-6 px-2" onClick={handleLinkClick}>
                       <BarChartBig className="h-7 w-7 text-primary" />
                       <span className="font-bold text-xl text-foreground font-headline">codexair</span>
                     </Link>
                   </SheetClose>
-                  {navLinks}
+                  {navItems.filter(item => item.show()).map(item => renderNavItem(item, true))}
                 </nav>
               </SheetContent>
             </Sheet>
