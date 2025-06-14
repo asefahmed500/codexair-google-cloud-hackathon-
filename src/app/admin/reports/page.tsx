@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Download, Eye, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Download, Eye, AlertTriangle, CheckCircle2, MinusCircle } from 'lucide-react';
 import type { AnalysisReportItem } from '@/types';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
@@ -63,41 +63,51 @@ export default function AdminReportsPage() {
     }
     const headers = ["PR Number", "PR Title", "Repository", "Author", "Analysis Date", "Quality Score", "Critical Issues", "High Issues", "Analysis Link"];
     const rows = reportData.map(item => {
-        const analysisLink = item.analysisId && item.repositoryFullName !== 'N/A' && item.repositoryFullName.includes('/')
-            ? `${window.location.origin}/analyze/${item.repositoryFullName}/${item.prNumber}/${item.analysisId}`
+        const analysisLink = item.analysisId && item.owner && item.repoName && item.owner !== 'N/A' && item.repoName !== 'N/A'
+            ? `${window.location.origin}/analyze/${item.owner}/${item.repoName}/${item.prNumber}/${item.analysisId}`
             : 'N/A';
+        
+        // Ensure PR title is properly escaped for CSV
+        const escapedPrTitle = `"${(item.prTitle || '').replace(/"/g, '""')}"`;
+
         return [
             item.prNumber,
-            `"${item.prTitle.replace(/"/g, '""')}"`, 
+            escapedPrTitle, 
             item.repositoryFullName,
             item.prAuthor,
-            format(new Date(item.analysisDate), 'yyyy-MM-dd HH:mm'),
-            item.qualityScore ?? 'N/A',
+            item.analysisDate ? format(new Date(item.analysisDate), 'yyyy-MM-dd HH:mm') : 'N/A',
+            item.qualityScore !== null && item.qualityScore !== undefined ? item.qualityScore.toFixed(1) : 'N/A',
             item.criticalIssuesCount,
             item.highIssuesCount,
             analysisLink
-        ];
+        ].join(","); // Join with comma, escaping will handle internal commas in title
     });
 
     const csvContent = "data:text/csv;charset=utf-8,"
         + headers.join(",") + "\n"
-        + rows.map(e => e.join(",")).join("\n");
+        + rows.join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `analysis_summary_report_${format(new Date(), 'yyyyMMdd')}.csv`);
+    link.setAttribute("download", `codexair_analysis_summary_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     toast({title: "CSV Exported", description: "Analysis summary report downloaded.", variant: "default"});
   };
 
-  const getQualityScoreColor = (score: number | null) => {
-    if (score === null || score === undefined) return 'text-muted-foreground';
-    if (score >= 7) return 'text-green-600';
-    if (score >= 4) return 'text-amber-600';
-    return 'text-destructive';
+  const getQualityScoreDisplay = (score: number | null | undefined) => {
+    if (score === null || score === undefined) {
+      return <span className="text-muted-foreground flex items-center justify-center gap-1"><MinusCircle className="h-4 w-4" />N/A</span>;
+    }
+    let colorClass = 'text-muted-foreground';
+    let Icon = MinusCircle;
+    if (score >= 7) { colorClass = 'text-green-600'; Icon = CheckCircle2; }
+    else if (score >= 4) { colorClass = 'text-orange-500'; Icon = AlertTriangle; }
+    else { colorClass = 'text-destructive'; Icon = AlertTriangle; }
+    
+    return <span className={`font-semibold ${colorClass} flex items-center justify-center gap-1`}><Icon className="h-4 w-4" />{score.toFixed(1)}</span>;
   };
 
 
@@ -115,8 +125,8 @@ export default function AdminReportsPage() {
               <div className="flex justify-end mb-4">
                 <Skeleton className="h-10 w-32" />
               </div>
-              <Skeleton className="h-10 w-full mb-2" /> {/* Table Header Skeleton */}
-              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full mb-1" />)} {/* Table Row Skeletons */}
+              <Skeleton className="h-10 w-full mb-2" /> 
+              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full mb-1" />)} 
             </CardContent>
           </Card>
         </main>
@@ -200,8 +210,8 @@ export default function AdminReportsPage() {
                   {reportData.map((item) => (
                     <TableRow key={item.prId}>
                       <TableCell className="font-medium">
-                          {item.analysisId && item.repositoryFullName !== 'N/A' && item.repositoryFullName.includes('/') ? (
-                               <Link href={`/analyze/${item.repositoryFullName}/${item.prNumber}/${item.analysisId}`} 
+                          {item.analysisId && item.owner && item.repoName && item.owner !== 'N/A' && item.repoName !== 'N/A' ? (
+                               <Link href={`/analyze/${item.owner}/${item.repoName}/${item.prNumber}/${item.analysisId}`} 
                                     className="hover:underline text-primary"
                                     title={item.prTitle}>
                                   #{item.prNumber}: {item.prTitle.substring(0, 30)}{item.prTitle.length > 30 ? '...' : ''}
@@ -214,24 +224,26 @@ export default function AdminReportsPage() {
                       </TableCell>
                       <TableCell>{item.repositoryFullName}</TableCell>
                       <TableCell>{item.prAuthor}</TableCell>
-                      <TableCell className="whitespace-nowrap">{format(new Date(item.analysisDate), 'MMM d, yyyy')}</TableCell>
-                      <TableCell className={`text-center font-semibold ${getQualityScoreColor(item.qualityScore)}`}>
-                        {item.qualityScore !== null ? item.qualityScore.toFixed(1) : <span className="text-muted-foreground">N/A</span>}
+                      <TableCell className="whitespace-nowrap">{item.analysisDate ? format(new Date(item.analysisDate), 'MMM d, yyyy') : 'N/A'}</TableCell>
+                      <TableCell className="text-center">
+                        {getQualityScoreDisplay(item.qualityScore)}
                       </TableCell>
                       <TableCell className={`text-center font-semibold ${item.criticalIssuesCount > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                        {item.criticalIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1" />}
-                        {item.criticalIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1" />}
-                        {item.criticalIssuesCount}
+                        <span className="flex items-center justify-center gap-1">
+                          {item.criticalIssuesCount > 0 ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                          {item.criticalIssuesCount}
+                        </span>
                       </TableCell>
                        <TableCell className={`text-center font-semibold ${item.highIssuesCount > 0 ? 'text-orange-500' : 'text-green-600'}`}>
-                        {item.highIssuesCount > 0 && <AlertTriangle className="inline h-4 w-4 mr-1" />}
-                        {item.highIssuesCount === 0 && <CheckCircle2 className="inline h-4 w-4 mr-1" />}
-                        {item.highIssuesCount}
+                        <span className="flex items-center justify-center gap-1">
+                          {item.highIssuesCount > 0 ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                          {item.highIssuesCount}
+                        </span>
                       </TableCell>
                       <TableCell className="text-center">
-                        {item.analysisId && item.repositoryFullName !== 'N/A' && item.repositoryFullName.includes('/') && (
+                        {item.analysisId && item.owner && item.repoName && item.owner !== 'N/A' && item.repoName !== 'N/A' && (
                           <Button variant="ghost" size="sm" asChild>
-                             <Link href={`/analyze/${item.repositoryFullName}/${item.prNumber}/${item.analysisId}`}>
+                             <Link href={`/analyze/${item.owner}/${item.repoName}/${item.prNumber}/${item.analysisId}`}>
                                   <Eye className="mr-1 h-4 w-4" /> View
                              </Link>
                           </Button>
@@ -254,3 +266,4 @@ export default function AdminReportsPage() {
     </div>
   );
 }
+

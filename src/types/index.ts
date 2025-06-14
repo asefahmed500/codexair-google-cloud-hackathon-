@@ -197,27 +197,30 @@ export interface AdminUserView {
 }
 
 export interface AnalysisReportItem {
-  prId: string; // MongoDB _id of the PullRequest document
+  prId: string; 
   prNumber: number;
   prTitle: string;
-  repositoryFullName: string; // e.g., "owner/repo-name"
+  repositoryFullName: string; 
+  owner: string; // Added for easier link construction
+  repoName: string; // Added for easier link construction
   prAuthor: string;
-  analysisDate: Date;
+  analysisDate: Date | null; // Can be null if analysis object or its date is missing
   qualityScore: number | null;
   criticalIssuesCount: number;
   highIssuesCount: number;
-  analysisId?: string; // MongoDB _id of the Analysis document
+  analysisId?: string; 
 }
 
 export interface AuditLogEntry {
   _id: string;
   timestamp: Date;
-  adminUserId?: string; // Could be populated User object later
+  adminUserId?: string; 
   adminUserEmail: string;
   action: string;
-  targetUserId?: string; // Could be populated User object later
+  targetUserId?: string; 
   targetUserEmail?: string;
-  details?: any; // Store arbitrary JSON details
+  details?: any; 
 }
+
 
 

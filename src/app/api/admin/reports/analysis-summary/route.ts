@@ -8,9 +8,9 @@ import mongoose from 'mongoose';
 
 
 interface PopulatedPR extends Omit<PRType, 'analysis' | 'repositoryId'> {
-  _id: mongoose.Types.ObjectId; // Ensure _id is of ObjectId type for direct use
+  _id: mongoose.Types.ObjectId; 
   analysis: AnalysisDocType | null;
-  repositoryId: RepoType | null;
+  repositoryId: RepoType | null; 
 }
 
 
@@ -43,9 +43,15 @@ export async function GET(request: NextRequest) {
       }
       
       let repoFullName = "N/A";
+      let ownerName = pr.owner || "N/A"; // from PR schema directly
+      let actualRepoName = pr.repoName || "N/A"; // from PR schema directly
+
       if (pr.repositoryId && pr.repositoryId.fullName) {
           repoFullName = pr.repositoryId.fullName;
-      } else if (pr.owner && pr.repoName) { // Fallback if population failed or structure is different
+          // Override with more specific data if repositoryId is populated
+          if (pr.repositoryId.owner) ownerName = pr.repositoryId.owner;
+          if (pr.repositoryId.name) actualRepoName = pr.repositoryId.name;
+      } else if (pr.owner && pr.repoName) { 
           repoFullName = `${pr.owner}/${pr.repoName}`;
       }
 
@@ -54,10 +60,12 @@ export async function GET(request: NextRequest) {
         prId: pr._id.toString(),
         prNumber: pr.number,
         prTitle: pr.title,
-        repositoryFullName: repoFullName,
+        repositoryFullName: repoFullName, // For display
+        owner: ownerName, // For link construction
+        repoName: actualRepoName, // For link construction
         prAuthor: pr.author?.login || 'N/A',
-        analysisDate: analysis?.createdAt || pr.updatedAt, // Prefer analysis date, fallback to PR update
-        qualityScore: analysis?.qualityScore !== undefined ? parseFloat(analysis.qualityScore.toFixed(1)) : null,
+        analysisDate: analysis?.createdAt || pr.updatedAt, 
+        qualityScore: analysis?.qualityScore !== undefined && analysis.qualityScore !== null ? parseFloat(analysis.qualityScore.toFixed(1)) : null,
         criticalIssuesCount,
         highIssuesCount,
         analysisId: analysis?._id?.toString(),
@@ -71,7 +79,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-
     
 
     
+
