@@ -17,11 +17,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 // This interface should match the structure returned by the API endpoint
 interface DisplayablePullRequest {
   id: number | string; // GitHub ID
+  _id?: string; // Our DB's PullRequest document _id
   number: number;
   title: string;
   html_url?: string;
   created_at: string;
   user?: { login: string; avatar_url?: string };
+  author?: { login: string; avatar?: string }; // From our DB
   branch?: string; // Source branch name
   state: "open" | "closed" | "merged"; // GitHub PR state
   analysisStatus?: 'analyzed' | 'pending' | 'failed' | 'not_started';
@@ -92,15 +94,18 @@ export default function RepositoryAnalysisPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ owner, repoName, pullNumber }),
       });
+      
+      const result = await response.json(); // Always try to parse JSON
+
       if (!response.ok) {
-        const errorData = await response.json();
         setPullRequests(prevPRs => 
-          prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'not_started' } : pr) 
+          prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'failed' } : pr) 
         );
-        throw new Error(errorData.details || errorData.error || 'Failed to start analysis');
+        throw new Error(result.details || result.error || 'Failed to start analysis');
       }
-      const result = await response.json(); // { analysis: CodeAnalysis, pullRequest: PRType }
-      toast({ title: "Analysis Started", description: `Analysis for PR #${pullNumber} is in progress. You will be redirected.` });
+      
+      toast({ title: "Analysis Complete", description: `Analysis for PR #${pullNumber} is complete. Redirecting...` });
+      // Update the specific PR in the list with new analysis data
       setPullRequests(prevPRs => 
         prevPRs.map(pr => pr.number === pullNumber ? { 
             ...pr, 
@@ -114,7 +119,7 @@ export default function RepositoryAnalysisPage() {
       setError(err.message); 
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
       setPullRequests(prevPRs => 
-        prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'not_started' } : pr)
+        prevPRs.map(pr => pr.number === pullNumber ? { ...pr, analysisStatus: 'failed' } : pr)
       );
     } finally {
       setAnalyzingPR(null);
@@ -153,7 +158,7 @@ export default function RepositoryAnalysisPage() {
         );
       case 'pending':
         return <span className="flex items-center gap-1 text-amber-500"><Clock className="h-4 w-4 animate-spin-slow" /> Pending...</span>;
-      case 'failed': // Note: 'failed' status is not currently set by the backend API for this listing
+      case 'failed':
         return <span className="flex items-center gap-1 text-destructive"><ShieldAlert className="h-4 w-4" /> Failed</span>;
       default: // not_started or undefined
         return <span className="flex items-center gap-1 text-muted-foreground"><XCircle className="h-4 w-4" /> Not Analyzed</span>;
@@ -211,7 +216,7 @@ export default function RepositoryAnalysisPage() {
                     </div>
                     <CardDescription className="mt-1 text-xs space-y-0.5">
                         <span className="flex items-center gap-1">
-                           <User className="h-3 w-3" /> Author: {pr.user?.login || 'N/A'}
+                           <User className="h-3 w-3" /> Author: {pr.user?.login || pr.author?.login || 'N/A'}
                         </span>
                         <span className="flex items-center gap-1">
                             <GitBranch className="h-3 w-3" /> Branch: {pr.branch || 'N/A'}
@@ -235,13 +240,16 @@ export default function RepositoryAnalysisPage() {
                     ) : (
                         <Button
                         onClick={() => handleAnalyzePR(pr.number)}
-                        disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open' || pr.analysisStatus === 'pending'}
-                        title={pr.state.toLowerCase() !== 'open' ? "Can only analyze open PRs" : (pr.analysisStatus === 'pending' ? "Analysis in progress..." : `Analyze PR #${pr.number}`)}
+                        disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open' || pr.analysisStatus === 'pending' || pr.analysisStatus === 'failed'}
+                        title={pr.state.toLowerCase() !== 'open' ? "Can only analyze open PRs" : (pr.analysisStatus === 'pending' ? "Analysis in progress..." : (pr.analysisStatus === 'failed' ? "Analysis failed, try again?" : `Analyze PR #${pr.number}`))}
                         size="sm"
+                        variant={pr.analysisStatus === 'failed' ? 'destructive' : 'default'}
                         className="w-full sm:w-auto"
                         >
                         {analyzingPR === pr.number || pr.analysisStatus === 'pending' ? (
                             <><Clock className="mr-2 h-4 w-4 animate-spin-slow" /> Analyzing...</>
+                        ) : pr.analysisStatus === 'failed' ? (
+                            <><RefreshCw className="mr-2 h-4 w-4" /> Retry Analysis</>
                         ) : (
                             <><GitPullRequest className="mr-2 h-4 w-4" /> Analyze PR</>
                         )}

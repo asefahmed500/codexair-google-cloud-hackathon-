@@ -188,6 +188,8 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   files: [codeFileSchema],
   analysis: { type: mongoose.Schema.Types.ObjectId, ref: 'Analysis' },
   userId: { type: String, required: true }, 
+  analysisStatus: { type: String, enum: ['analyzed', 'pending', 'failed', 'not_started'], default: 'not_started' },
+  qualityScore: { type: Number, default: null },
 }, {
   timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' },
   indexes: [{ fields: { repositoryId: 1, number: 1 }, unique: true }]
@@ -249,4 +251,3 @@ export const connectMongoose = async () => {
 };
 
 connectMongoose();
-

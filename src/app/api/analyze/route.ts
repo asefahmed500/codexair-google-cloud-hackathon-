@@ -82,20 +82,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 2: Check if PR analysis already exists
-    const existingPR = await PullRequest.findOne({
-      repositoryId: localRepo._id.toString(), 
-      number: pullNumber,
-    }).populate('analysis');
+    // For re-analysis, one might allow overwriting, but for now, if analysis exists, we return it.
+    // However, the request is to analyze, so we should proceed.
+    // We will update the existing PR document's analysis field later.
+    // Update PR analysisStatus to 'pending' immediately
+     await PullRequest.updateOne(
+        { repositoryId: localRepo._id.toString(), number: pullNumber },
+        { $set: { analysisStatus: 'pending' } },
+        { upsert: true } // Upsert to create if PR doc doesn't exist yet for some reason
+    );
+    console.log(`[API/ANALYZE] Set PR #${pullNumber} status to 'pending' for ${repoFullName}.`);
 
-    if (existingPR && existingPR.analysis) {
-      console.log(`[API/ANALYZE] Analysis already exists for PR #${pullNumber} in ${repoFullName}. Returning existing analysis.`);
-      return NextResponse.json({ analysis: existingPR.analysis, pullRequest: existingPR });
-    }
 
     // Step 3: Fetch PR details from GitHub
     console.log(`[API/ANALYZE] Fetching PR details for ${repoFullName} PR #${pullNumber} from GitHub...`);
     const ghPullRequest = await getPullRequestDetails(owner, repoName, pullNumber);
     if (!ghPullRequest) {
+      await PullRequest.updateOne(
+        { repositoryId: localRepo._id.toString(), number: pullNumber },
+        { $set: { analysisStatus: 'failed' } }
+      );
       return NextResponse.json({ error: 'Pull request not found on GitHub' }, { status: 404 });
     }
 
@@ -239,6 +245,7 @@ export async function POST(request: NextRequest) {
 
 
     const finalAnalysisData = {
+      pullRequestId: '', // This will be set after PR is saved/found
       qualityScore: aggregatedQualityScore,
       complexity: aggregatedComplexity,
       maintainability: aggregatedMaintainability,
@@ -264,7 +271,11 @@ export async function POST(request: NextRequest) {
         patch: f.patch || '',
       }));
 
-    let savedPR = existingPR; 
+    let savedPR = await PullRequest.findOne({
+      repositoryId: localRepo._id.toString(),
+      number: pullNumber,
+    });
+
     if (!savedPR) {
       savedPR = new PullRequest({
         repositoryId: localRepo._id.toString(), 
@@ -280,9 +291,10 @@ export async function POST(request: NextRequest) {
           avatar: ghPullRequest.user?.avatar_url || '',
         },
         files: prFiles,
-        userId: session.user.id,
+        userId: session.user.id, // User who initiated this sync/analysis for this PR
         createdAt: new Date(ghPullRequest.created_at), 
         updatedAt: new Date(ghPullRequest.updated_at),
+        analysisStatus: 'pending', // Initially pending
       });
     } else {
       savedPR.title = ghPullRequest.title;
@@ -296,18 +308,26 @@ export async function POST(request: NextRequest) {
           avatar: ghPullRequest.user?.avatar_url || savedPR.author?.avatar || '',
       };
       savedPR.updatedAt = new Date(ghPullRequest.updated_at);
+      savedPR.userId = savedPR.userId || session.user.id; // Ensure userId is set if it was missing
     }
     await savedPR.save();
     console.log(`[API/ANALYZE] Saved/Updated PullRequest ${savedPR._id} for ${repoFullName} PR #${pullNumber}`);
 
-    const analysisDoc = new Analysis({
-      pullRequestId: savedPR._id,
-      ...finalAnalysisData,
-    });
+    finalAnalysisData.pullRequestId = savedPR._id.toString();
+
+    // Remove old analysis if it exists for this PR
+    if (savedPR.analysis) {
+        await Analysis.deleteOne({ _id: savedPR.analysis });
+        console.log(`[API/ANALYZE] Deleted old analysis for PR ${savedPR._id}`);
+    }
+    
+    const analysisDoc = new Analysis(finalAnalysisData);
     await analysisDoc.save();
     console.log(`[API/ANALYZE] Saved Analysis ${analysisDoc._id} for PR ${savedPR._id}`);
 
     savedPR.analysis = analysisDoc._id;
+    savedPR.analysisStatus = 'analyzed';
+    savedPR.qualityScore = aggregatedQualityScore;
     await savedPR.save();
 
     const populatedPR = await PullRequest.findById(savedPR._id).populate('analysis').lean();
@@ -317,6 +337,21 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('[API/ANALYZE] Critical error during pull request analysis:', error, error.stack);
     
+    const { owner, repoName, pullNumber: pullNumberStr } = await request.json(); // Re-parse for logging
+    const pullNumber = parseInt(pullNumberStr);
+
+    if (owner && repoName && !isNaN(pullNumber)) {
+        try {
+            await PullRequest.updateOne(
+                { owner, repoName, number: pullNumber, userId: (await getServerSession(authOptions))?.user?.id },
+                { $set: { analysisStatus: 'failed' } }
+            );
+             console.log(`[API/ANALYZE] Set PR #${pullNumber} status to 'failed' due to error.`);
+        } catch (dbError) {
+            console.error(`[API/ANALYZE] Failed to update PR status to 'failed' in DB:`, dbError);
+        }
+    }
+
     let errorMessage = 'Internal server error during analysis';
     let statusCode = 500;
 
@@ -330,4 +365,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errorMessage, details: error.message }, { status: statusCode });
   }
 }
-

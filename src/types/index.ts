@@ -42,10 +42,10 @@ export interface PullRequest {
   files: CodeFile[];
   createdAt: Date;
   updatedAt: Date;
-  // branch field can be added if we store head.ref from GitHub PR data
-  // e.g. branch?: string;
   analysis?: CodeAnalysis | string; // Can be ObjectId string or populated object
   userId?: string;
+  analysisStatus?: 'analyzed' | 'pending' | 'failed' | 'not_started';
+  qualityScore?: number | null;
 }
 
 export interface SecurityIssue {

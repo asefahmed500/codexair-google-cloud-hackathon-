@@ -542,5 +542,3 @@ function AnalysisDetailsLoadingSkeleton() {
     </div>
   );
 }
-
-    
