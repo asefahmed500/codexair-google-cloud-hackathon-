@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { CodeAnalysis, PullRequest as PRType, SecurityIssue, Suggestion, FileAnalysisItem, SimilarCodeResult } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +20,7 @@ import Navbar from '@/components/layout/navbar';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
-const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated.";
+const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated for this pull request.";
 
 export default function AnalysisDetailsPage() {
   const params = useParams();
@@ -39,7 +39,7 @@ export default function AnalysisDetailsPage() {
   const [similarCodeResults, setSimilarCodeResults] = useState<SimilarCodeResult[]>([]);
   const [isSearchingSimilarCode, setIsSearchingSimilarCode] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [currentSearchContext, setCurrentSearchContext] = useState<{type: 'security' | 'suggestion', title: string} | null>(null);
+  const [currentSearchContext, setCurrentSearchContext] = useState<{type: 'security' | 'suggestion', title: string, filename: string} | null>(null);
 
 
   useEffect(() => {
@@ -49,7 +49,10 @@ export default function AnalysisDetailsPage() {
       setLoading(true);
       fetch(`/api/analysis-results/${analysisId}`)
         .then(res => {
-          if (!res.ok) throw new Error('Failed to fetch analysis details');
+          if (!res.ok) {
+            const errorData = res.json();
+            return errorData.then(err => { throw new Error(err.details || err.error || 'Failed to fetch analysis details')});
+          }
           return res.json();
         })
         .then(data => {
@@ -60,6 +63,7 @@ export default function AnalysisDetailsPage() {
           console.error(err);
           setError(err.message);
           setLoading(false);
+          toast({ title: "Error", description: err.message, variant: "destructive" });
         });
     }
   }, [status, router, analysisId]);
@@ -69,7 +73,7 @@ export default function AnalysisDetailsPage() {
     setIsSearchingSimilarCode(true);
     setSearchError(null);
     setSimilarCodeResults([]);
-    setCurrentSearchContext({ type, title: contextTitle});
+    setCurrentSearchContext({ type, title: contextTitle, filename: queryFilename});
 
     try {
       const response = await fetch('/api/search/similar-code', {
@@ -84,7 +88,7 @@ export default function AnalysisDetailsPage() {
       const data = await response.json();
       setSimilarCodeResults(data.results || []);
       if ((data.results || []).length === 0) {
-        toast({ title: "No Similar Code Found", description: "Could not find significantly similar code snippets from recent analyses."});
+        toast({ title: "No Similar Code Found", description: `Could not find significantly similar code patterns related to "${contextTitle}" in ${queryFilename} from recent analyses.`});
       }
     } catch (err: any) {
       setSearchError(err.message);
@@ -119,7 +123,7 @@ export default function AnalysisDetailsPage() {
   }
   
   const { analysis, pullRequest } = analysisData;
-  const displayAiInsights = analysis.aiInsights && analysis.aiInsights !== FALLBACK_SUMMARY_MESSAGE 
+  const displayAiInsights = analysis.aiInsights && analysis.aiInsights !== FALLBACK_SUMMARY_MESSAGE && analysis.aiInsights.trim() !== ""
                             ? analysis.aiInsights
                             : "AI summary for this pull request is not available or could not be generated.";
 
@@ -141,6 +145,16 @@ export default function AnalysisDetailsPage() {
       default: return 'outline';
     }
   };
+  const getIssueTypeBadgeVariant = (type: Suggestion['type'] | SecurityIssue['type']) => {
+      switch (type) {
+          case 'bug': case 'vulnerability': return 'destructive';
+          case 'performance': case 'optimization': return 'default'; // Using 'default' for accent like orange
+          case 'style': case 'code_smell': return 'secondary';
+          case 'feature': return 'outline';
+          default: return 'outline';
+      }
+  };
+
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
@@ -168,9 +182,9 @@ export default function AnalysisDetailsPage() {
           </CardHeader>
            {analysis.aiInsights && (
             <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-muted/30">
-                <h3 className="font-semibold text-lg flex items-center gap-2"><Lightbulb className="h-5 w-5 text-accent" />AI Review Summary:</h3>
+                <h3 className="font-semibold text-lg flex items-center gap-2"><Lightbulb className="h-5 w-5 text-accent" />AI Review Summary (Overall PR):</h3>
                 <ScrollArea className="h-auto max-h-48 w-full rounded-md border p-4 bg-background shadow">
-                    <pre className={`text-sm whitespace-pre-wrap font-mono ${analysis.aiInsights === FALLBACK_SUMMARY_MESSAGE ? 'text-muted-foreground italic' : 'text-foreground'}`}>
+                    <pre className={`text-sm whitespace-pre-wrap font-mono ${analysis.aiInsights === FALLBACK_SUMMARY_MESSAGE || analysis.aiInsights.trim() === "" ? 'text-muted-foreground italic' : 'text-foreground'}`}>
                         {displayAiInsights}
                     </pre>
                 </ScrollArea>
@@ -213,7 +227,7 @@ export default function AnalysisDetailsPage() {
                             <div className="flex items-center justify-between w-full">
                               <span className="font-medium text-left">{issue.title}</span>
                               <div className="flex items-center gap-2">
-                                 <Badge variant={getSeverityBadgeVariant(issue.severity)}>{issue.severity}</Badge>
+                                 <Badge variant={getSeverityBadgeVariant(issue.severity)} className="capitalize">{issue.severity}</Badge>
                                   <span className="text-xs text-muted-foreground">{issue.file}:{issue.line || 'N/A'}</span>
                               </div>
                             </div>
@@ -232,9 +246,9 @@ export default function AnalysisDetailsPage() {
                                 size="sm" 
                                 className="p-0 h-auto text-xs mt-2 text-primary hover:underline"
                                 onClick={() => handleFindSimilarCode(issue.file, issue.title, 'security')}
-                                disabled={isSearchingSimilarCode}
+                                disabled={isSearchingSimilarCode && currentSearchContext?.filename === issue.file && currentSearchContext?.title === issue.title}
                               >
-                                {isSearchingSimilarCode && currentSearchContext?.type === 'security' && currentSearchContext?.title === issue.title ? 
+                                {isSearchingSimilarCode && currentSearchContext?.filename === issue.file && currentSearchContext?.title === issue.title ? 
                                   <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> : 
                                   <><Search className="mr-1 h-3 w-3" />Find similar past issues</>
                                 }
@@ -261,14 +275,14 @@ export default function AnalysisDetailsPage() {
                            <div className="flex items-center justify-between w-full">
                               <span className="font-medium text-left">{suggestion.title}</span>
                                <div className="flex items-center gap-2">
-                                  <Badge variant={getPriorityBadgeVariant(suggestion.priority)}>{suggestion.priority}</Badge>
+                                  <Badge variant={getIssueTypeBadgeVariant(suggestion.type)} className="capitalize">{suggestion.type.replace(/_/g, ' ')}</Badge>
+                                  <Badge variant={getPriorityBadgeVariant(suggestion.priority)} className="capitalize">{suggestion.priority}</Badge>
                                   <span className="text-xs text-muted-foreground">{suggestion.file}:{suggestion.line || 'N/A'}</span>
                               </div>
                             </div>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 bg-secondary/30 rounded-b-md space-y-2">
                             <p className="text-sm"><strong className="text-foreground">Description:</strong> {suggestion.description}</p>
-                            <p className="text-sm"><strong className="text-foreground">Type:</strong> <Badge variant="outline" className="capitalize">{suggestion.type}</Badge></p>
                             <p className="text-sm"><strong className="text-foreground">File:</strong> {suggestion.file} {suggestion.line && `(Line: ${suggestion.line})`}</p>
                             {suggestion.codeExample && (
                               <>
@@ -284,11 +298,11 @@ export default function AnalysisDetailsPage() {
                                 size="sm" 
                                 className="p-0 h-auto text-xs mt-2 text-primary hover:underline"
                                 onClick={() => handleFindSimilarCode(suggestion.file, suggestion.title, 'suggestion')}
-                                disabled={isSearchingSimilarCode}
+                                disabled={isSearchingSimilarCode && currentSearchContext?.filename === suggestion.file && currentSearchContext?.title === suggestion.title}
                               >
-                                {isSearchingSimilarCode && currentSearchContext?.type === 'suggestion' && currentSearchContext?.title === suggestion.title ? 
+                                {isSearchingSimilarCode && currentSearchContext?.filename === suggestion.file && currentSearchContext?.title === suggestion.title ? 
                                   <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> : 
-                                  <><Search className="mr-1 h-3 w-3" />Find similar past issues</>
+                                  <><Search className="mr-1 h-3 w-3" />Find similar past patterns</>
                                 }
                               </Button>
                             </DialogTrigger>
@@ -315,7 +329,8 @@ export default function AnalysisDetailsPage() {
                                   <Code2 className="h-4 w-4 text-muted-foreground" />
                                   <span className="font-medium text-left">{file.filename}</span>
                                </div>
-                              <Badge variant={file.qualityScore >= 7 ? "default" : file.qualityScore >=4 ? "outline" : "destructive"}>
+                              <Badge variant={file.qualityScore >= 7 ? "default" : file.qualityScore >=4 ? "outline" : "destructive"} 
+                                     className={file.qualityScore >= 7 ? 'bg-green-100 text-green-700 border-green-300' : file.qualityScore >=4 ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-red-100 text-red-700 border-red-300'}>
                                   QS: {file.qualityScore.toFixed(1)}
                               </Badge>
                             </div>
@@ -325,14 +340,19 @@ export default function AnalysisDetailsPage() {
                               <p><strong className="text-foreground">Quality Score:</strong> {file.qualityScore.toFixed(1)}</p>
                               <p><strong className="text-foreground">Complexity:</strong> {file.complexity.toFixed(1)}</p>
                               <p><strong className="text-foreground">Maintainability:</strong> {file.maintainability.toFixed(1)}</p>
-                              <p><strong className="text-foreground">Lines of Code Analyzed:</strong> {file.metrics.linesOfCode}</p>
+                              <p><strong className="text-foreground">Lines of Code:</strong> {file.metrics.linesOfCode}</p>
                             </div>
                             <Separator/>
                             <div>
                               <h4 className="font-semibold text-foreground mb-1">Security Issues ({file.securityIssues.length}):</h4>
                               {file.securityIssues.length > 0 ? (
                                   <ul className="list-disc pl-5 space-y-1 text-xs">
-                                  {file.securityIssues.map((si, i) => <li key={i}>{si.title} (<span className={`font-semibold ${si.severity === 'critical' || si.severity === 'high' ? 'text-destructive' : ''}`}>{si.severity}</span>)</li>)}
+                                  {file.securityIssues.map((si, i) => (
+                                      <li key={`sec-${i}`}>
+                                        {si.title} (<Badge variant={getSeverityBadgeVariant(si.severity)} className="capitalize text-[10px] px-1 py-0">{si.severity}</Badge>)
+                                        {si.cwe && <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0">{si.cwe}</Badge>}
+                                      </li>
+                                  ))}
                                   </ul>
                               ) : <p className="text-xs text-muted-foreground">None</p>}
                             </div>
@@ -340,11 +360,16 @@ export default function AnalysisDetailsPage() {
                               <h4 className="font-semibold text-foreground mb-1">Suggestions ({file.suggestions.length}):</h4>
                                {file.suggestions.length > 0 ? (
                                   <ul className="list-disc pl-5 space-y-1 text-xs">
-                                  {file.suggestions.map((s, i) => <li key={i}>{s.title} ({s.priority} priority)</li>)}
+                                  {file.suggestions.map((s, i) => (
+                                    <li key={`sug-${i}`}>
+                                        {s.title} (<Badge variant={getPriorityBadgeVariant(s.priority)} className="capitalize text-[10px] px-1 py-0">{s.priority}</Badge>
+                                        <Badge variant={getIssueTypeBadgeVariant(s.type)} className="ml-1 capitalize text-[10px] px-1 py-0">{s.type.replace(/_/g, ' ')}</Badge>)
+                                    </li>
+                                  ))}
                                   </ul>
                               ) : <p className="text-xs text-muted-foreground">None</p>}
                             </div>
-                             {file.aiInsights && (
+                             {file.aiInsights && file.aiInsights.trim() !== "" && (
                               <div>
                                   <h4 className="font-semibold text-foreground mb-1">AI Insights for this file:</h4>
                                   <ScrollArea className="h-24 w-full rounded-md border bg-background p-2 shadow-inner">
@@ -364,9 +389,9 @@ export default function AnalysisDetailsPage() {
           
           <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Similar Code Found for: <span className="text-primary">{currentSearchContext?.title || "Selected Issue"}</span></DialogTitle>
+              <DialogTitle>Similar Code Found: <span className="text-primary">{currentSearchContext?.title || "Selected Issue"}</span> ({currentSearchContext?.filename})</DialogTitle>
               <DialogDescription>
-                Showing code snippets from past analyses that are semantically similar to the context of <span className="font-semibold">"{currentSearchContext?.title || "the selected issue/suggestion"}"</span>.
+                Showing code snippets from past analyses that are semantically similar to the context of <span className="font-semibold">"{currentSearchContext?.title || "the selected issue/suggestion"}"</span> from file <code className="bg-muted px-1 py-0.5 rounded text-xs">{currentSearchContext?.filename}</code>.
               </DialogDescription>
             </DialogHeader>
             {isSearchingSimilarCode && 
@@ -401,7 +426,7 @@ export default function AnalysisDetailsPage() {
                         <CardDescription className="text-xs">
                           Found in <code className="bg-background px-1 py-0.5 rounded text-xs">{result.filename}</code> (repo: {result.owner}/{result.repoName})
                           <br/>
-                          By: {result.prAuthorLogin || 'N/A'} on {format(new Date(result.prCreatedAt), 'MMM d, yyyy')}
+                          By: {result.prAuthorLogin || 'N/A'} on {result.prCreatedAt ? format(new Date(result.prCreatedAt), 'MMM d, yyyy') : 'N/A'}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
@@ -482,7 +507,12 @@ function AnalysisDetailsLoadingSkeleton() {
 
         {/* Tabs Skeleton */}
         <div className="w-full">
-            <Skeleton className="h-10 w-full grid grid-cols-2 sm:grid-cols-4 mb-6 p-1 rounded-md bg-muted" /> {/* Tabs List */}
+            <div className="grid w-full grid-cols-2 sm:grid-cols-4 mb-6 h-10 bg-muted p-1 rounded-md">
+              <Skeleton className="h-full w-full rounded-sm" />
+              <Skeleton className="h-full w-full rounded-sm" />
+              <Skeleton className="h-full w-full rounded-sm" />
+              <Skeleton className="h-full w-full rounded-sm" />
+            </div>
             
             {/* Tab Content Skeleton (Showing Overview as example) */}
             <Card>
@@ -511,3 +541,4 @@ function AnalysisDetailsLoadingSkeleton() {
     </div>
   );
 }
+

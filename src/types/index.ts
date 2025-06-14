@@ -80,7 +80,7 @@ export interface FileAnalysisItem {
   securityIssues: SecurityIssue[];
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics;
-  aiInsights: string;
+  aiInsights: string; // Per-file AI insights
   vectorEmbedding?: number[];
 }
 
@@ -93,7 +93,7 @@ export interface CodeAnalysis {
   securityIssues: SecurityIssue[];
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics;
-  aiInsights: string; 
+  aiInsights: string; // Overall PR AI insights
   fileAnalyses?: FileAnalysisItem[];
   createdAt: Date;
 }
@@ -167,7 +167,7 @@ export interface DashboardData {
   topSuggestions: TopIssueItem[];
   securityHotspots: SecurityHotspotItem[];
   teamMetrics: TeamMemberMetric[];
-  connectedRepositories: ConnectedRepositoryItem[]; // Added this line
+  connectedRepositories: ConnectedRepositoryItem[]; 
 }
 
 export interface SimilarCodeResult {
@@ -217,5 +217,4 @@ export interface AuditLogEntry {
   targetUserEmail?: string;
   details?: any; // Store arbitrary JSON details
 }
-
 

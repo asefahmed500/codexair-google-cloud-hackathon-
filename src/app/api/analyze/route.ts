@@ -11,6 +11,8 @@ import { ai } from '@/ai/genkit';
 
 const MAX_FILES_TO_ANALYZE = 10; 
 const EMBEDDING_DIMENSIONS = 768;
+const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated for this pull request.";
+
 
 /**
  * Extracts added lines from a git patch string.
@@ -103,7 +105,8 @@ export async function POST(request: NextRequest) {
     const filesToConsider = ghFiles
       .filter(file => 
         (file.status === 'added' || file.status === 'modified' || file.status === 'renamed') &&
-        file.filename?.match(/\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i)
+        file.filename?.match(/\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i) &&
+        (file.changes || 0) < 2000 // Filter out extremely large diffs for individual file content fetching (safety)
       )
       .slice(0, MAX_FILES_TO_ANALYZE);
 
@@ -141,9 +144,10 @@ export async function POST(request: NextRequest) {
           
           console.log(`[API/ANALYZE] Analyzing ${file.filename} (context: ${analysisContext}, length: ${contentToAnalyze.length} chars)`);
 
-          if (contentToAnalyze.length > 70000) { 
-             console.warn(`[API/ANALYZE] Content for ${file.filename} is too large (${contentToAnalyze.length} chars), truncating to 70000.`);
-             contentToAnalyze = contentToAnalyze.substring(0, 70000);
+          const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 70000; // Max chars for AI model
+          if (contentToAnalyze.length > MAX_CONTENT_LENGTH_FOR_ANALYSIS) { 
+             console.warn(`[API/ANALYZE] Content for ${file.filename} is too large (${contentToAnalyze.length} chars), truncating to ${MAX_CONTENT_LENGTH_FOR_ANALYSIS}.`);
+             contentToAnalyze = contentToAnalyze.substring(0, MAX_CONTENT_LENGTH_FOR_ANALYSIS);
           }
 
           const aiResponse: AIAnalysisOutput = await analyzeCode({ code: contentToAnalyze, filename: file.filename });
@@ -159,7 +163,7 @@ export async function POST(request: NextRequest) {
               let rawEmbedding = embeddingResult.output;
               if (Array.isArray(rawEmbedding) && rawEmbedding.every(n => typeof n === 'number')) {
                   fileEmbedding = rawEmbedding;
-              } else if (rawEmbedding && typeof rawEmbedding === 'object') { // Handle nested structures if any model returns that
+              } else if (rawEmbedding && typeof rawEmbedding === 'object') { 
                   if ('embedding' in rawEmbedding && Array.isArray(rawEmbedding.embedding)) fileEmbedding = rawEmbedding.embedding;
                   else if ('vector' in rawEmbedding && Array.isArray(rawEmbedding.vector)) fileEmbedding = rawEmbedding.vector;
               }
@@ -189,7 +193,7 @@ export async function POST(request: NextRequest) {
             securityIssues: aiResponse.securityIssues || [],
             suggestions: aiResponse.suggestions || [],
             metrics: aiResponse.metrics || { linesOfCode: 0, cyclomaticComplexity: 0, cognitiveComplexity: 0, duplicateBlocks: 0 },
-            aiInsights: aiResponse.aiInsights || '', // This is the per-file AI insight
+            aiInsights: aiResponse.aiInsights || '', 
             vectorEmbedding: fileEmbedding,
           };
         } catch (error: any) {
@@ -213,7 +217,7 @@ export async function POST(request: NextRequest) {
     const totalHighIssues = allSecurityIssues.filter(s => s.severity === 'high').length;
 
     // Step 5.5: Generate PR-level summary using the new flow
-    let prLevelSummary = 'Overall analysis summary could not be generated.';
+    let prLevelSummary = FALLBACK_SUMMARY_MESSAGE;
     if (totalAnalyzedFiles > 0) {
         try {
             const summaryInput = {
@@ -246,7 +250,7 @@ export async function POST(request: NextRequest) {
         cognitiveComplexity: totalAnalyzedFiles > 0 ? parseFloat((fileAnalysesResults.reduce((sum, a) => sum + (a.metrics?.cognitiveComplexity || 0), 0) / totalAnalyzedFiles).toFixed(1)) : 0,
         duplicateBlocks: fileAnalysesResults.reduce((sum, fa) => sum + (fa.metrics?.duplicateBlocks || 0), 0),
       },
-      aiInsights: prLevelSummary, // Use the new PR-level summary
+      aiInsights: prLevelSummary, 
       fileAnalyses: fileAnalysesResults,
     };
     

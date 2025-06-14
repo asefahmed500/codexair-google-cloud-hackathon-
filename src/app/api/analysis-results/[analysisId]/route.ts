@@ -38,10 +38,16 @@ export async function GET(
     
     // Check if the user has permission to view this analysis
     // Admins can view any analysis.
-    // Regular users can only view analyses for PRs linked to their userId.
+    // Regular users can only view analyses for PRs linked to their userId (or PRs in repos they own/collaborate if that's the logic).
+    // Assuming PRs are linked to a userId at creation time (e.g., user who initiated sync/analysis of that repo's PRs)
     if (session.user.role !== 'admin' && pullRequest.userId !== session.user.id) {
+        // Further check: if PR.userId is not set, but analysis is for a repo the user synced, allow.
+        // This might require fetching the Repository document linked to the PullRequest.
+        // For simplicity now, strictly checking pullRequest.userId against session.user.id for non-admins.
+        // This implies that pullRequest.userId must be correctly set when the PR is first created/synced in our DB.
         return NextResponse.json({ error: 'Access to this pull request analysis is denied' }, { status: 403 });
     }
+
 
     return NextResponse.json({ analysis, pullRequest });
 
@@ -50,5 +56,4 @@ export async function GET(
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-
 
