@@ -34,6 +34,7 @@ const explainCodePrompt = ai.definePrompt({
   output: {schema: ExplainCodeOutputSchema},
   prompt: `You are an expert AI programming assistant. A user has provided a code snippet{{#if language}} written in {{language}}{{/if}} and a question about it.
 Analyze the code carefully and provide a clear, concise, and helpful explanation in response to the user's question.
+Consider aspects like logic, potential risks (security, bugs), edge cases, and possible improvements if relevant to the question.
 
 User's Question: "{{{question}}}"
 
@@ -54,8 +55,13 @@ const explainCodeFlow = ai.defineFlow(
   },
   async (input) => {
     const {output} = await explainCodePrompt(input);
+    if (!output || !output.explanation || output.explanation.trim() === "") {
+        console.warn("[explainCodeFlow] AI failed to generate an explanation. Input was:", input);
+        return { explanation: "Sorry, I couldn't generate an explanation for this code and question. Please try rephrasing or providing more context." };
+    }
     return output!;
   }
 );
+
 
 
