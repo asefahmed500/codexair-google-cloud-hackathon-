@@ -10,11 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import Navbar from '@/components/layout/navbar';
 import { PullRequest as PRType, CodeAnalysis, SecurityIssue, Suggestion, CodeFile, Repository as RepoType } from '@/types';
-import { ArrowLeftRight, Github, AlertTriangle, Lightbulb, FileText, CalendarDays, User, CheckCircle, XCircle, FileWarning, RefreshCw, GitPullRequest } from 'lucide-react';
+import { ArrowLeftRight, Github, AlertTriangle, Lightbulb, FileText, CalendarDays, User, CheckCircle, XCircle, FileWarning, RefreshCw, GitPullRequest, GitBranch } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
@@ -38,33 +38,43 @@ export default function PRComparisonPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchPRData = async (prNumber: string): Promise<FullPRData | null> => {
+    try {
+      const res = await fetch(`/api/pullrequests/details/${owner}/${repoName}/${prNumber}`);
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(`Failed to fetch PR #${prNumber}: ${errData.error || res.statusText}`);
+      }
+      const data = await res.json();
+      return { 
+        pullRequest: data.pullRequest, 
+        analysis: data.pullRequest.analysis || undefined
+      };
+    } catch (e: any) {
+      console.error(`Error fetching PR #${prNumber}:`, e);
+      setError(prev => `${prev ? prev + '; ' : ''}Error fetching PR #${prNumber}: ${e.message}`);
+      return null;
+    }
+  };
+  
+  const refreshSpecificPRData = async (prNum: string, isPr1: boolean) => {
+    const data = await fetchPRData(prNum);
+    if (data) {
+      if (isPr1) setPrData1(data);
+      else setPrData2(data);
+      toast({title: `PR #${prNum} Data Refreshed`, description: "Latest analysis status updated."});
+    } else {
+      toast({title: "Refresh Failed", description: `Could not refresh data for PR #${prNum}.`, variant: "destructive"});
+    }
+  }
+
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
       return;
     }
     if (status === 'authenticated' && owner && repoName && prNumber1 && prNumber2) {
-      const fetchPRData = async (prNumber: string): Promise<FullPRData | null> => {
-        try {
-          // Ensure owner and repoName are correctly passed
-          const res = await fetch(`/api/pullrequests/details/${owner}/${repoName}/${prNumber}`);
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(`Failed to fetch PR #${prNumber}: ${errData.error || res.statusText}`);
-          }
-          const data = await res.json();
-          // API response structure: { pullRequest: { ...prData, analysis: { ...analysisData } | null } }
-          return { 
-            pullRequest: data.pullRequest, 
-            analysis: data.pullRequest.analysis || undefined // Ensure analysis is explicitly undefined if null/missing
-          };
-        } catch (e: any) {
-          console.error(`Error fetching PR #${prNumber}:`, e);
-          setError(prev => `${prev ? prev + '; ' : ''}Error fetching PR #${prNumber}: ${e.message}`);
-          return null;
-        }
-      };
-
       setLoading(true);
       setError(null);
       Promise.all([fetchPRData(prNumber1), fetchPRData(prNumber2)])
@@ -142,8 +152,8 @@ export default function PRComparisonPage() {
         </Card>
 
         <div className="grid md:grid-cols-2 gap-6">
-          <PRDetailsColumn prData={prData1} owner={owner} repoName={repoName} prNumber={prNumber1} getSeverityBadgeVariant={getSeverityBadgeVariant} getPriorityBadgeVariant={getPriorityBadgeVariant} />
-          <PRDetailsColumn prData={prData2} owner={owner} repoName={repoName} prNumber={prNumber2} getSeverityBadgeVariant={getSeverityBadgeVariant} getPriorityBadgeVariant={getPriorityBadgeVariant} />
+          <PRDetailsColumn prData={prData1} owner={owner} repoName={repoName} prNumber={prNumber1} getSeverityBadgeVariant={getSeverityBadgeVariant} getPriorityBadgeVariant={getPriorityBadgeVariant} onAnalysisComplete={() => refreshSpecificPRData(prNumber1, true)} />
+          <PRDetailsColumn prData={prData2} owner={owner} repoName={repoName} prNumber={prNumber2} getSeverityBadgeVariant={getSeverityBadgeVariant} getPriorityBadgeVariant={getPriorityBadgeVariant} onAnalysisComplete={() => refreshSpecificPRData(prNumber2, false)} />
         </div>
       </main>
       <footer className="py-6 border-t bg-background">
@@ -162,11 +172,11 @@ interface PRDetailsColumnProps {
   prNumber: string;
   getSeverityBadgeVariant: (severity: SecurityIssue['severity']) => "default" | "destructive" | "secondary" | "outline" | null | undefined;
   getPriorityBadgeVariant: (priority: Suggestion['priority']) => "default" | "destructive" | "secondary" | "outline" | null | undefined;
+  onAnalysisComplete: () => void;
 }
 
-function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVariant, getPriorityBadgeVariant }: PRDetailsColumnProps) {
+function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVariant, getPriorityBadgeVariant, onAnalysisComplete }: PRDetailsColumnProps) {
   const { pullRequest, analysis } = prData;
-  const router = useRouter();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleAnalyzePR = async (prNumToAnalyze: number) => {
@@ -182,11 +192,9 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to start analysis');
       }
-      const result = await response.json();
-      toast({ title: "Analysis Started", description: `Analysis for PR #${prNumToAnalyze} is in progress. Navigate to its analysis page to view results.` });
-      // To reflect the new analysis, ideally, we'd re-fetch or update this specific prData.
-      // For now, we'll rely on the toast and potential navigation by the user.
-      // A more advanced solution might involve a global state or context for PR data.
+      // const result = await response.json(); // Not strictly needed here unless we use result.analysis._id
+      toast({ title: "Analysis Started", description: `Analysis for PR #${prNumToAnalyze} is in progress. This view will update shortly.` });
+      onAnalysisComplete(); // Notify parent to refresh this PR's data
     } catch (err: any) {
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
     } finally {
@@ -211,6 +219,13 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
         <CardDescription className="text-xs flex flex-col gap-1 mt-1">
            <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />By: {pullRequest.author?.login || 'N/A'}</span>
            <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Created: {format(new Date(pullRequest.createdAt), "MMM d, yyyy")}</span>
+           {/* Branch name is not explicitly stored in PRType, would require GitHub API call or modification to how PRs are stored if vital here */}
+           {/* For now, it's shown on the PR listing page */}
+            <span className="flex items-center gap-1.5">
+                <GitBranch className="h-3.5 w-3.5" />
+                {/* Branch: {pullRequest.branch || 'N/A'}  This field isn't on PRType directly */}
+                Lines: <span className="text-green-600">+{pullRequest.files.reduce((sum, f) => sum + f.additions, 0)}</span> / <span className="text-red-600">-{pullRequest.files.reduce((sum, f) => sum + f.deletions, 0)}</span>
+            </span>
            <Badge variant={pullRequest.state === 'open' ? 'default' : 'secondary'} className={`w-fit mt-1 ${pullRequest.state === 'open' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
             {pullRequest.state}
            </Badge>
@@ -225,7 +240,7 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
             <TabsTrigger value="suggestions" className="py-1.5">Suggestions ({analysis?.suggestions?.length || 0})</TabsTrigger>
           </TabsList>
           
-          <ScrollArea className="h-[60vh] md:h-[450px] pr-2">
+          <ScrollArea className="h-[calc(60vh_-_50px)] md:h-[400px] pr-2"> {/* Adjusted height */}
             <TabsContent value="overview">
               <h4 className="font-semibold mb-2 text-sm">PR Description:</h4>
               {pullRequest.body ? (
@@ -300,7 +315,7 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
               {analysis?.securityIssues?.length > 0 ? (
                 <Accordion type="single" collapsible className="w-full">
                   {analysis.securityIssues.map((issue, index) => (
-                    <AccordionItem value={`sec-issue-${index}`} key={index} className="border-b-0 mb-1.5">
+                    <AccordionItem value={`sec-issue-${index}-${prNumber}`} key={index} className="border-b-0 mb-1.5">
                       <AccordionTrigger className="text-xs p-2 bg-muted/30 hover:bg-muted/50 rounded-md data-[state=open]:rounded-b-none">
                         <div className="flex items-center justify-between w-full">
                             <span className="font-medium text-left truncate pr-2" title={issue.title}>{issue.title}</span>
@@ -323,7 +338,7 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
               {analysis?.suggestions?.length > 0 ? (
                 <Accordion type="single" collapsible className="w-full">
                   {analysis.suggestions.map((suggestion, index) => (
-                    <AccordionItem value={`sug-issue-${index}`} key={index} className="border-b-0 mb-1.5">
+                    <AccordionItem value={`sug-issue-${index}-${prNumber}`} key={index} className="border-b-0 mb-1.5">
                       <AccordionTrigger className="text-xs p-2 bg-muted/30 hover:bg-muted/50 rounded-md data-[state=open]:rounded-b-none">
                         <div className="flex items-center justify-between w-full">
                             <span className="font-medium text-left truncate pr-2" title={suggestion.title}>{suggestion.title}</span>

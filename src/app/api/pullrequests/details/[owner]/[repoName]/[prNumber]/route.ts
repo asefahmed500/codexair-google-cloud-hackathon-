@@ -30,39 +30,31 @@ export async function GET(
     if (session.user.role === 'admin') {
       localRepo = await Repository.findOne({ fullName: repoFullName });
       if (!localRepo) {
-        // If an admin tries to access a repo not synced by anyone, it's effectively not in our system.
         return NextResponse.json({ error: `Repository ${repoFullName} not found in the system.` }, { status: 404 });
       }
     } else {
-      // Regular users can only access PRs from repositories associated with them
       localRepo = await Repository.findOne({ fullName: repoFullName, userId: session.user.id });
       if (!localRepo) {
           return NextResponse.json({ error: `Repository ${repoFullName} not found or not associated with the current user.` }, { status: 404 });
       }
     }
 
-    // Build the query based on role
     const query: any = {
       repositoryId: localRepo._id.toString(),
       number: prNumber,
     };
 
-    // Regular users can only access PRs linked to their userId, if such a check is desired on the PR document itself
-    // For now, access is controlled by whether they can access the parent repository.
-    // if (session.user.role !== 'admin' && localRepo.userId !== session.user.id) {
-    //   query.userId = session.user.id; // This line might be redundant if repo access is the main check
-    // }
 
     const pullRequest = await PullRequest.findOne(query)
-      .populate('analysis') // Populate the analysis field
+      .populate('analysis') 
       .lean();
 
     if (!pullRequest) {
-      return NextResponse.json({ error: 'Pull Request not found or access denied' }, { status: 404 });
+      // Attempt to fetch from GitHub if not found locally - this might be desired for comparison if one PR isn't in DB yet
+      // For now, this API strictly fetches from local DB. If we want to fetch from GH as fallback, that's a separate logic.
+      return NextResponse.json({ error: 'Pull Request not found in local database or access denied' }, { status: 404 });
     }
     
-    // Ensure the populated analysis object (if it exists) is fully sent.
-    // If analysis is just an ID, it means it wasn't populated or doesn't exist, which is fine.
     return NextResponse.json({ pullRequest });
 
   } catch (error: any) {
@@ -70,5 +62,6 @@ export async function GET(
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
+
 
 

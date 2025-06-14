@@ -21,7 +21,7 @@ export interface CodeFile {
   deletions: number;
   changes: number;
   patch: string;
-  content?: string;
+  content?: string; // Full content of the file, if fetched
 }
 
 export interface PullRequest {
@@ -41,6 +41,8 @@ export interface PullRequest {
   files: CodeFile[];
   createdAt: Date;
   updatedAt: Date;
+  // branch field can be added if we store head.ref from GitHub PR data
+  // e.g. branch?: string;
   analysis?: CodeAnalysis | string; // Can be ObjectId string or populated object
   userId?: string;
 }
@@ -217,4 +219,5 @@ export interface AuditLogEntry {
   targetUserEmail?: string;
   details?: any; // Store arbitrary JSON details
 }
+
 
