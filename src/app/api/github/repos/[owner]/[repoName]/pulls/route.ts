@@ -25,11 +25,20 @@ export async function GET(
     
     const repoFullName = `${owner}/${repoName}`;
 
-    const localRepo = await Repository.findOne({ fullName: repoFullName, userId: session.user.id });
+    // Ensure the user has this repository synced/connected in our system
+    // For admins, this check might be different or skipped if they should see all system PRs.
+    // For now, assuming non-admins can only see PRs of repos they've synced.
+    let localRepoQuery: any = { fullName: repoFullName };
+    if (session.user.role !== 'admin') {
+      localRepoQuery.userId = session.user.id;
+    }
+    
+    const localRepo = await Repository.findOne(localRepoQuery);
     if (!localRepo) {
-        return NextResponse.json({ error: `Repository ${repoFullName} not associated with user or not found.` }, { status: 404 });
+        return NextResponse.json({ error: `Repository ${repoFullName} not associated with user or not found in system.` }, { status: 404 });
     }
 
+    // Fetch open PRs from GitHub by default. Could be made configurable via query params.
     const githubPRs = await getGitHubPullRequests(owner, repoName, 'open', 1, 50); 
 
     const prNumbersFromGithub = githubPRs.map(pr => pr.number);
@@ -45,7 +54,7 @@ export async function GET(
       if (localMatch?.analysis) {
         analysisStatus = 'analyzed';
       }
-      // Note: 'pending' and 'failed' statuses would typically be set by the analysis background job/process
+      // "pending" and "failed" statuses are typically client-side optimistic updates or from a background job system.
       // For this API, we primarily know if an analysis record exists ('analyzed') or not ('not_started').
 
       return {
@@ -53,7 +62,7 @@ export async function GET(
         number: ghPR.number,
         title: ghPR.title,
         body: ghPR.body,
-        state: ghPR.state, 
+        state: ghPR.state as "open" | "closed" | "merged", 
         html_url: ghPR.html_url,
         created_at: ghPR.created_at,
         updated_at: ghPR.updated_at,
@@ -61,8 +70,10 @@ export async function GET(
             login: ghPR.user?.login || 'unknown',
             avatar_url: ghPR.user?.avatar_url || ''
         },
-        _id: localMatch?._id?.toString(), 
-        author: localMatch?.author || { login: ghPR.user?.login || 'unknown', avatar: ghPR.user?.avatar_url || '' }, 
+        branch: ghPR.head?.ref, // Branch name from head.ref
+        // Local DB derived data
+        _id: localMatch?._id?.toString(), // Our DB's PullRequest document _id
+        author: localMatch?.author || { login: ghPR.user?.login || 'unknown', avatar: ghPR.user?.avatar_url || '' }, // Prefer local DB stored author if available
         analysisStatus: analysisStatus,
         analysisId: localMatch?.analysis?._id?.toString() || (typeof localMatch?.analysis === 'string' ? localMatch.analysis : undefined),
         qualityScore: (localMatch?.analysis as any)?.qualityScore, 
@@ -79,44 +90,3 @@ export async function GET(
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-
-// This local DB fetch function might be used if you want to list PRs that are ONLY in your DB
-// (e.g., including closed ones for which you have analysis), separate from live GitHub state.
-// For the main PR listing, the above GET that merges with live GitHub data is preferred.
-export async function _getLocalPullRequests( 
-  request: NextRequest,
-  { params }: { params: { owner: string; repoName: string } }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    await connectMongoose();
-    const { owner, repoName } = params;
-    const repoFullName = `${owner}/${repoName}`;
-    
-    const localRepo = await Repository.findOne({ fullName: repoFullName, userId: session.user.id });
-    if (!localRepo) {
-        return NextResponse.json({ error: `Repository ${repoFullName} not associated with user or not found.` }, { status: 404 });
-    }
-
-    const pullRequests = await LocalPullRequest.find({ repositoryId: localRepo._id.toString() })
-      .sort({ number: -1 })
-      .populate('analysis', '_id qualityScore') 
-      .lean();
-    
-    const augmentedPRs = pullRequests.map(pr => ({
-      ...pr,
-      analysisStatus: pr.analysis ? 'analyzed' : 'not_started',
-      analysisId: pr.analysis?._id?.toString() || (typeof pr.analysis === 'string' ? pr.analysis : undefined),
-      qualityScore: (pr.analysis as any)?.qualityScore, // if populated
-    }));
-
-    return NextResponse.json({ pullRequests: augmentedPRs });
-  } catch (error: any) {
-    console.error(`Error fetching DB PRs for ${params.owner}/${params.repoName}:`, error);
-    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
-  }
-}
-
