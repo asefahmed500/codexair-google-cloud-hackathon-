@@ -65,53 +65,51 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user, account, profile }) {
       await connectMongoose();
-      console.log(`[JWT Callback Entry] token.id: ${token.id}, user?.id: ${user?.id}, account: ${!!account}, profile name: ${profile?.name}`);
+      // console.log(`[JWT Callback Entry] token.id: ${token.id}, user?.id: ${user?.id}, account: ${!!account}, profile name: ${profile?.name}`);
 
-      // This block handles the initial sign-in flow when 'account' and 'user' (from adapter) are present
+      // This block handles the initial sign-in flow when 'account' (from provider) and 'user' (from adapter) are present
       if (account && user && user.id) {
-        console.log(`[JWT Callback - Initial Sign-in] User ID from adapter: ${user.id}, Provider: ${account.provider}`);
+        console.log(`[JWT Callback - Initial Sign-in Flow] User ID from adapter: ${user.id}, Provider: ${account.provider}`);
         token.id = user.id; // This is the MongoDB _id as a string from adapter
         token.sub = user.id; // Standard 'sub' claim
         token.provider = account.provider;
-        token.accessToken = account.access_token;
+        if (account.access_token) token.accessToken = account.access_token;
 
-        // Fetch the user from DB to get role and other details set by adapter/schema
-        // This user (from user.id) should have been created by the adapter with default role 'user'
+
         const dbUserForToken = await UserModel.findById(user.id).select('role email status name image').lean();
         if (dbUserForToken) {
-          token.role = dbUserForToken.role; // Should be 'user' by default from schema
-          token.status = dbUserForToken.status;
+          // Ensure defaults are applied in the token if somehow not read from DB immediately
+          token.role = dbUserForToken.role || 'user'; // Default to 'user'
+          token.status = dbUserForToken.status || 'active'; // Default to 'active'
           token.email = dbUserForToken.email;
           token.name = dbUserForToken.name;
           token.picture = dbUserForToken.image;
 
-          console.log(`[JWT Callback - Initial Sign-in] DB user ${user.id} fetched. Current role from DB: '${dbUserForToken.role}'.`);
+          console.log(`[JWT Callback - Initial Sign-in] DB user ${user.id} fetched. Role from DB: '${dbUserForToken.role}', Status from DB: '${dbUserForToken.status}'. Effective Token Role: '${token.role}', Status: '${token.status}'.`);
 
           // FIRST USER PROMOTION LOGIC
-          // This runs only during the initial sign-in flow for this JWT (account is present)
-          if (dbUserForToken.role === 'user') { // Only attempt promotion if current role is 'user'
+          if (token.role === 'user') { // Check against the effective role in the token
             const totalUsersInSystem = await UserModel.countDocuments();
-            console.log(`[JWT Callback - Promotion Check] Total users in system: ${totalUsersInSystem}. Current user role: '${dbUserForToken.role}'.`);
+            console.log(`[JWT Callback - Promotion Check] Total users in system: ${totalUsersInSystem}. Current effective token role: '${token.role}'.`);
             if (totalUsersInSystem === 1) {
-              // This confirms this dbUserForToken (which has role 'user') is the only one.
-              console.log(`[JWT Callback - Promotion Action] Promoting User ID: ${user.id}, Email: ${dbUserForToken.email} to 'admin'.`);
+              // This user is the very first one. Promote to admin.
+              console.log(`[JWT Callback - Promotion Action] Promoting User ID: ${user.id}, Email: ${token.email} to 'admin'.`);
               await UserModel.updateOne({ _id: user.id }, { $set: { role: 'admin', status: 'active' } });
               token.role = 'admin'; // Update token immediately
               token.status = 'active';
             } else {
-              console.log(`[JWT Callback - No Promotion] Not the first user (Total users: ${totalUsersInSystem}). User ID: ${user.id} remains role: '${dbUserForToken.role}'.`);
+              console.log(`[JWT Callback - No Promotion] Not the first user (Total users: ${totalUsersInSystem}). User ID: ${user.id} remains role: '${token.role}'.`);
             }
-          } else if (dbUserForToken.role === 'admin') {
-            console.log(`[JWT Callback - Already Admin] User ID: ${user.id} is already 'admin'. No promotion check needed.`);
+          } else if (token.role === 'admin') {
+            console.log(`[JWT Callback - Already Admin or Promoted] User ID: ${user.id} is now 'admin'. No further promotion check needed.`);
           }
         } else {
-          console.error(`[JWT Callback - Initial Sign-in] CRITICAL: User ${user.id} not found in DB immediately after adapter processing.`);
+          console.error(`[JWT Callback - Initial Sign-in] CRITICAL: User ${user.id} not found in DB immediately after adapter processing. Cannot set role/status.`);
           delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture;
         }
       }
       // This block handles subsequent JWT validations (session refresh, etc.)
       else if (token.id && typeof token.id === 'string' && mongoose.Types.ObjectId.isValid(token.id)) {
-        // Refresh user data from DB
         const dbUser = await UserModel.findById(token.id).select('role email status name image').lean();
         if (dbUser) {
           token.role = dbUser.role;
@@ -124,11 +122,11 @@ export const authOptions: NextAuthOptions = {
           console.warn(`[JWT Callback - Subsequent] User with ID ${token.id} not found in DB. Clearing sensitive fields from token.`);
           delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture; delete token.id; delete token.sub;
         }
-      } else if (token.id) { // Invalid token.id format case (e.g., not an ObjectId string)
+      } else if (token.id) { 
         console.error(`[JWT Callback] Invalid token.id format: '${token.id}'. Clearing sensitive fields from token.`);
         delete token.id; delete token.sub; delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture;
       }
-      console.log(`[JWT Callback Exit] Final token for id '${token.id}': role='${token.role}', status='${token.status}'`);
+      // console.log(`[JWT Callback Exit] Final token for id '${token.id}': role='${token.role}', status='${token.status}'`);
       return token;
     },
 
@@ -142,20 +140,26 @@ export const authOptions: NextAuthOptions = {
       }
       if (token.role && session.user) {
         session.user.role = token.role as 'user' | 'admin';
+      } else if (session.user && !token.role) { // Ensure role is not undefined in session
+        session.user.role = 'user'; // Fallback default if token.role is missing
       }
+      
       if (token.status && session.user) {
         session.user.status = token.status as 'active' | 'suspended';
+      } else if (session.user && !token.status) { // Ensure status is not undefined
+        session.user.status = 'active'; // Fallback default if token.status is missing
       }
+
       if (token.email && session.user) {
         session.user.email = token.email as string;
       } else if (session.user && !token.email) {
          delete session.user.email;
       }
-      // Ensure name and image from token are passed to session.user
+      
       if (token.name && session.user) {
         session.user.name = token.name as string;
       }
-      if (token.picture && session.user) { // 'picture' from token corresponds to 'image' in session.user
+      if (token.picture && session.user) { 
         session.user.image = token.picture as string;
       }
       // console.log("[Session Callback] Session object created/updated:", JSON.stringify(session, null, 2));
@@ -164,7 +168,7 @@ export const authOptions: NextAuthOptions = {
 
     async signIn({ user, account, profile }) {
       await connectMongoose();
-      const userEmail = user?.email || profile?.email; // Use email from user obj first, then profile
+      const userEmail = user?.email || profile?.email; 
       const provider = account?.provider || 'unknown';
       console.log(`[SignIn Callback] Attempting sign-in for email: '${userEmail}', Provider: '${provider}'`);
 
@@ -173,28 +177,25 @@ export const authOptions: NextAuthOptions = {
         return `/auth/signin?error=SignInError&reason=missing_provider_details`;
       }
 
-      // Check for suspended status before allowing sign-in
       const dbUser = await UserModel.findOne({ email: userEmail }).select('status role').lean();
       if (dbUser && dbUser.status === 'suspended') {
         console.warn(`[SignIn Callback] Denied: Account for email '${userEmail}' is suspended.`);
         return `/auth/signin?error=AccountSuspended&email=${encodeURIComponent(userEmail)}`;
       }
-
-      // The adapter will handle user creation or retrieval.
-      // The role (default 'user') is set by the Mongoose schema when the adapter calls createUser.
-      // The first user promotion to 'admin' is now exclusively handled in the JWT callback
-      // after the user is confirmed to be in the database and their initial role is 'user'.
+      
       console.log(`[SignIn Callback] Approved sign-in for email: '${userEmail}'. Adapter will handle DB operations. Initial DB role (if user exists): ${dbUser?.role || 'N/A (new user)'}`);
-      return true; // Allow sign-in, adapter handles DB ops
+      return true; 
     }
   },
   pages: {
     signIn: '/auth/signin',
-    error: '/auth/signin',
+    error: '/auth/signin', // Redirect to sign-in page on error, showing error query param
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
 };
 
-const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST };
+// Removed: const handler = NextAuth(authOptions);
+// Removed: export { handler as GET, handler as POST };
+// These are not needed for the authOptions export itself, but rather in the [...nextauth].ts route handler.
+// Ensuring they are not duplicated here. The route handler already exports them.
