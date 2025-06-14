@@ -41,7 +41,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
       authorization: {
         params: {
-          scope: 'repo read:user user:email', 
+          scope: 'repo read:user user:email',
         },
       },
     })
@@ -65,55 +65,75 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user, account, profile }) {
       await connectMongoose();
+      console.log(`[JWT Callback Entry] token.id: ${token.id}, user?.id: ${user?.id}, account: ${!!account}, profile name: ${profile?.name}`);
 
-      // On initial sign-in (account and user are present)
+      // This block handles the initial sign-in flow when 'account' and 'user' (from adapter) are present
       if (account && user && user.id) {
         console.log(`[JWT Callback - Initial Sign-in] User ID from adapter: ${user.id}, Provider: ${account.provider}`);
-        token.accessToken = account.access_token;
-        token.provider = account.provider;
-        token.id = user.id; // This is the MongoDB _id as a string
+        token.id = user.id; // This is the MongoDB _id as a string from adapter
         token.sub = user.id; // Standard 'sub' claim
-      }
+        token.provider = account.provider;
+        token.accessToken = account.access_token;
 
-      // On subsequent JWT creations/updates, ensure user data is fresh
-      if (token.id && typeof token.id === 'string' && mongoose.Types.ObjectId.isValid(token.id)) {
-        try {
-          const dbUser = await UserModel.findById(token.id).select('role email status').lean();
-          if (dbUser) {
-            token.role = dbUser.role; // Default is 'user' from schema
-            token.status = dbUser.status;
-            token.email = dbUser.email; // Keep email in token fresh
-            
-            // First user promotion logic (only if 'account' is present, indicating an initial sign-in flow for this JWT)
-            if (account && dbUser.role !== 'admin') { // Check dbUser.role before potential promotion
-              const userCount = await UserModel.countDocuments();
-              if (userCount === 1) {
-                console.log(`[JWT Callback] Promoting first user (ID: ${token.id}, Email: ${dbUser.email}) to admin.`);
-                await UserModel.updateOne({ _id: token.id }, { $set: { role: 'admin', status: 'active' } });
-                token.role = 'admin';
-                token.status = 'active'; // Ensure status is active for the first admin
-              }
+        // Fetch the user from DB to get role and other details set by adapter/schema
+        // This user (from user.id) should have been created by the adapter with default role 'user'
+        const dbUserForToken = await UserModel.findById(user.id).select('role email status name image').lean();
+        if (dbUserForToken) {
+          token.role = dbUserForToken.role; // Should be 'user' by default from schema
+          token.status = dbUserForToken.status;
+          token.email = dbUserForToken.email;
+          token.name = dbUserForToken.name;
+          token.picture = dbUserForToken.image;
+
+          console.log(`[JWT Callback - Initial Sign-in] DB user ${user.id} fetched. Current role from DB: '${dbUserForToken.role}'.`);
+
+          // FIRST USER PROMOTION LOGIC
+          // This runs only during the initial sign-in flow for this JWT (account is present)
+          if (dbUserForToken.role === 'user') { // Only attempt promotion if current role is 'user'
+            const totalUsersInSystem = await UserModel.countDocuments();
+            console.log(`[JWT Callback - Promotion Check] Total users in system: ${totalUsersInSystem}. Current user role: '${dbUserForToken.role}'.`);
+            if (totalUsersInSystem === 1) {
+              // This confirms this dbUserForToken (which has role 'user') is the only one.
+              console.log(`[JWT Callback - Promotion Action] Promoting User ID: ${user.id}, Email: ${dbUserForToken.email} to 'admin'.`);
+              await UserModel.updateOne({ _id: user.id }, { $set: { role: 'admin', status: 'active' } });
+              token.role = 'admin'; // Update token immediately
+              token.status = 'active';
+            } else {
+              console.log(`[JWT Callback - No Promotion] Not the first user (Total users: ${totalUsersInSystem}). User ID: ${user.id} remains role: '${dbUserForToken.role}'.`);
             }
-            // console.log(`[JWT Callback - Update] Refreshed token for user ID: ${token.id}. Role: ${token.role}, Status: ${token.status}`);
-          } else {
-            console.warn(`[JWT Callback - Update] User with ID ${token.id} not found in DB. Clearing role/status from token.`);
-            delete token.role;
-            delete token.status;
-            // Potentially invalidate token further if user is deleted.
+          } else if (dbUserForToken.role === 'admin') {
+            console.log(`[JWT Callback - Already Admin] User ID: ${user.id} is already 'admin'. No promotion check needed.`);
           }
-        } catch (dbError) {
-            console.error(`[JWT Callback - Update] Error fetching user from DB for ID ${token.id}:`, dbError);
-            delete token.role; delete token.status; delete token.email;
+        } else {
+          console.error(`[JWT Callback - Initial Sign-in] CRITICAL: User ${user.id} not found in DB immediately after adapter processing.`);
+          delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture;
         }
-      } else if (token.id) {
-        // This case means token.id was present but not a valid ObjectId string.
-        console.error(`[JWT Callback] Invalid token.id format: ${token.id}. Clearing sensitive token fields.`);
-        delete token.id; delete token.sub; delete token.role; delete token.status; delete token.email;
       }
+      // This block handles subsequent JWT validations (session refresh, etc.)
+      else if (token.id && typeof token.id === 'string' && mongoose.Types.ObjectId.isValid(token.id)) {
+        // Refresh user data from DB
+        const dbUser = await UserModel.findById(token.id).select('role email status name image').lean();
+        if (dbUser) {
+          token.role = dbUser.role;
+          token.status = dbUser.status;
+          token.email = dbUser.email;
+          token.name = dbUser.name;
+          token.picture = dbUser.image;
+          // console.log(`[JWT Callback - Subsequent] Refreshed token for User ID: ${token.id}. Role: ${token.role}, Status: ${token.status}`);
+        } else {
+          console.warn(`[JWT Callback - Subsequent] User with ID ${token.id} not found in DB. Clearing sensitive fields from token.`);
+          delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture; delete token.id; delete token.sub;
+        }
+      } else if (token.id) { // Invalid token.id format case (e.g., not an ObjectId string)
+        console.error(`[JWT Callback] Invalid token.id format: '${token.id}'. Clearing sensitive fields from token.`);
+        delete token.id; delete token.sub; delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture;
+      }
+      console.log(`[JWT Callback Exit] Final token for id '${token.id}': role='${token.role}', status='${token.status}'`);
       return token;
     },
 
     async session({ session, token }) {
+      // The token object here is the output of the jwt callback
       if (token.accessToken && session) {
         session.accessToken = token.accessToken as string;
       }
@@ -127,42 +147,50 @@ export const authOptions: NextAuthOptions = {
         session.user.status = token.status as 'active' | 'suspended';
       }
       if (token.email && session.user) {
-        session.user.email = token.email as string; // Ensure email is passed to session
+        session.user.email = token.email as string;
       } else if (session.user && !token.email) {
-         delete session.user.email; // Clean up if email not in token
+         delete session.user.email;
+      }
+      // Ensure name and image from token are passed to session.user
+      if (token.name && session.user) {
+        session.user.name = token.name as string;
+      }
+      if (token.picture && session.user) { // 'picture' from token corresponds to 'image' in session.user
+        session.user.image = token.picture as string;
       }
       // console.log("[Session Callback] Session object created/updated:", JSON.stringify(session, null, 2));
       return session;
     },
-    
+
     async signIn({ user, account, profile }) {
       await connectMongoose();
-      const userEmail = user?.email || profile?.email;
-      console.log(`[SignIn Callback] Attempting sign-in for email: ${userEmail}, Provider: ${account?.provider}`);
+      const userEmail = user?.email || profile?.email; // Use email from user obj first, then profile
+      const provider = account?.provider || 'unknown';
+      console.log(`[SignIn Callback] Attempting sign-in for email: '${userEmail}', Provider: '${provider}'`);
 
       if (!account || !userEmail) {
-        // Should not happen for standard OAuth providers like Google/GitHub after successful auth with them
-        console.error(`[SignIn Callback] Denied: Missing account details or profile email. This is unexpected for OAuth. Account: ${JSON.stringify(account)}, Profile: ${JSON.stringify(profile)}`);
+        console.error(`[SignIn Callback] Denied: Missing account details or profile email for provider '${provider}'.`);
         return `/auth/signin?error=SignInError&reason=missing_provider_details`;
       }
 
-      // Check if the user trying to sign in is suspended
-      const dbUser = await UserModel.findOne({ email: userEmail }).select('status').lean();
+      // Check for suspended status before allowing sign-in
+      const dbUser = await UserModel.findOne({ email: userEmail }).select('status role').lean();
       if (dbUser && dbUser.status === 'suspended') {
-        console.warn(`[SignIn Callback] Denied: Account for email ${userEmail} is suspended.`);
+        console.warn(`[SignIn Callback] Denied: Account for email '${userEmail}' is suspended.`);
         return `/auth/signin?error=AccountSuspended&email=${encodeURIComponent(userEmail)}`;
       }
-      
-      console.log(`[SignIn Callback] Allowed: Email ${userEmail}, Provider: ${account.provider}. Adapter will handle user creation/linking.`);
-      // Let the adapter handle user creation and account linking.
-      // The E11000 error needs to be resolved by cleaning the database.
-      // This callback's main job here is to prevent sign-in for suspended users.
-      return true; 
+
+      // The adapter will handle user creation or retrieval.
+      // The role (default 'user') is set by the Mongoose schema when the adapter calls createUser.
+      // The first user promotion to 'admin' is now exclusively handled in the JWT callback
+      // after the user is confirmed to be in the database and their initial role is 'user'.
+      console.log(`[SignIn Callback] Approved sign-in for email: '${userEmail}'. Adapter will handle DB operations. Initial DB role (if user exists): ${dbUser?.role || 'N/A (new user)'}`);
+      return true; // Allow sign-in, adapter handles DB ops
     }
   },
   pages: {
     signIn: '/auth/signin',
-    error: '/auth/signin', 
+    error: '/auth/signin',
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
@@ -170,7 +198,3 @@ export const authOptions: NextAuthOptions = {
 
 const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };
-    
-    
-
-    
