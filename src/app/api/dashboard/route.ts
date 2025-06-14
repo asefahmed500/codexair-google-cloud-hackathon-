@@ -231,17 +231,17 @@ export async function GET(request: NextRequest) {
       a => a?.securityIssues,
       item => item.title,
       item => item.severity,
-      undefined,
-      item => item.type
+      undefined, // no priorityExtractor for security issues
+      item => item.type // 'vulnerability', 'warning', 'info'
     );
 
     const topSuggestions = getTopItems(
       relevantAnalyses,
       a => a?.suggestions,
       item => item.title,
-      undefined,
+      undefined, // no severityExtractor for suggestions
       item => item.priority,
-      item => item.type
+      item => item.type // 'performance', 'style', etc.
     );
 
     const fileIssueCounts: Record<string, SecurityHotspotItem> = {};

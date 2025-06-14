@@ -18,8 +18,8 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
   const getSeverityBadgeVariant = (severity?: SecurityIssue['severity']) => {
     switch (severity) {
       case 'critical': return 'destructive';
-      case 'high': return 'destructive'; // Consider a slightly different destructive or a custom orange
-      case 'medium': return 'default'; // Default often blue, maps to primary. Consider an orange/yellow style in globals.css for 'default' or 'warning'
+      case 'high': return 'destructive'; 
+      case 'medium': return 'default'; 
       case 'low': return 'secondary';
       default: return 'outline';
     }
@@ -28,7 +28,7 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
   const getPriorityBadgeVariant = (priority?: Suggestion['priority']) => {
     switch (priority) {
       case 'high': return 'destructive';
-      case 'medium': return 'default'; // Similar to medium severity, consider theming
+      case 'medium': return 'default'; 
       case 'low': return 'secondary';
       default: return 'outline';
     }
@@ -43,7 +43,7 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
           <Icon className={`mr-2 h-6 w-6 ${issueType === 'security' ? 'text-destructive' : 'text-accent'}`} />
           {title}
         </CardTitle>
-        <CardDescription>Most frequently occurring issues across your analyses.</CardDescription>
+        <CardDescription>Most frequently occurring {issueType === 'security' ? 'security problems' : 'improvement suggestions'} across your analyses.</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
         {issues.length === 0 ? (
