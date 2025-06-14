@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Lightbulb, RefreshCw, AlertTriangle, Terminal, ScrollText, FileCode, MessageSquareQuestion } from 'lucide-react';
+import { Lightbulb, RefreshCw, AlertTriangle, Terminal, ScrollText, FileCode, MessageSquareQuote } from 'lucide-react'; // Changed MessageSquareQuestion to MessageSquareQuote
 import { toast } from '@/hooks/use-toast';
 import type { ExplainCodeOutput } from '@/ai/flows/explain-code-flow';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -156,7 +156,7 @@ export default function ExplainCodePage() {
             </div>
             <div>
               <label htmlFor="question-select" className="flex items-center text-sm font-medium text-foreground mb-1.5">
-                <MessageSquareQuestion className="mr-2 h-4 w-4 text-muted-foreground" />
+                <MessageSquareQuote className="mr-2 h-4 w-4 text-muted-foreground" /> {/* Changed MessageSquareQuestion to MessageSquareQuote */}
                 Predefined Question
               </label>
               <Select value={selectedQuestion} onValueChange={setSelectedQuestion} disabled={customQuestion.trim() !== ''}>
