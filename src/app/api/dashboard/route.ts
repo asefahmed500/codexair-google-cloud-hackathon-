@@ -23,17 +23,24 @@ function getTopItems(
 ): TopIssueItem[] {
   const itemCounts: Record<string, TopIssueItem> = {};
 
-  analyses.forEach(analysis => {
-    if (!analysis) return;
-    const items = itemSelector(analysis) || [];
+  analyses.forEach(analysisDoc => { // Renamed analysis to analysisDoc for clarity
+    if (!analysisDoc) return;
+    const items = itemSelector(analysisDoc) || [];
     items.forEach((item: SecurityIssue | Suggestion) => {
       if (!item || !item.title) return;
       const title = titleExtractor(item);
       if (!itemCounts[title]) {
         itemCounts[title] = { title, count: 0 };
-        if (severityExtractor && 'severity' in item && item.severity) itemCounts[title].severity = severityExtractor(item as SecurityIssue);
-        if (priorityExtractor && 'priority' in item && item.priority) itemCounts[title].priority = priorityExtractor(item as Suggestion);
-        if (typeExtractor && item.type) itemCounts[title].type = typeExtractor(item);
+        // Ensure correct type casting for accessing specific properties
+        if (severityExtractor && 'severity' in item && (item as SecurityIssue).severity) {
+            itemCounts[title].severity = severityExtractor(item as SecurityIssue);
+        }
+        if (priorityExtractor && 'priority' in item && (item as Suggestion).priority) {
+            itemCounts[title].priority = priorityExtractor(item as Suggestion);
+        }
+        if (typeExtractor && item.type) {
+            itemCounts[title].type = typeExtractor(item);
+        }
       }
       itemCounts[title].count++;
     });
@@ -93,8 +100,8 @@ export async function GET(request: NextRequest) {
     const relevantAnalyses = await Analysis.find(relevantAnalysesQuery)
       .populate<{ pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null }>({
         path: 'pullRequestId',
-        select: 'title repositoryId number author createdAt owner repoName state',
-        populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' }
+        select: 'title repositoryId number author createdAt owner repoName state', // Added owner, repoName from PR doc
+        populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' } // Keep this for full repo details if available
       })
       .sort({ createdAt: -1 }) // Sort by analysis creation date, descending
       .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
@@ -143,32 +150,36 @@ export async function GET(request: NextRequest) {
 
     const recentAnalysesDocs = relevantAnalyses.slice(0, MAX_RECENT_ANALYSES);
 
-    const recentAnalyses: RecentAnalysisItem[] = recentAnalysesDocs.map((analysis) => {
-      if (!analysis || !analysis.pullRequestId) return null;
+    const recentAnalyses: RecentAnalysisItem[] = recentAnalysesDocs.map((analysisDoc) => { // Renamed analysis to analysisDoc
+      if (!analysisDoc || !analysisDoc.pullRequestId) return null;
 
+      const pr = analysisDoc.pullRequestId;
       let repoFullNameDisplay = 'N/A';
-      let ownerDisplay = analysis.pullRequestId.owner || 'N/A';
-      let actualRepoName = analysis.pullRequestId.repoName || 'N/A';
+      let ownerDisplay = 'N/A';
+      let actualRepoName = 'N/A';
 
-      if (analysis.pullRequestId.repositoryId && typeof analysis.pullRequestId.repositoryId === 'object' && analysis.pullRequestId.repositoryId.fullName) {
-        const repoObj = analysis.pullRequestId.repositoryId as RepoType;
+      if (pr.repositoryId && typeof pr.repositoryId === 'object' && pr.repositoryId.fullName) {
+        const repoObj = pr.repositoryId as RepoType;
         repoFullNameDisplay = repoObj.fullName;
-        ownerDisplay = repoObj.owner || ownerDisplay;
-        actualRepoName = repoObj.name || actualRepoName;
-      } else if (ownerDisplay !== 'N/A' && actualRepoName !== 'N/A') {
-        repoFullNameDisplay = `${ownerDisplay}/${actualRepoName}`;
+        ownerDisplay = repoObj.owner || pr.owner || 'N/A'; // Fallback to PR's owner
+        actualRepoName = repoObj.name || pr.repoName || 'N/A'; // Fallback to PR's repoName
+      } else if (pr.owner && pr.repoName) { // Fallback if repositoryId not populated fully
+        repoFullNameDisplay = `${pr.owner}/${pr.repoName}`;
+        ownerDisplay = pr.owner;
+        actualRepoName = pr.repoName;
       }
 
+
       return {
-        id: analysis._id.toString(), // This is the analysisId
-        pullRequestTitle: analysis.pullRequestId.title || 'N/A',
+        id: analysisDoc._id.toString(), // This is the analysisId
+        pullRequestTitle: pr.title || 'N/A',
         repositoryName: repoFullNameDisplay, // Full name like "owner/repo" for display
-        prNumber: analysis.pullRequestId.number,
-        owner: ownerDisplay, // Extracted owner for link construction
-        repo: actualRepoName,  // Extracted repoName (short name) for link construction
-        qualityScore: analysis.qualityScore || 0,
-        securityIssues: (analysis.securityIssues || []).filter((si: SecurityIssue) => si.severity === 'critical' || si.severity === 'high').length,
-        createdAt: analysis.createdAt, // Analysis creation date
+        prNumber: pr.number,
+        owner: ownerDisplay, 
+        repo: actualRepoName,  
+        qualityScore: analysisDoc.qualityScore || 0,
+        securityIssues: (analysisDoc.securityIssues || []).filter((si: SecurityIssue) => si.severity === 'critical' || si.severity === 'high').length,
+        createdAt: analysisDoc.createdAt, // Analysis creation date
       };
     }).filter(Boolean) as RecentAnalysisItem[];
 
@@ -178,13 +189,13 @@ export async function GET(request: NextRequest) {
     const qualityTrendsData = relevantAnalyses.filter(a => a && new Date(a.createdAt) >= thirtyDaysAgo);
     const qualityTrendsAggMap: Record<string, { totalQuality: number, count: number }> = {};
 
-    qualityTrendsData.forEach((analysis) => {
-        if (!analysis) return;
-        const dateStr = new Date(analysis.createdAt).toISOString().split('T')[0];
+    qualityTrendsData.forEach((analysisDoc) => { // Renamed analysis to analysisDoc
+        if (!analysisDoc) return;
+        const dateStr = new Date(analysisDoc.createdAt).toISOString().split('T')[0];
         if (!qualityTrendsAggMap[dateStr]) {
             qualityTrendsAggMap[dateStr] = { totalQuality: 0, count: 0 };
         }
-        qualityTrendsAggMap[dateStr].totalQuality += (analysis.qualityScore || 0);
+        qualityTrendsAggMap[dateStr].totalQuality += (analysisDoc.qualityScore || 0);
         qualityTrendsAggMap[dateStr].count++;
     });
 
@@ -197,8 +208,8 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     let trendsUp = false;
-    if (qualityTrends.length === 0 && totalAnalyses > 0 && avgQualityScore > 0) {
-        trendsUp = avgQualityScore >= 7.0; // Base trend on overall average if no recent daily data
+    if (qualityTrends.length === 0) {
+        trendsUp = false; // No data for trend
     } else if (qualityTrends.length === 1) {
         trendsUp = qualityTrends[0].quality >= 7.0;
     } else if (qualityTrends.length >= 2) {
@@ -234,9 +245,9 @@ export async function GET(request: NextRequest) {
     );
 
     const fileIssueCounts: Record<string, SecurityHotspotItem> = {};
-    relevantAnalyses.forEach((analysis) => {
-      if (!analysis) return;
-      (analysis.fileAnalyses || []).forEach((file: FileAnalysisItem) => {
+    relevantAnalyses.forEach((analysisDoc) => { // Renamed analysis to analysisDoc
+      if (!analysisDoc) return;
+      (analysisDoc.fileAnalyses || []).forEach((file: FileAnalysisItem) => {
         if (!file.filename) return;
         const fileKey = file.filename;
 
@@ -260,13 +271,13 @@ export async function GET(request: NextRequest) {
         fileIssueCounts[fileKey].highIssues += fileHigh;
         fileIssueCounts[fileKey].totalIssuesInFile += (file.securityIssues || []).length;
 
-        const currentAnalysisDate = new Date(analysis.createdAt);
+        const currentAnalysisDate = new Date(analysisDoc.createdAt);
         if (!fileIssueCounts[fileKey].lastOccurrence || currentAnalysisDate > fileIssueCounts[fileKey].lastOccurrence) {
             fileIssueCounts[fileKey].lastOccurrence = currentAnalysisDate;
         }
 
-        if (analysis.pullRequestId?._id && !fileIssueCounts[fileKey].relatedPrIds.includes(analysis.pullRequestId._id.toString())) {
-             fileIssueCounts[fileKey].relatedPrIds.push(analysis.pullRequestId._id.toString());
+        if (analysisDoc.pullRequestId?._id && !fileIssueCounts[fileKey].relatedPrIds.includes(analysisDoc.pullRequestId._id.toString())) {
+             fileIssueCounts[fileKey].relatedPrIds.push(analysisDoc.pullRequestId._id.toString());
         }
       });
     });
@@ -276,16 +287,16 @@ export async function GET(request: NextRequest) {
       .slice(0, MAX_HOTSPOTS);
 
     const memberMetrics: Record<string, TeamMemberMetric> = {};
-    relevantAnalyses.forEach((analysis) => {
-        if (!analysis || !analysis.pullRequestId) return;
-        const authorLogin = analysis.pullRequestId.author?.login;
+    relevantAnalyses.forEach((analysisDoc) => { // Renamed analysis to analysisDoc
+        if (!analysisDoc || !analysisDoc.pullRequestId) return;
+        const authorLogin = analysisDoc.pullRequestId.author?.login;
         if (!authorLogin) return;
 
         if (!memberMetrics[authorLogin]) {
             memberMetrics[authorLogin] = {
                 userId: authorLogin,
                 userName: authorLogin,
-                userAvatar: analysis.pullRequestId.author?.avatar,
+                userAvatar: analysisDoc.pullRequestId.author?.avatar,
                 totalAnalyses: 0,
                 avgQualityScore: 0,
                 totalCriticalIssues: 0,
@@ -293,8 +304,8 @@ export async function GET(request: NextRequest) {
             };
         }
         memberMetrics[authorLogin].totalAnalyses++;
-        memberMetrics[authorLogin].avgQualityScore += (analysis.qualityScore || 0);
-        (analysis.securityIssues || []).forEach((si: SecurityIssue) => {
+        memberMetrics[authorLogin].avgQualityScore += (analysisDoc.qualityScore || 0);
+        (analysisDoc.securityIssues || []).forEach((si: SecurityIssue) => {
             if (si.severity === 'critical') memberMetrics[authorLogin].totalCriticalIssues++;
             if (si.severity === 'high') memberMetrics[authorLogin].totalHighIssues++;
         });

@@ -18,8 +18,8 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
   const getSeverityBadgeVariant = (severity?: SecurityIssue['severity']) => {
     switch (severity) {
       case 'critical': return 'destructive';
-      case 'high': return 'destructive';
-      case 'medium': return 'default';
+      case 'high': return 'destructive'; // Consider a slightly different destructive or a custom orange
+      case 'medium': return 'default'; // Default often blue, maps to primary. Consider an orange/yellow style in globals.css for 'default' or 'warning'
       case 'low': return 'secondary';
       default: return 'outline';
     }
@@ -28,7 +28,7 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
   const getPriorityBadgeVariant = (priority?: Suggestion['priority']) => {
     switch (priority) {
       case 'high': return 'destructive';
-      case 'medium': return 'default';
+      case 'medium': return 'default'; // Similar to medium severity, consider theming
       case 'low': return 'secondary';
       default: return 'outline';
     }
@@ -40,7 +40,7 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
     <Card className="shadow-lg h-full flex flex-col">
       <CardHeader>
         <CardTitle className="text-2xl font-semibold font-headline flex items-center">
-          <Icon className="mr-2 h-6 w-6 text-primary" />
+          <Icon className={`mr-2 h-6 w-6 ${issueType === 'security' ? 'text-destructive' : 'text-accent'}`} />
           {title}
         </CardTitle>
         <CardDescription>Most frequently occurring issues across your analyses.</CardDescription>
@@ -49,34 +49,34 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
         {issues.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <ListChecks className="w-16 h-16 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No common issues identified yet.</p>
+            <p className="text-muted-foreground">No common {issueType === 'security' ? 'security issues' : 'suggestions'} identified yet.</p>
           </div>
         ) : (
           <ScrollArea className="h-[280px] pr-3">
             <ul className="space-y-3">
               {issues.map((issue, index) => (
                 <li key={index} className="p-3 border rounded-md hover:bg-muted/50 transition-colors">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-sm text-foreground truncate pr-2" title={issue.title}>{issue.title}</span>
-                    <Badge variant="secondary" className="text-xs shrink-0">
+                  <div className="flex justify-between items-start">
+                    <span className="font-medium text-sm text-foreground truncate pr-2 flex-grow" title={issue.title}>{issue.title}</span>
+                    <Badge variant="secondary" className="text-xs shrink-0 ml-2">
                       {issue.count} {issue.count === 1 ? 'occurrence' : 'occurrences'}
                     </Badge>
                   </div>
                   {(issue.severity || issue.priority || issue.type) && (
-                    <div className="mt-1 flex flex-wrap gap-1">
+                    <div className="mt-1.5 flex flex-wrap gap-1 items-center">
                       {issueType === 'security' && issue.severity && (
-                        <Badge variant={getSeverityBadgeVariant(issue.severity as SecurityIssue['severity'])} className="text-xs">
+                        <Badge variant={getSeverityBadgeVariant(issue.severity as SecurityIssue['severity'])} className="text-xs capitalize">
                           {issue.severity}
                         </Badge>
                       )}
                       {issueType === 'suggestion' && issue.priority && (
-                         <Badge variant={getPriorityBadgeVariant(issue.priority as Suggestion['priority'])} className="text-xs">
+                         <Badge variant={getPriorityBadgeVariant(issue.priority as Suggestion['priority'])} className="text-xs capitalize">
                           {issue.priority} priority
                         </Badge>
                       )}
                        {issue.type && (
                          <Badge variant="outline" className="text-xs capitalize">
-                          {issue.type.replace(/_/g, ' ')}
+                          {(issue.type as string).replace(/_/g, ' ')}
                         </Badge>
                       )}
                     </div>
@@ -90,3 +90,4 @@ export default function TopIssues({ title, issues, issueType }: TopIssuesProps) 
     </Card>
   );
 }
+
