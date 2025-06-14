@@ -211,7 +211,7 @@ export async function GET(request: NextRequest) {
     if (qualityTrends.length === 0) {
         trendsUp = false; // No data for trend
     } else if (qualityTrends.length === 1) {
-        trendsUp = qualityTrends[0].quality >= 7.0;
+        trendsUp = qualityTrends[0].quality >= 7.0; // Trend is "up" if the single score is good
     } else if (qualityTrends.length >= 2) {
         const lastScore = qualityTrends[qualityTrends.length -1].quality;
         const secondLastScore = qualityTrends[qualityTrends.length -2].quality;
@@ -294,8 +294,8 @@ export async function GET(request: NextRequest) {
 
         if (!memberMetrics[authorLogin]) {
             memberMetrics[authorLogin] = {
-                userId: authorLogin,
-                userName: authorLogin,
+                userId: authorLogin, // This is the GitHub login
+                userName: authorLogin, // Display name, could be enhanced if we fetch GitHub user's display name
                 userAvatar: analysisDoc.pullRequestId.author?.avatar,
                 totalAnalyses: 0,
                 avgQualityScore: 0,
