@@ -144,6 +144,7 @@ export default function AdminPage() {
       } catch (err: any) {
         setErrorStats(err.message);
         setSummaryStats(null);
+        toast({ title: "Error Fetching Stats", description: err.message, variant: "destructive"});
       } finally {
         setLoadingStats(false);
       }
@@ -163,6 +164,7 @@ export default function AdminPage() {
       } catch (err: any) {
         setErrorUsers(err.message);
         setUsers([]);
+        toast({ title: "Error Fetching Users", description: err.message, variant: "destructive"});
       } finally {
         setLoadingUsers(false);
       }
@@ -341,8 +343,8 @@ export default function AdminPage() {
             {summaryStats && !loadingStats && (
               <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8">
                 <StatCard Icon={Users} title="Total Users" value={summaryStats.totalUsers} />
-                <StatCard Icon={FolderGit2} title="Total Projects" value={summaryStats.totalRepositories} description="Repositories synced" />
-                <StatCard Icon={FileScan} title="Total PRs Analyzed" value={summaryStats.totalAnalyses} />
+                <StatCard Icon={FolderGit2} title="Total Repositories Synced" value={summaryStats.totalRepositories} description="Across all users" />
+                <StatCard Icon={FileScan} title="Total PR Analyses" value={summaryStats.totalAnalyses} />
               </div>
             )}
           </CardContent>
@@ -438,5 +440,4 @@ function StatCard({ Icon, title, value, description }: StatCardProps) {
     </Card>
   );
 }
-
     

@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     await connectMongoose();
 
     const totalUsers = await User.countDocuments();
-    const totalRepositories = await Repository.countDocuments();
+    const totalRepositories = await Repository.countDocuments(); // Counts all repository documents in the system
     const totalAnalyses = await Analysis.countDocuments();
 
     const stats: AdminSummaryStats = {
@@ -36,7 +36,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-
-    
-
     
