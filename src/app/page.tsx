@@ -3,7 +3,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useSession } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Navbar from '@/components/layout/navbar';
@@ -16,7 +16,8 @@ import {
   Code,
   CheckCircle,
   ArrowDownCircle,
-  Users
+  Users,
+  Github, // Added Github icon
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -66,6 +67,27 @@ export default function HomePage() {
             </Button>
           </div>
         </section>
+
+        {/* GitHub Sign-In Prompt Section - Only if not logged in */}
+        {!session && status !== 'loading' && (
+          <section className="w-full py-16 md:py-20 bg-primary/5 text-center">
+            <div className="container mx-auto px-4 max-w-2xl">
+              <h2 className="text-3xl font-semibold text-primary mb-4 font-headline">
+                🚀 Want the full experience?
+              </h2>
+              <p className="text-md text-foreground/80 mb-6">
+                To explore all GitHub features like repository sync and pull request analysis, please log in with your GitHub account.
+              </p>
+              <Button
+                size="lg"
+                onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-shadow text-lg px-8 py-3"
+              >
+                <Github className="mr-2 h-5 w-5" /> Login with GitHub
+              </Button>
+            </div>
+          </section>
+        )}
 
         {/* Core Features Section */}
         <section id="features" className="w-full py-16 md:py-24 bg-secondary/50">
@@ -196,4 +218,3 @@ function ValuePropCard({ icon, title, items }: ValuePropCardProps) {
     </Card>
   );
 }
-
