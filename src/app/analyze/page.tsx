@@ -9,10 +9,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import type { Repository as RepoType } from '@/types';
-import { Github, Eye, RefreshCw, Search, Star, Lock, Unlock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Github, Eye, RefreshCw, Search, Star, Lock, Unlock, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import Navbar from '@/components/layout/navbar'; 
+import Navbar from '@/components/layout/navbar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 
 export default function AnalyzePage() {
   const { data: session, status } = useSession();
@@ -25,6 +26,8 @@ export default function AnalyzePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const ITEMS_PER_PAGE = 9; // Display 9 repos per page (3x3 grid)
+
   const fetchRepositories = useCallback(async (page = 1, sync = false) => {
     if (sync) {
       setIsSyncing(true);
@@ -35,7 +38,7 @@ export default function AnalyzePage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/repositories?page=${page}&limit=10&sync=${sync}`);
+      const response = await fetch(`/api/repositories?page=${page}&limit=${ITEMS_PER_PAGE}&sync=${sync}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch repositories');
@@ -45,7 +48,7 @@ export default function AnalyzePage() {
       setCurrentPage(data.currentPage || 1);
       setTotalPages(data.totalPages || 1);
 
-      if (sync) toast({ title: "Repositories Synced", description: `Fetched page ${data.currentPage || 1} of repositories from GitHub.` });
+      if (sync) toast({ title: "Repositories Synced", description: `Fetched page ${data.currentPage || 1} of your repositories.` });
       
     } catch (err: any) {
       setError(err.message);
@@ -57,7 +60,7 @@ export default function AnalyzePage() {
       if (sync) setIsSyncing(false);
       else setLoading(false);
     }
-  }, []); 
+  }, [ITEMS_PER_PAGE]); 
   
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -73,13 +76,14 @@ export default function AnalyzePage() {
   };
 
   const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage && !loading && !isSyncing) {
       setCurrentPage(newPage);
     }
   };
 
   const filteredRepositories = repositories.filter(repo =>
-    repo.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+    repo.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (repo.language && repo.language.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (status === 'loading') {
@@ -98,7 +102,12 @@ export default function AnalyzePage() {
                     <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Analyze Repository</CardTitle>
                     <CardDescription>Select a repository to view its pull requests and initiate AI-powered code analysis. Click "Sync Repositories" to fetch your latest repositories from GitHub.</CardDescription>
                 </div>
-                <Button variant="outline" className="w-full sm:w-auto" onClick={handleSync} disabled={isSyncing || loading}>
+                <Button 
+                    variant="outline" 
+                    className="w-full sm:w-auto" 
+                    onClick={handleSync} 
+                    disabled={isSyncing || loading}
+                >
                     <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing && 'animate-spin'}`} />
                     {isSyncing ? 'Syncing...' : 'Sync Repositories'}
                 </Button>
@@ -110,48 +119,78 @@ export default function AnalyzePage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input
                   type="search"
-                  placeholder="Search synced repositories..."
+                  placeholder="Search by name or language..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  disabled={loading || isSyncing}
                 />
               </div>
             </div>
 
             {loading && !repositories.length && !isSyncing ? ( 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(3)].map((_, i) => (
+                {[...Array(ITEMS_PER_PAGE)].map((_, i) => (
                   <SkeletonRepoCard key={i} />
                 ))}
               </div>
             ) : error ? (
-              <p className="text-destructive text-center py-8">{error}</p>
+              <div className="flex flex-col items-center justify-center text-center py-10 bg-muted/30 rounded-md">
+                <Info className="w-12 h-12 text-destructive mb-3" />
+                <p className="text-lg font-semibold text-destructive">Failed to load repositories</p>
+                <p className="text-muted-foreground mb-4">{error}</p>
+                <Button onClick={() => fetchRepositories(currentPage)} variant="outline">Try Again</Button>
+              </div>
             ) : filteredRepositories.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                {searchTerm ? "No repositories match your search." : "No repositories found. Try syncing with GitHub."}
-              </p>
+              <div className="flex flex-col items-center justify-center text-center py-10 bg-muted/30 rounded-md">
+                <Github className="w-12 h-12 text-muted-foreground mb-3" />
+                <p className="text-lg font-semibold text-foreground">
+                    {searchTerm ? "No repositories match your search." : "No repositories found."}
+                </p>
+                <p className="text-muted-foreground mb-4">
+                    {searchTerm ? "Try a different search term or clear your search." : 'Try syncing with GitHub to see your repositories here.'}
+                </p>
+                {searchTerm && <Button onClick={() => setSearchTerm('')} variant="outline" className="mr-2">Clear Search</Button>}
+                {!searchTerm && <Button onClick={handleSync} disabled={isSyncing || loading} variant="default">
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing && 'animate-spin'}`} /> Sync Now
+                </Button>}
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredRepositories.map(repo => (
-                  <Card key={repo._id} className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <CardTitle className="text-lg md:text-xl flex items-center gap-2">
-                        <Github className="h-5 w-5 text-primary" />
-                        {repo.fullName}
-                      </CardTitle>
-                      <CardDescription>Language: {repo.language || 'N/A'}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-1 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1.5">
-                        <Star className="h-4 w-4" /> {repo.stars} Stars
+                  <Card key={repo._id} className="hover:shadow-xl transition-all duration-300 ease-in-out flex flex-col bg-card">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <Github className="h-5 w-5 text-primary flex-shrink-0" />
+                            <CardTitle className="text-lg md:text-xl font-semibold truncate hover:text-primary transition-colors">
+                                <Link href={`/analyze/${repo.owner}/${repo.name}`} title={repo.fullName}>
+                                    {repo.fullName}
+                                </Link>
+                            </CardTitle>
+                        </div>
+                        <Badge variant={repo.isPrivate ? "default" : "secondary"} className={`text-xs ${repo.isPrivate ? 'bg-foreground text-background' : ''}`}>
+                            {repo.isPrivate ? <Lock className="mr-1 h-3 w-3" /> : <Unlock className="mr-1 h-3 w-3" />}
+                            {repo.isPrivate ? 'Private' : 'Public'}
+                        </Badge>
                       </div>
+                      <CardDescription className="text-xs text-muted-foreground">
+                        Last updated: {new Date(repo.updatedAt).toLocaleDateString()}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm text-muted-foreground flex-grow">
+                      {repo.language && (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full bg-accent"></div> {/* Placeholder for language color dot */}
+                          <span>{repo.language}</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-1.5">
-                        {repo.isPrivate ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                        {repo.isPrivate ? 'Private' : 'Public'}
+                        <Star className="h-4 w-4 text-yellow-500" /> <span>{repo.stars} Stars</span>
                       </div>
                     </CardContent>
-                    <CardFooter>
-                      <Button asChild className="w-full">
+                    <CardFooter className="pt-3 border-t">
+                      <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                         <Link href={`/analyze/${repo.owner}/${repo.name}`}>
                           <Eye className="mr-2 h-4 w-4" /> View Pull Requests
                         </Link>
@@ -162,17 +201,18 @@ export default function AnalyzePage() {
               </div>
             )}
             
-            {totalPages > 1 && (
-              <div className="mt-8 flex justify-center items-center gap-2">
+            {totalPages > 1 && filteredRepositories.length > 0 && (
+              <div className="mt-8 flex justify-center items-center gap-3">
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1 || loading || isSyncing}
+                  aria-label="Previous page"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-5 w-5" />
                 </Button>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-muted-foreground font-medium">
                   Page {currentPage} of {totalPages}
                 </span>
                 <Button
@@ -180,8 +220,9 @@ export default function AnalyzePage() {
                   size="icon"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages || loading || isSyncing}
+                  aria-label="Next page"
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-5 w-5" />
                 </Button>
               </div>
             )}
@@ -199,18 +240,26 @@ export default function AnalyzePage() {
 
 function SkeletonRepoCard() {
     return (
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-6 w-3/4 mb-2" />
+      <Card className="animate-pulse flex flex-col">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2 w-3/4">
+                <Skeleton className="h-5 w-5 rounded-full" />
+                <Skeleton className="h-6 w-full" />
+            </div>
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </div>
           <Skeleton className="h-4 w-1/2" />
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="space-y-2 flex-grow">
           <Skeleton className="h-4 w-1/3" />
           <Skeleton className="h-4 w-1/4" />
         </CardContent>
-        <CardFooter>
+        <CardFooter className="pt-3 border-t">
           <Skeleton className="h-10 w-full" />
         </CardFooter>
       </Card>
     )
 }
+
+    
