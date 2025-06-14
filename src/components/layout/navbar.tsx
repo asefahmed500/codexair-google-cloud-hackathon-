@@ -17,6 +17,8 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetHeader, // Added import
+  SheetTitle,  // Added import
   SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
@@ -32,7 +34,7 @@ interface NavItemDefinition {
   isAnchor?: boolean;
   show: () => boolean; 
   adminOnly?: boolean;
-  userOnly?: boolean; // For links that should only show for logged-in non-admins
+  userOnly?: boolean; 
 }
 
 export default function Navbar() {
@@ -80,7 +82,7 @@ export default function Navbar() {
   const renderNavItem = (item: NavItemDefinition, isMobile: boolean) => {
     const commonProps = {
       variant: "ghost" as const,
-      className: isMobile ? "w-full justify-start" : "",
+      className: `w-full justify-start ${isMobile ? 'text-base py-3' : 'text-sm'}`, // Adjusted text size for mobile
       onClick: item.onClick as React.MouseEventHandler<HTMLButtonElement>,
     };
 
@@ -144,7 +146,7 @@ export default function Navbar() {
           {isAuthenticated && isAdmin && navItemsDefinition.filter(item => item.show() && item.adminOnly).map(item => renderNavItem(item, false))}
         </nav>
 
-        <div className="flex items-center justify-end space-x-2 ml-4"> {/* Removed md:space-x-4 and md:ml-0 which might conflict */}
+        <div className="flex items-center justify-end space-x-2 ml-auto md:ml-4">
           {!session ? (
             <Button onClick={() => router.push('/auth/signin')} variant="default" className="hidden md:inline-flex">
               Sign In / Sign Up
@@ -190,16 +192,18 @@ export default function Navbar() {
                   <span className="sr-only">Toggle navigation menu</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[280px] sm:w-[320px] pt-10">
-                <nav className="flex flex-col space-y-1 h-full">
-                  <SheetClose asChild>
-                    <Link href="/" className="flex items-center gap-2 mb-6 px-2" onClick={handleLinkClick}>
-                      <BarChartBig className="h-7 w-7 text-primary" />
-                      <span className="font-bold text-xl text-foreground font-headline">codexair</span>
-                    </Link>
-                  </SheetClose>
-                  
-                  {/* Main navigation items */}
+              <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0 flex flex-col">
+                <SheetHeader className="px-4 pt-5 pb-3 border-b">
+                  <SheetTitle>
+                    <SheetClose asChild>
+                        <Link href="/" className="flex items-center gap-2" onClick={handleLinkClick}>
+                        <BarChartBig className="h-7 w-7 text-primary" />
+                        <span className="font-bold text-xl text-foreground font-headline">codexair</span>
+                        </Link>
+                    </SheetClose>
+                  </SheetTitle>
+                </SheetHeader>
+                <nav className="flex-1 flex flex-col space-y-1 p-4 overflow-y-auto">
                   {navItemsDefinition.filter(item => item.show()).map(item => renderNavItem(item, true))}
                   
                   <div className="mt-auto pt-4 border-t border-border">
@@ -207,7 +211,7 @@ export default function Navbar() {
                         <SheetClose asChild>
                         <Button 
                             variant="default" 
-                            className="w-full"
+                            className="w-full text-base py-3"
                             onClick={() => { router.push('/auth/signin'); handleLinkClick(); }}
                         >
                             Sign In / Sign Up
@@ -216,18 +220,18 @@ export default function Navbar() {
                     ) : (
                         <>
                         <SheetClose asChild>
-                            <Button asChild variant="ghost" className="w-full justify-start" onClick={() => { router.push('/profile'); handleLinkClick(); }}>
+                            <Button asChild variant="ghost" className="w-full justify-start text-base py-3" onClick={() => { router.push('/profile'); handleLinkClick(); }}>
                             <Link href="/profile"><UserCircle className="mr-2 h-4 w-4" /> My Profile</Link>
                             </Button>
                         </SheetClose>
                         <SheetClose asChild>
-                            <Button asChild variant="ghost" className="w-full justify-start" onClick={() => { router.push('/settings'); handleLinkClick(); }}>
+                            <Button asChild variant="ghost" className="w-full justify-start text-base py-3" onClick={() => { router.push('/settings'); handleLinkClick(); }}>
                             <Link href="/settings"><Cog className="mr-2 h-4 w-4" /> My Settings</Link>
                             </Button>
                         </SheetClose>
                         <DropdownMenuSeparator className="my-2" />
                         <SheetClose asChild>
-                            <Button variant="ghost" onClick={() => { signOut({ callbackUrl: '/' }); handleLinkClick(); }} className="w-full justify-start">
+                            <Button variant="ghost" onClick={() => { signOut({ callbackUrl: '/' }); handleLinkClick(); }} className="w-full justify-start text-base py-3">
                             <LogOut className="mr-2 h-4 w-4" /> Log out
                             </Button>
                         </SheetClose>
