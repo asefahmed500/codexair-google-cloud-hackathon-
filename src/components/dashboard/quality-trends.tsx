@@ -45,6 +45,7 @@ export default function QualityTrends({ trends }: QualityTrendsProps) {
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} 
               axisLine={{ stroke: 'hsl(var(--border))' }}
               tickLine={{ stroke: 'hsl(var(--border))' }}
+              label={{ value: 'Avg Quality Score', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))', fontSize: 12, dx: -5 }}
             />
             <YAxis 
               yAxisId="right" 
@@ -52,6 +53,7 @@ export default function QualityTrends({ trends }: QualityTrendsProps) {
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
               axisLine={{ stroke: 'hsl(var(--border))' }}
               tickLine={{ stroke: 'hsl(var(--border))' }}
+              label={{ value: '# Analyses', angle: 90, position: 'insideRight', fill: 'hsl(var(--muted-foreground))', fontSize: 12, dx: 5 }}
             />
             <Tooltip
               contentStyle={{ 
@@ -72,6 +74,7 @@ export default function QualityTrends({ trends }: QualityTrendsProps) {
               strokeWidth={2} 
               dot={{ r: 4, fill: 'hsl(var(--primary))', strokeWidth: 0 }}
               activeDot={{ r: 6, fill: 'hsl(var(--primary))', stroke: 'hsl(var(--background))', strokeWidth: 2 }}
+              name="Avg. Quality Score"
             />
              <Line 
               yAxisId="right" 
@@ -82,6 +85,7 @@ export default function QualityTrends({ trends }: QualityTrendsProps) {
               strokeDasharray="5 5"
               dot={{ r: 4, fill: 'hsl(var(--accent))', strokeWidth: 0 }}
               activeDot={{ r: 6, fill: 'hsl(var(--accent))', stroke: 'hsl(var(--background))', strokeWidth: 2 }}
+              name="Number of Analyses"
             />
           </LineChart>
         </ResponsiveContainer>
@@ -90,3 +94,5 @@ export default function QualityTrends({ trends }: QualityTrendsProps) {
     </Card>
   );
 }
+
+    
