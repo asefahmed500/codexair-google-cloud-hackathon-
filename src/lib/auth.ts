@@ -75,34 +75,17 @@ export const authOptions: NextAuthOptions = {
         token.provider = account.provider;
         if (account.access_token) token.accessToken = account.access_token;
 
-
         const dbUserForToken = await UserModel.findById(user.id).select('role email status name image').lean();
         if (dbUserForToken) {
-          // Ensure defaults are applied in the token if somehow not read from DB immediately
-          token.role = dbUserForToken.role || 'user'; // Default to 'user'
-          token.status = dbUserForToken.status || 'active'; // Default to 'active'
+          // User's role is set by schema default ('user') on creation by adapter.
+          // We read it here. No automatic promotion to admin.
+          token.role = dbUserForToken.role || 'user'; 
+          token.status = dbUserForToken.status || 'active';
           token.email = dbUserForToken.email;
           token.name = dbUserForToken.name;
           token.picture = dbUserForToken.image;
 
-          console.log(`[JWT Callback - Initial Sign-in] DB user ${user.id} fetched. Role from DB: '${dbUserForToken.role}', Status from DB: '${dbUserForToken.status}'. Effective Token Role: '${token.role}', Status: '${token.status}'.`);
-
-          // FIRST USER PROMOTION LOGIC
-          if (token.role === 'user') { // Check against the effective role in the token
-            const totalUsersInSystem = await UserModel.countDocuments();
-            console.log(`[JWT Callback - Promotion Check] Total users in system: ${totalUsersInSystem}. Current effective token role: '${token.role}'.`);
-            if (totalUsersInSystem === 1) {
-              // This user is the very first one. Promote to admin.
-              console.log(`[JWT Callback - Promotion Action] Promoting User ID: ${user.id}, Email: ${token.email} to 'admin'.`);
-              await UserModel.updateOne({ _id: user.id }, { $set: { role: 'admin', status: 'active' } });
-              token.role = 'admin'; // Update token immediately
-              token.status = 'active';
-            } else {
-              console.log(`[JWT Callback - No Promotion] Not the first user (Total users: ${totalUsersInSystem}). User ID: ${user.id} remains role: '${token.role}'.`);
-            }
-          } else if (token.role === 'admin') {
-            console.log(`[JWT Callback - Already Admin or Promoted] User ID: ${user.id} is now 'admin'. No further promotion check needed.`);
-          }
+          console.log(`[JWT Callback - Initial Sign-in] DB user ${user.id} fetched. Role from DB (and schema default for new users): '${dbUserForToken.role}', Status: '${dbUserForToken.status}'. Token updated accordingly.`);
         } else {
           console.error(`[JWT Callback - Initial Sign-in] CRITICAL: User ${user.id} not found in DB immediately after adapter processing. Cannot set role/status.`);
           delete token.role; delete token.status; delete token.email; delete token.name; delete token.picture;
@@ -183,7 +166,7 @@ export const authOptions: NextAuthOptions = {
         return `/auth/signin?error=AccountSuspended&email=${encodeURIComponent(userEmail)}`;
       }
       
-      console.log(`[SignIn Callback] Approved sign-in for email: '${userEmail}'. Adapter will handle DB operations. Initial DB role (if user exists): ${dbUser?.role || 'N/A (new user)'}`);
+      console.log(`[SignIn Callback] Approved sign-in for email: '${userEmail}'. Adapter will handle DB operations. Initial DB role (if user exists): ${dbUser?.role || 'N/A (new user)'}. For new users, schema default ('user') applies.`);
       return true; 
     }
   },
@@ -194,8 +177,3 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
 };
-
-// Removed: const handler = NextAuth(authOptions);
-// Removed: export { handler as GET, handler as POST };
-// These are not needed for the authOptions export itself, but rather in the [...nextauth].ts route handler.
-// Ensuring they are not duplicated here. The route handler already exports them.
