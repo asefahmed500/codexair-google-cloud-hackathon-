@@ -3,13 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { Repository, RepositoryScan, connectMongoose } from '@/lib/mongodb';
-import { getDefaultBranch, getRepoFileTree, getFileContent } from '@/lib/github';
+import { getDefaultBranch, getRepoFileTree, getFileContent, getRepositoryDetails, getGithubClient } from '@/lib/github'; // Added getGithubClient
 import { analyzeCode } from '@/ai/flows/code-quality-analysis';
-import { summarizePrAnalysis } from '@/ai/flows/summarize-pr-analysis-flow'; // Re-use for now
+import { summarizePrAnalysis } from '@/ai/flows/summarize-pr-analysis-flow'; 
 import type { FileAnalysisItem, SecurityIssue, Suggestion, CodeAnalysisMetrics, RepositoryScanResult } from '@/types';
-import { ai } from '@/ai/genkit'; // For embeddings
+import { ai } from '@/ai/genkit'; 
+import mongoose from 'mongoose';
 
-const MAX_FILES_TO_SCAN = 5; // Limit for synchronous MVP
+const MAX_FILES_TO_SCAN = 5; 
 const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 70000;
 const EMBEDDING_DIMENSIONS = 768;
 const FALLBACK_SUMMARY_MESSAGE = "Overall repository scan summary could not be generated.";
@@ -29,7 +30,7 @@ async function generateOverallSummary(
 ): Promise<string> {
   try {
     const summaryInput = {
-      prTitle: `${repoName} (Full Scan - ${branchName} branch)`, // Adapt for repo scan context
+      prTitle: `${repoName} (Full Scan - ${branchName} branch)`, 
       overallQualityScore: aggregatedQualityScore,
       totalCriticalIssues: totalCriticalIssues,
       totalHighIssues: totalHighIssues,
@@ -53,12 +54,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    await connectMongoose();
+
     const { owner, repoName } = await request.json();
     if (!owner || !repoName) {
       return NextResponse.json({ error: 'Missing owner or repoName' }, { status: 400 });
     }
-
-    await connectMongoose();
 
     const localRepo = await Repository.findOne({ owner, name: repoName, userId: session.user.id });
     if (!localRepo) {
@@ -70,8 +71,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Could not determine default branch for repository' }, { status: 500 });
     }
     
-    const repoDetails = await getRepositoryDetails(owner, repoName);
-    const headCommitSha = repoDetails.default_branch === defaultBranch ? repoDetails.updated_at : (await getGithubClient().rest.repos.getBranch({owner, repo: repoName, branch: defaultBranch})).data.commit.sha;
+    let headCommitSha: string;
+    try {
+      const octokit = await getGithubClient();
+      const branchData = await octokit.rest.repos.getBranch({ owner, repo: repoName, branch: defaultBranch });
+      headCommitSha = branchData.data.commit.sha;
+      if (!headCommitSha) {
+        throw new Error(`Could not retrieve valid commit SHA for branch ${defaultBranch}`);
+      }
+    } catch (e: any) {
+      console.error(`[API/RepoScan POST] Error fetching head commit SHA for branch ${defaultBranch} of ${owner}/${repoName}:`, e.message);
+      return NextResponse.json({ error: `Failed to get branch details for ${defaultBranch}. Ensure the branch exists and the app has access.`, details: e.message }, { status: 500 });
+    }
 
 
     const fileTree = await getRepoFileTree(owner, repoName, headCommitSha);
@@ -129,7 +140,6 @@ export async function POST(request: NextRequest) {
 
     const analyzedFiles = (await Promise.all(fileAnalysesPromises)).filter(Boolean) as FileAnalysisItem[];
 
-    // Aggregate results
     const totalAnalyzed = analyzedFiles.length;
     const aggQuality = totalAnalyzed > 0 ? analyzedFiles.reduce((sum, a) => sum + a.qualityScore, 0) / totalAnalyzed : 0;
     const aggComplexity = totalAnalyzed > 0 ? analyzedFiles.reduce((sum, a) => sum + a.complexity, 0) / totalAnalyzed : 0;
@@ -156,12 +166,12 @@ export async function POST(request: NextRequest) {
 
 
     const newScan = new RepositoryScan({
-      repositoryId: localRepo._id,
+      repositoryId: new mongoose.Types.ObjectId(localRepo._id as string), // Ensure it's ObjectId
       userId: session.user.id,
       owner,
       repoName,
       branchAnalyzed: defaultBranch,
-      commitShaAnalyzed: headCommitSha, // Store the SHA of the branch HEAD
+      commitShaAnalyzed: headCommitSha, 
       status: 'completed',
       qualityScore: aggQuality,
       complexity: aggComplexity,
@@ -171,6 +181,8 @@ export async function POST(request: NextRequest) {
       metrics: aggMetrics,
       summaryAiInsights: overallSummary,
       fileAnalyses: analyzedFiles,
+      createdAt: new Date(), // Explicitly set
+      updatedAt: new Date(), // Explicitly set
     });
 
     await newScan.save();
@@ -179,7 +191,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ scanId: newScan._id.toString() });
 
   } catch (error: any) {
-    console.error('[API/RepoScan POST] Error:', error);
-    return NextResponse.json({ error: 'Failed to initiate repository scan', details: error.message }, { status: 500 });
+    console.error('[API/RepoScan POST] Error Object Type:', Object.prototype.toString.call(error));
+    console.error('[API/RepoScan POST] Error Is Error Instance:', error instanceof Error);
+    console.error('[API/RepoScan POST] Error Properties:', Object.getOwnPropertyNames(error));
+    console.error('[API/RepoScan POST] Full Error Log:', error); 
+
+    let clientMessage = 'Failed to initiate repository scan.';
+    let detailsForClient = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    
+    if (detailsForClient.toLowerCase().includes('fetch failed') || detailsForClient.toLowerCase().includes('econnrefused') || detailsForClient.toLowerCase().includes('socket hang up')) {
+        clientMessage = "Network error: Could not connect to a required backend service (e.g., AI model server or Genkit development server). Please ensure all backend services are running correctly.";
+        detailsForClient = clientMessage; // Simplify client details for network issues
+    }
+    
+    // For server logs, keep more detailed info
+    let detailsForServerLog = 'No further details available.';
+    if (error instanceof Error && error.stack) {
+        detailsForServerLog = error.stack;
+    } else if (typeof error === 'string') {
+        detailsForServerLog = error;
+    } else if (error.details) {
+        detailsForServerLog = String(error.details);
+    } else {
+        try {
+            detailsForServerLog = JSON.stringify(error);
+        } catch (e) {
+            detailsForServerLog = "Could not stringify error object for server log."
+        }
+    }
+    console.error('[API/RepoScan POST] Server Log Details:', detailsForServerLog.substring(0,1000));
+
+
+    return NextResponse.json({ 
+        error: clientMessage, 
+        details: detailsForClient.substring(0, 500), // Keep client details concise
+    }, { status: 500 });
   }
 }
+
