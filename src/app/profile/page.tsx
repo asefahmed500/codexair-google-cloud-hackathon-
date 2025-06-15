@@ -113,6 +113,9 @@ export default function ProfilePage() {
     );
   }
 
+  const formattedJoinedDate = profile.createdAt && !isNaN(new Date(profile.createdAt).getTime())
+    ? format(new Date(profile.createdAt), 'PPP')
+    : 'Date not available';
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
@@ -137,7 +140,7 @@ export default function ProfilePage() {
             <InfoItem icon={<AtSign />} label="Email" value={profile.email || 'Not set'} />
             <InfoItem icon={<Shield />} label="Role" value={profile.role} badgeVariant={profile.role === 'admin' ? 'default' : 'secondary'} />
             <InfoItem icon={profile.status === 'active' ? <CheckCircle className="text-green-500" /> : <Clock className="text-amber-500" />} label="Status" value={profile.status} badgeVariant={profile.status === 'active' ? 'outline' : 'destructive'} />
-            <InfoItem icon={<CalendarDays />} label="Joined" value={format(new Date(profile.createdAt), 'PPP')} />
+            <InfoItem icon={<CalendarDays />} label="Joined" value={formattedJoinedDate} />
             
             <Button asChild variant="outline" className="w-full mt-8 shadow-sm hover:shadow-md transition-shadow">
               <Link href="/settings">
