@@ -10,8 +10,17 @@ import type { CodeAnalysisOutput as AIAnalysisOutput, FileAnalysisItem, PullRequ
 import { ai } from '@/ai/genkit';
 
 const MAX_FILES_TO_ANALYZE = 10;
+const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 20000; // Reduced max content length
 const EMBEDDING_DIMENSIONS = 768;
 const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated for this pull request.";
+const EXCLUDED_FILE_PATTERNS_FOR_ANALYSIS = [
+    /package-lock\.json$/,
+    /yarn\.lock$/,
+    /pnpm-lock\.yaml$/,
+    /\.min\.(js|css)$/, // Minified files
+    /\.(map)$/, // Source maps
+    /\.(lock)$/ // Generic lock files
+];
 
 function extractAddedLinesFromPatch(patch?: string): string {
   if (!patch) return '';
@@ -102,6 +111,7 @@ export async function POST(request: NextRequest) {
       .filter(file =>
         (file.status === 'added' || file.status === 'modified' || file.status === 'renamed') &&
         file.filename?.match(/\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i) &&
+        !EXCLUDED_FILE_PATTERNS_FOR_ANALYSIS.some(pattern => pattern.test(file.filename!)) && // Exclude specified patterns
         (file.changes || 0) < 2000
       )
       .slice(0, MAX_FILES_TO_ANALYZE);
@@ -136,12 +146,12 @@ export async function POST(request: NextRequest) {
             return null;
           }
 
-          console.log(`[API/ANALYZE] Analyzing ${file.filename} (context: ${analysisContext}, length: ${contentToAnalyze.length} chars)`);
-          const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 70000;
           if (contentToAnalyze.length > MAX_CONTENT_LENGTH_FOR_ANALYSIS) {
              console.warn(`[API/ANALYZE] Content for ${file.filename} is too large (${contentToAnalyze.length} chars), truncating to ${MAX_CONTENT_LENGTH_FOR_ANALYSIS}.`);
              contentToAnalyze = contentToAnalyze.substring(0, MAX_CONTENT_LENGTH_FOR_ANALYSIS);
           }
+          console.log(`[API/ANALYZE] Analyzing ${file.filename} (context: ${analysisContext}, length: ${contentToAnalyze.length} chars)`);
+
 
           const aiResponse: AIAnalysisOutput = await analyzeCode({ code: contentToAnalyze, filename: file.filename });
 
@@ -153,19 +163,27 @@ export async function POST(request: NextRequest) {
                 content: contentToAnalyze,
               });
 
-              if (Array.isArray(embedApiResponse) && embedApiResponse.length > 0 && embedApiResponse[0]?.embedding) {
-                const potentialEmbedding = embedApiResponse[0].embedding;
-                if (Array.isArray(potentialEmbedding) && potentialEmbedding.length === EMBEDDING_DIMENSIONS && potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
-                  fileEmbeddingVector = potentialEmbedding;
-                  console.log(`[API/ANALYZE] Successfully generated embedding for ${file.filename} with ${fileEmbeddingVector.length} dimensions.`);
-                } else {
-                  console.warn(`[API/ANALYZE] Generated embedding for ${file.filename} is invalid or has incorrect dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${potentialEmbedding?.length}. Embedding: ${JSON.stringify(potentialEmbedding)}`);
-                }
+              // Expecting response structure: [{ embedding: number[] }]
+              if (Array.isArray(embedApiResponse) &&
+                  embedApiResponse.length > 0 &&
+                  embedApiResponse[0] &&
+                  typeof embedApiResponse[0] === 'object' &&
+                  embedApiResponse[0] !== null &&
+                  Object.prototype.hasOwnProperty.call(embedApiResponse[0], 'embedding') &&
+                  Array.isArray(embedApiResponse[0].embedding) &&
+                  embedApiResponse[0].embedding.length === EMBEDDING_DIMENSIONS &&
+                  embedApiResponse[0].embedding.every((n: any) => typeof n === 'number' && isFinite(n))
+                 ) {
+                fileEmbeddingVector = embedApiResponse[0].embedding;
+                console.log(`[API/ANALYZE] Successfully generated embedding for ${file.filename} with ${fileEmbeddingVector.length} dimensions.`);
               } else {
-                 console.warn(`[API/ANALYZE] ai.embed returned an unexpected structure for ${file.filename}. Response:`, JSON.stringify(embedApiResponse));
+                 console.warn(`[API/ANALYZE] Generated embedding for ${file.filename} is invalid or has incorrect dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedApiResponse[0]?.embedding?.length}. Response:`, JSON.stringify(embedApiResponse));
               }
             } catch (embeddingError: any) {
               console.error(`[API/ANALYZE] Error generating embedding for file ${file.filename}:`, embeddingError.message);
+              if (embeddingError.message && embeddingError.message.includes('payload size exceeds the limit')) {
+                  console.warn(`[API/ANALYZE] Embedding for ${file.filename} failed due to payload size. Content length was ${contentToAnalyze.length}.`);
+              }
             }
           } else {
             console.log(`[API/ANALYZE] Skipping embedding for ${file.filename} due to empty or invalid content.`);
@@ -310,10 +328,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('[API/ANALYZE] Critical error during pull request analysis:', error, error.stack);
-    // Attempt to update PR status to failed if owner, repoName, and pullNumber were successfully parsed
     if (owner && repoName && pullNumber !== undefined) {
       try {
-        const currentSession = await getServerSession(authOptions); // Re-fetch session if needed
+        const currentSession = await getServerSession(authOptions); 
         await PullRequest.updateOne(
           { owner, repoName, number: pullNumber, userId: currentSession?.user?.id },
           { $set: { analysisStatus: 'failed' } }
@@ -332,6 +349,9 @@ export async function POST(request: NextRequest) {
         statusCode = error.status || 500;
     } else if (error.message.toLowerCase().includes('genkit') || error.message.toLowerCase().includes('ai model')) {
         errorMessage = `AI processing error: ${error.message}`;
+    } else if (error.message.includes('payload size exceeds the limit')) {
+        errorMessage = 'Content too large for AI embedding service. Try analyzing smaller files or changes.';
+        statusCode = 413; // Payload Too Large
     }
     
     return NextResponse.json({ error: errorMessage, details: error.message }, { status: statusCode });

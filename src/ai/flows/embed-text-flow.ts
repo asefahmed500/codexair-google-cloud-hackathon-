@@ -9,7 +9,7 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z}_ from 'genkit'; // Use flow's Zod for schema definitions
 
 const EmbedTextInputSchema = z.object({
   text: z.string().describe('The text to generate an embedding for. This can be a code snippet or a natural language query.'),
@@ -51,6 +51,7 @@ const embedTextFlow = ai.defineFlow(
 
     let extractedEmbedding: number[] | undefined = undefined;
 
+    // Primary expected structure: [{ embedding: number[] }]
     if (Array.isArray(embedApiResponse) &&
         embedApiResponse.length > 0 &&
         embedApiResponse[0] &&
@@ -61,40 +62,43 @@ const embedTextFlow = ai.defineFlow(
         const potentialEmbedding = (embedApiResponse[0] as any).embedding;
 
         if (Array.isArray(potentialEmbedding) &&
-            potentialEmbedding.length > 0 &&
+            potentialEmbedding.length > 0 && // Check if array is not empty
             potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
             extractedEmbedding = potentialEmbedding;
             console.log('[embedTextFlow] Successfully extracted embedding from ai.embed() response structure: [ { embedding: [...] } ]');
         } else {
             console.error('[embedTextFlow] ai.embed() response [0].embedding was not a valid non-empty array of finite numbers.');
-            console.error('[embedTextFlow] Value of (embedApiResponse[0] as any).embedding:', JSON.stringify(potentialEmbedding));
+            console.error('[embedTextFlow] Validation details: isArray:', Array.isArray(potentialEmbedding), 'length:', potentialEmbedding?.length, 'allFiniteNumbers:', potentialEmbedding?.every((n:any) => typeof n === 'number' && isFinite(n)));
+            console.error('[embedTextFlow] Value of (embedApiResponse[0] as any).embedding (first 10 elements):', JSON.stringify(potentialEmbedding?.slice(0,10)));
         }
-    } else if (embedApiResponse && typeof embedApiResponse === 'object' && Object.prototype.hasOwnProperty.call(embedApiResponse, 'embedding')) {
-        // Fallback for standard { embedding: [...] } structure, though logs indicate array structure for text-embedding-004
+    } 
+    // Fallback for potential direct { embedding: number[] } structure, though logs suggest array.
+    else if (embedApiResponse && typeof embedApiResponse === 'object' && Object.prototype.hasOwnProperty.call(embedApiResponse, 'embedding')) {
         const potentialEmbedding = (embedApiResponse as any).embedding;
         if (Array.isArray(potentialEmbedding) &&
-            potentialEmbedding.length > 0 &&
+            potentialEmbedding.length > 0 && // Check if array is not empty
             potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
             extractedEmbedding = potentialEmbedding;
             console.log('[embedTextFlow] Successfully extracted embedding from ai.embed() response structure: { embedding: [...] }');
         } else {
             console.error('[embedTextFlow] ai.embed() response .embedding was not a valid non-empty array of finite numbers.');
-            console.error('[embedTextFlow] Value of (embedApiResponse as any).embedding:', JSON.stringify(potentialEmbedding));
+            console.error('[embedTextFlow] Validation details: isArray:', Array.isArray(potentialEmbedding), 'length:', potentialEmbedding?.length, 'allFiniteNumbers:', potentialEmbedding?.every((n:any) => typeof n === 'number' && isFinite(n)));
+            console.error('[embedTextFlow] Value of (embedApiResponse as any).embedding (first 10 elements):', JSON.stringify(potentialEmbedding?.slice(0,10)));
         }
     } else {
         console.error('[embedTextFlow] ai.embed() response did not match expected structures.');
     }
     
     if (!extractedEmbedding) {
-        console.error('[embedTextFlow] Final check: extractedEmbedding is undefined or invalid.');
+        console.error('[embedTextFlow] Final check: extractedEmbedding is undefined or invalid. Embedding generation failed.');
         console.error('[embedTextFlow] Input text was (first 100 chars):', input.text.substring(0, 100));
-        console.error('[embedTextFlow] Original response from ai.embed was:', JSON.stringify(embedApiResponse, null, 2));
+        console.error('[embedTextFlow] Full response from ai.embed was:', JSON.stringify(embedApiResponse, null, 2));
         throw new Error('Failed to generate a valid embedding for the provided text. The AI model did not return the expected data (e.g., empty or invalid array).');
     }
     
+    // This check is now more of a warning, as the primary goal is a valid non-empty array of numbers.
+    // The vector search will fail if dimensions are wrong anyway.
     if (extractedEmbedding.length !== 768) {
-        // This is now a warning, as the primary check is for a valid, non-empty array of numbers.
-        // The vector search component will ultimately fail if dimensions don't match its index.
         console.warn(`[embedTextFlow] Generated embedding has ${extractedEmbedding.length} dimensions, expected 768. This might cause issues with vector search. Input text (first 100 chars): ${input.text.substring(0,100)}`);
     }
 

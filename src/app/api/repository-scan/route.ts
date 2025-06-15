@@ -11,11 +11,26 @@ import { ai } from '@/ai/genkit';
 import mongoose from 'mongoose';
 
 const MAX_FILES_TO_SCAN = 5;
-const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 70000;
+const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 20000; // Reduced max content length
 const EMBEDDING_DIMENSIONS = 768;
 const FALLBACK_SUMMARY_MESSAGE = "Overall repository scan summary could not be generated.";
 
 const RELEVANT_FILE_EXTENSIONS = /\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i;
+const EXCLUDED_FILE_PATTERNS_FOR_SCAN = [
+    /package-lock\.json$/,
+    /yarn\.lock$/,
+    /pnpm-lock\.yaml$/,
+    /\.min\.(js|css)$/, // Minified files
+    /\.(map)$/, // Source maps
+    /\.(lock)$/, // Generic lock files
+    /node_modules\//, // Node modules folder
+    /\.git\//, // Git folder
+    /dist\//, // Common build output folders
+    /build\//,
+    /out\//,
+    /\.(png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|eot|ttf|otf)$/i // Common binary/font files
+];
+
 
 async function generateOverallSummary(
   repoName: string,
@@ -28,17 +43,17 @@ async function generateOverallSummary(
   perFileSummaries: { filename: string; insight: string }[]
 ): Promise<string> {
   try {
-    const summaryInput = {
-      prTitle: `${repoName} (Full Scan - ${branchName} branch)`,
+    const promptContext = {
+      prTitle: `${repoName} (Full Scan - ${branchName} branch)`, // Adapted context
       overallQualityScore: aggregatedQualityScore,
+      formattedOverallQualityScore: aggregatedQualityScore.toFixed(1), // Pre-format
       totalCriticalIssues: totalCriticalIssues,
       totalHighIssues: totalHighIssues,
       totalSuggestions: allSuggestionsCount,
       fileCount: analyzedFileCount,
       perFileSummaries: perFileSummaries,
     };
-    // Using summarizePrAnalysis flow, context adapted by prTitle.
-    const summaryOutput = await summarizePrAnalysis(summaryInput);
+    const summaryOutput = await summarizePrAnalysis(promptContext);
     return summaryOutput.prSummary || FALLBACK_SUMMARY_MESSAGE;
   } catch (error) {
     console.error("Error generating repository scan summary:", error);
@@ -85,7 +100,12 @@ export async function POST(request: NextRequest) {
 
     const fileTree = await getRepoFileTree(owner, repoName, headCommitSha);
     const relevantFiles = fileTree
-      .filter(file => file.type === 'blob' && file.path && RELEVANT_FILE_EXTENSIONS.test(file.path))
+      .filter(file => 
+        file.type === 'blob' && 
+        file.path && 
+        RELEVANT_FILE_EXTENSIONS.test(file.path) &&
+        !EXCLUDED_FILE_PATTERNS_FOR_SCAN.some(pattern => pattern.test(file.path!))
+      )
       .slice(0, MAX_FILES_TO_SCAN);
 
     console.log(`[API/RepoScan] Starting scan for ${owner}/${repoName}, branch: ${defaultBranch}. Found ${relevantFiles.length} relevant files (limited to ${MAX_FILES_TO_SCAN}).`);
@@ -111,19 +131,27 @@ export async function POST(request: NextRequest) {
               embedder: 'googleai/text-embedding-004',
               content: contentToAnalyze,
             });
-
-            if (Array.isArray(embedApiResponse) && embedApiResponse.length > 0 && embedApiResponse[0]?.embedding) {
-              const potentialEmbedding = embedApiResponse[0].embedding;
-              if (Array.isArray(potentialEmbedding) && potentialEmbedding.length === EMBEDDING_DIMENSIONS && potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
-                fileEmbeddingVector = potentialEmbedding;
-              } else {
-                console.warn(`[API/RepoScan] Generated embedding for ${fileMeta.path!} is invalid or has incorrect dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${potentialEmbedding?.length}.`);
-              }
+            
+            // Expecting response structure: [{ embedding: number[] }]
+            if (Array.isArray(embedApiResponse) &&
+                embedApiResponse.length > 0 &&
+                embedApiResponse[0] &&
+                typeof embedApiResponse[0] === 'object' &&
+                embedApiResponse[0] !== null &&
+                Object.prototype.hasOwnProperty.call(embedApiResponse[0], 'embedding') &&
+                Array.isArray(embedApiResponse[0].embedding) &&
+                embedApiResponse[0].embedding.length === EMBEDDING_DIMENSIONS &&
+                embedApiResponse[0].embedding.every((n: any) => typeof n === 'number' && isFinite(n))
+               ) {
+              fileEmbeddingVector = embedApiResponse[0].embedding;
             } else {
-               console.warn(`[API/RepoScan] ai.embed returned an unexpected structure for ${fileMeta.path!}. Response:`, JSON.stringify(embedApiResponse));
+              console.warn(`[API/RepoScan] Generated embedding for ${fileMeta.path!} is invalid or has incorrect dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedApiResponse[0]?.embedding?.length}. Response:`, JSON.stringify(embedApiResponse));
             }
           } catch (embErr: any) {
             console.error(`[API/RepoScan] Embedding error for ${fileMeta.path!}: ${embErr.message}`);
+            if (embErr.message && embErr.message.includes('payload size exceeds the limit')) {
+                console.warn(`[API/RepoScan] Embedding for ${fileMeta.path!} failed due to payload size. Content length was ${contentToAnalyze.length}.`);
+            }
           }
         }
 
@@ -203,12 +231,16 @@ export async function POST(request: NextRequest) {
 
     let clientMessage = 'Failed to initiate repository scan.';
     let detailsForClient = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    let statusCode = 500;
     
     if (detailsForClient.toLowerCase().includes('fetch failed') || detailsForClient.toLowerCase().includes('econnrefused') || detailsForClient.toLowerCase().includes('socket hang up')) {
         clientMessage = "Network error: Could not connect to a required backend service (e.g., AI model server or Genkit development server). Please ensure all backend services are running correctly.";
         detailsForClient = clientMessage;
     } else if (detailsForClient.includes("Could not retrieve valid commit SHA for branch")) {
         clientMessage = "Configuration Error: Could not get essential repository information (commit SHA for default branch). Please ensure the repository is accessible and the default branch exists.";
+    } else if (detailsForClient.includes('payload size exceeds the limit')) {
+        clientMessage = 'Content too large for AI embedding service. One or more files exceeded the size limit.';
+        statusCode = 413; // Payload Too Large
     }
     
     let detailsForServerLog = 'No further details available.';
@@ -229,7 +261,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
         error: clientMessage,
-        details: detailsForClient.substring(0, 500),
-    }, { status: 500 });
+        details: detailsForClient.substring(0, 500), // Keep client details concise
+    }, { status: statusCode });
   }
 }
