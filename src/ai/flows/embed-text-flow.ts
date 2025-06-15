@@ -33,20 +33,37 @@ const embedTextFlow = ai.defineFlow(
     outputSchema: EmbedTextOutputSchema,
   },
   async (input) => {
-    const { embedding } = await ai.embed({
-        embedder: 'googleai/text-embedding-004',
-        content: input.text,
-    });
-    
-    if (!embedding || !Array.isArray(embedding) || !embedding.every(n => typeof n === 'number')) {
-        console.error('[embedTextFlow] Failed to extract a valid embedding array. Embedding was:', embedding);
-        throw new Error('Failed to generate a valid embedding for the provided text.');
+    if (!input.text || input.text.trim() === "") {
+      console.error('[embedTextFlow] Input text is empty or whitespace. Cannot generate embedding.');
+      throw new Error('Input text for embedding cannot be empty.');
+    }
+
+    let embedResponse: any;
+    try {
+      embedResponse = await ai.embed({
+          embedder: 'googleai/text-embedding-004',
+          content: input.text, // Genkit handles tokenization internally
+      });
+    } catch (e: any) {
+        console.error('[embedTextFlow] ai.embed() call threw an exception:', e);
+        const errorMessage = e.details || e.message || 'Unknown error during embedding generation.';
+        throw new Error(`Embedding generation failed: ${errorMessage}`);
     }
     
+    const embedding = embedResponse?.embedding;
+
+    // Check if embedding is a valid, non-empty array of numbers
+    if (!embedding || !Array.isArray(embedding) || embedding.length === 0 || !embedding.every(n => typeof n === 'number')) {
+        console.error('[embedTextFlow] Failed to extract a valid, non-empty embedding array from ai.embed response.');
+        console.error('[embedTextFlow] Input text was (first 100 chars):', input.text.substring(0, 100));
+        console.error('[embedTextFlow] Full response from ai.embed was:', JSON.stringify(embedResponse, null, 2));
+        throw new Error('Failed to generate a valid embedding for the provided text. The AI model did not return the expected data (e.g., empty or invalid array).');
+    }
+    
+    // Check for correct dimensions, but treat as a warning for now, still return the embedding if it's otherwise valid.
     if (embedding.length !== 768) {
-        console.warn(`[embedTextFlow] Generated embedding has ${embedding.length} dimensions, expected 768. This might cause issues with vector search.`);
-        // Depending on strictness, you might throw an error or allow it but log a warning.
-        // For now, a warning is logged, and the embedding is returned.
+        console.warn(`[embedTextFlow] Generated embedding has ${embedding.length} dimensions, expected 768. This might cause issues with vector search but will be returned. Input text (first 100 chars): ${input.text.substring(0,100)}`);
+        // Depending on strictness, you might throw an error here or allow it but log a warning.
     }
 
     return { embedding: embedding };
