@@ -29,8 +29,8 @@ export async function findSimilarCode(
     return [];
   }
 
-  const defaultGeneralSearchThreshold = 0.50; 
-  const defaultContextualSearchThreshold = 0.75;
+  const defaultGeneralSearchThreshold = 0.40; // Lowered further for more lenient general search
+  const defaultContextualSearchThreshold = 0.75; // Kept contextual search a bit stricter
 
   let effectiveSimilarityThreshold: number;
   let searchTypeMessage: string;
@@ -41,18 +41,16 @@ export async function findSimilarCode(
   } else if (excludeAnalysisId && excludeFilename) { 
     effectiveSimilarityThreshold = defaultContextualSearchThreshold;
     searchTypeMessage = `contextual default (${defaultContextualSearchThreshold})`;
-    console.log("[findSimilarCode] Applying contextual search default threshold:", effectiveSimilarityThreshold);
   } else { 
     effectiveSimilarityThreshold = defaultGeneralSearchThreshold;
     searchTypeMessage = `general default (${defaultGeneralSearchThreshold})`;
-    console.log("[findSimilarCode] Applying general search default threshold:", effectiveSimilarityThreshold);
   }
   
   console.log(`[findSimilarCode] Using effective similarity threshold: ${effectiveSimilarityThreshold} (Search type: ${searchTypeMessage}, Limit: ${limit})`);
   console.log(`[findSimilarCode] Query vector (first 5 dims): ${queryVector.slice(0,5).join(', ')}`);
   if (excludeAnalysisId) console.log(`[findSimilarCode] Excluding analysisId: ${excludeAnalysisId}, filename: ${excludeFilename || 'N/A'}`);
 
-  // Pipeline to get raw candidates and their count
+  // Pipeline to get raw candidates and their count (before score filtering by $match)
   const countPipeline: mongoose.PipelineStage[] = [
     {
       $vectorSearch: {
@@ -60,7 +58,7 @@ export async function findSimilarCode(
         path: "fileAnalyses.vectorEmbedding",
         queryVector: queryVector,
         numCandidates: limit * 20, // Fetch more candidates initially
-        limit: limit * 10       // Limit the initial set before further processing
+        limit: limit * 10,       // Limit the initial set before further processing
       }
     },
     {
@@ -77,11 +75,10 @@ export async function findSimilarCode(
     console.log(`[findSimilarCode] Atlas $vectorSearch stage initially identified ${rawCandidateCount} potential candidates (before score filtering).`);
   } catch (error) {
     console.error("[findSimilarCode] Error counting raw candidates from $vectorSearch:", error);
-    // Proceed, but this info will be missing
   }
 
-  if (rawCandidateCount === 0 && limit * 10 > 0) { // Check if we expected candidates
-      console.log("[findSimilarCode] No candidates returned by the $vectorSearch stage itself. This suggests the index might be empty, not configured correctly for 'fileAnalyses.vectorEmbedding', or the query vector is too dissimilar to anything in the index.");
+  if (rawCandidateCount === 0 && limit * 10 > 0) {
+      console.warn("[findSimilarCode] No candidates returned by the Atlas $vectorSearch stage itself. This suggests the index might be empty, not configured correctly for 'fileAnalyses.vectorEmbedding', or the query vector is too dissimilar to anything in the index.");
   }
 
   const pipeline: mongoose.PipelineStage[] = [
@@ -108,14 +105,16 @@ export async function findSimilarCode(
       $unwind: "$fileAnalyses" 
     },
     {
-      $match: {
+      $match: { // Ensure the unwound fileAnalysis actually has the embedding that was searched on
         "fileAnalyses.vectorEmbedding": { $exists: true, $ne: null, $not: {$size: 0} },
-        $expr: {
-            $and: [
-                { $isArray: "$fileAnalyses.vectorEmbedding" },
-                { $gt: [ { $size: "$fileAnalyses.vectorEmbedding" }, 0 ] }
-            ]
-        }
+        // Compare the unwound file's embedding to the query vector using $meta vectorSearchScore,
+        // to ensure we are matching the correct unwound element.
+        // This is slightly tricky as $vectorSearch operates on the document level.
+        // A simpler approach is to re-evaluate similarity if needed, or trust Atlas's initial match if the path is specific.
+        // For now, rely on the $vectorSearch path and the fact that we $unwind after.
+        // A more robust way for multi-vector documents might involve more complex aggregation
+        // or ensuring the score is directly tied to the unwound element.
+        // However, given 'fileAnalyses.vectorEmbedding' path, Atlas should score based on the *specific* array element that matched.
       }
     },
     ...(excludeAnalysisId && excludeFilename ? [{
@@ -163,7 +162,7 @@ export async function findSimilarCode(
 
   try {
     const results = await db.collection('analyses').aggregate(pipeline).toArray();
-    console.log(`[findSimilarCode] Vector search returned ${results.length} results after thresholding (${effectiveSimilarityThreshold}) and limiting.`);
+    console.log(`[findSimilarCode] Vector search returned ${results.length} results after thresholding (${effectiveSimilarityThreshold}) and limiting. Initial candidates found by Atlas: ${rawCandidateCount}.`);
     
     if (results.length === 0) {
       console.warn(`[findSimilarCode] No results found. This could be due to the threshold (${effectiveSimilarityThreshold}), no matching data, or an issue with the query/index. Raw candidates found by Atlas before scoring: ${rawCandidateCount}.`);
@@ -241,4 +240,3 @@ export async function findTextSearchResults(queryText: string, limit = 10): Prom
   */
   return [];
 }
-
