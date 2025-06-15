@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { scanId: string } }
+  context: { params: { scanId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,7 +15,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { scanId } = params;
+    const scanId = context.params.scanId;
     if (!scanId || !mongoose.Types.ObjectId.isValid(scanId)) {
       return NextResponse.json({ error: 'Invalid Scan ID' }, { status: 400 });
     }
@@ -37,7 +37,7 @@ export async function GET(
     return NextResponse.json(scanResult);
 
   } catch (error: any) {
-    console.error(`[API/RepoScan GET ${params.scanId}] Error:`, error);
+    console.error(`[API/RepoScan GET ${context.params.scanId}] Error:`, error);
     return NextResponse.json({ error: 'Failed to fetch repository scan results', details: error.message }, { status: 500 });
   }
 }

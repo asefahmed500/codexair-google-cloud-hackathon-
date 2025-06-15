@@ -8,7 +8,7 @@ import type { PullRequest as PRType } from '@/types';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { owner: string; repoName: string } }
+  context: { params: { owner: string; repoName: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -18,7 +18,9 @@ export async function GET(
 
     await connectMongoose();
 
-    const { owner, repoName } = params;
+    const owner = context.params.owner;
+    const repoName = context.params.repoName;
+
     if (!owner || !repoName) {
       return NextResponse.json({ error: 'Missing owner or repository name' }, { status: 400 });
     }
@@ -81,7 +83,7 @@ export async function GET(
     return NextResponse.json({ pull_requests: mergedPRs.sort((a,b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()) });
 
   } catch (error: any) {
-    console.error(`Error fetching pull requests for ${params.owner}/${params.repoName}:`, error);
+    console.error(`Error fetching pull requests for ${context.params.owner}/${context.params.repoName}:`, error);
     if (error.message.includes('GitHub API error') || error.status === 401 || error.status === 403 || error.status === 404) {
         return NextResponse.json({ error: `GitHub interaction failed: ${error.message}` }, { status: error.status || 500 });
     }

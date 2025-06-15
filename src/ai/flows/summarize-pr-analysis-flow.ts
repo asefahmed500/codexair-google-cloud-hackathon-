@@ -34,15 +34,23 @@ export async function summarizePrAnalysis(input: SummarizePrAnalysisInput): Prom
   return summarizePrAnalysisFlow(input);
 }
 
+// Define a schema for the actual data structure being passed to the prompt's template
+const SummarizePrAnalysisPromptContextSchema = SummarizePrAnalysisInputSchema.extend({
+  formattedOverallQualityScore: z.string(),
+});
+
 const prompt = ai.definePrompt({
   name: 'summarizePrAnalysisPrompt',
-  input: {schema: SummarizePrAnalysisInputSchema},
+  // The input schema for the prompt definition should match what the template expects.
+  // However, the flow itself receives SummarizePrAnalysisInput.
+  // The 'input' to `prompt()` call within the flow will be an object satisfying SummarizePrAnalysisPromptContextSchema.
+  input: {schema: SummarizePrAnalysisPromptContextSchema}, 
   output: {schema: SummarizePrAnalysisOutputSchema},
   prompt: `You are an expert Code Review AI Lead. You have received analysis results for a pull request titled "{{prTitle}}".
 Your task is to generate a concise, high-level summary for the *entire pull request*. This summary should be a narrative explanation that helps developers understand what to prioritize.
 
 Key aggregated metrics for the PR:
-- Overall Quality Score: {{overallQualityScore.toFixed(1)}}/10 (across {{fileCount}} files)
+- Overall Quality Score: {{formattedOverallQualityScore}}/10 (across {{fileCount}} files)
 - Critical Security Issues: {{totalCriticalIssues}}
 - High-Severity Security Issues: {{totalHighIssues}}
 - Total Improvement Suggestions: {{totalSuggestions}}
@@ -66,9 +74,9 @@ Focus on:
 
 Make the summary concise (2-4 impactful sentences) and easy to understand for a developer or team lead.
 Avoid simply restating the numbers; *interpret* them into a narrative.
-Example 1 (issues present): "This PR introduces several valuable improvements but requires immediate attention to {{totalCriticalIssues}} critical security vulnerabilities, notably in {{#if perFileSummaries.[0]}}{{perFileSummaries.[0].filename}}{{else}}key files{{/if}}. Overall quality is {{overallQualityScore.toFixed(1)}}/10. Prioritize addressing the identified security risks before merging."
-Example 2 (good quality): "Excellent work on this PR! The changes are well-structured, leading to a high quality score of {{overallQualityScore.toFixed(1)}}/10 with no critical issues found across the {{fileCount}} analyzed files. This looks good to merge after reviewing the {{totalSuggestions}} minor suggestions."
-Example 3 (mixed): "The PR achieves its main goals with an average quality score of {{overallQualityScore.toFixed(1)}}/10. While there are no critical security issues, address the {{totalHighIssues}} high-severity warnings and review the {{totalSuggestions}} suggestions for maintainability, particularly in files like {{#if perFileSummaries.[0]}}{{perFileSummaries.[0].filename}}{{/if}}."
+Example 1 (issues present): "This PR introduces several valuable improvements but requires immediate attention to {{totalCriticalIssues}} critical security vulnerabilities, notably in {{#if perFileSummaries.[0]}}{{perFileSummaries.[0].filename}}{{else}}key files{{/if}}. Overall quality is {{formattedOverallQualityScore}}/10. Prioritize addressing the identified security risks before merging."
+Example 2 (good quality): "Excellent work on this PR! The changes are well-structured, leading to a high quality score of {{formattedOverallQualityScore}}/10 with no critical issues found across the {{fileCount}} analyzed files. This looks good to merge after reviewing the {{totalSuggestions}} minor suggestions."
+Example 3 (mixed): "The PR achieves its main goals with an average quality score of {{formattedOverallQualityScore}}/10. While there are no critical security issues, address the {{totalHighIssues}} high-severity warnings and review the {{totalSuggestions}} suggestions for maintainability, particularly in files like {{#if perFileSummaries.[0]}}{{perFileSummaries.[0].filename}}{{/if}}."
 
 Generate the prSummary. Ensure it is a narrative explanation suitable for display at the top of a detailed analysis view.
 `,
@@ -77,13 +85,17 @@ Generate the prSummary. Ensure it is a narrative explanation suitable for displa
 const summarizePrAnalysisFlow = ai.defineFlow(
   {
     name: 'summarizePrAnalysisFlow',
-    inputSchema: SummarizePrAnalysisInputSchema,
+    inputSchema: SummarizePrAnalysisInputSchema, // Flow input remains the original schema
     outputSchema: SummarizePrAnalysisOutputSchema,
   },
   async (input) => {
-    // Potentially add pre-processing for perFileSummaries if they are too verbose for the prompt context window
-    // For now, we pass them as is.
-    const {output} = await prompt(input);
+    // Create the context object for the prompt, including the formatted score
+    const promptContext = {
+      ...input,
+      formattedOverallQualityScore: input.overallQualityScore.toFixed(1),
+    };
+    
+    const {output} = await prompt(promptContext); // Pass the extended context to the prompt
     if (!output || !output.prSummary || output.prSummary.trim() === "") {
         console.warn("[summarizePrAnalysisFlow] AI failed to generate a summary. Falling back.");
         return { prSummary: FALLBACK_SUMMARY_MESSAGE };
@@ -93,3 +105,4 @@ const summarizePrAnalysisFlow = ai.defineFlow(
 );
 
 const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated for this pull request.";
+

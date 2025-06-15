@@ -6,7 +6,7 @@ import { PullRequest, Repository, connectMongoose } from '@/lib/mongodb';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { owner: string; repoName: string; prNumber: string } }
+  context: { params: { owner: string; repoName: string; prNumber: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -16,7 +16,9 @@ export async function GET(
 
     await connectMongoose();
 
-    const { owner, repoName, prNumber: prNumberStr } = params;
+    const owner = context.params.owner;
+    const repoName = context.params.repoName;
+    const prNumberStr = context.params.prNumber;
     const prNumber = parseInt(prNumberStr);
 
     if (!owner || !repoName || isNaN(prNumber)) {
@@ -58,10 +60,7 @@ export async function GET(
     return NextResponse.json({ pullRequest });
 
   } catch (error: any) {
-    console.error(`Error fetching PR details for ${params.owner}/${params.repoName}#${params.prNumber}:`, error);
+    console.error(`Error fetching PR details for ${context.params.owner}/${context.params.repoName}#${context.params.prNumber}:`, error);
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
-
-
-

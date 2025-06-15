@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
@@ -7,7 +8,7 @@ import type { PullRequest as PRType } from '@/types';
 // This route is intended to fetch PRs already synced/created in the local DB.
 export async function GET(
   request: NextRequest,
-  { params }: { params: { owner: string; repoName: string } }
+  context: { params: { owner: string; repoName: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -17,7 +18,9 @@ export async function GET(
 
     await connectMongoose();
 
-    const { owner, repoName } = params;
+    const owner = context.params.owner;
+    const repoName = context.params.repoName;
+
     if (!owner || !repoName) {
       return NextResponse.json({ error: 'Missing owner or repository name' }, { status: 400 });
     }
@@ -52,7 +55,7 @@ export async function GET(
     return NextResponse.json({ pullRequests: augmentedPRs });
 
   } catch (error: any) {
-    console.error(`Error fetching local DB pull requests for ${params.owner}/${params.repoName}:`, error);
+    console.error(`Error fetching local DB pull requests for ${context.params.owner}/${context.params.repoName}:`, error);
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }

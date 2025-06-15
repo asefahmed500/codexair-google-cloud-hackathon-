@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { analysisId: string } }
+  context: { params: { analysisId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -17,7 +17,7 @@ export async function GET(
 
     await connectMongoose();
 
-    const { analysisId } = params;
+    const analysisId = context.params.analysisId;
     if (!analysisId || !mongoose.Types.ObjectId.isValid(analysisId)) {
       return NextResponse.json({ error: 'Invalid Analysis ID' }, { status: 400 });
     }
@@ -48,7 +48,7 @@ export async function GET(
     return NextResponse.json({ analysis, pullRequest });
 
   } catch (error: any) {
-    console.error(`Error fetching analysis ${params.analysisId}:`, error);
+    console.error(`Error fetching analysis ${context.params.analysisId}:`, error);
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }

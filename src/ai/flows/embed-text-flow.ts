@@ -38,11 +38,11 @@ const embedTextFlow = ai.defineFlow(
       throw new Error('Input text for embedding cannot be empty.');
     }
 
-    let embedResponse: any;
+    let embedApiResponse: any;
     try {
-      embedResponse = await ai.embed({
+      embedApiResponse = await ai.embed({
           embedder: 'googleai/text-embedding-004',
-          content: input.text, // Genkit handles tokenization internally
+          content: input.text, 
       });
     } catch (e: any) {
         console.error('[embedTextFlow] ai.embed() call threw an exception:', e);
@@ -50,23 +50,35 @@ const embedTextFlow = ai.defineFlow(
         throw new Error(`Embedding generation failed: ${errorMessage}`);
     }
     
-    const embedding = embedResponse?.embedding;
+    // Standard Genkit ai.embed for single content usually returns { embedding: number[] }
+    // If it ever returns an array like [{ embedding: number[] }], we handle that too.
+    let extractedEmbedding: number[] | undefined;
 
-    // Check if embedding is a valid, non-empty array of numbers
-    if (!embedding || !Array.isArray(embedding) || embedding.length === 0 || !embedding.every(n => typeof n === 'number')) {
-        console.error('[embedTextFlow] Failed to extract a valid, non-empty embedding array from ai.embed response.');
+    if (Array.isArray(embedApiResponse) && embedApiResponse.length > 0 && embedApiResponse[0] && typeof embedApiResponse[0] === 'object' && 'embedding' in embedApiResponse[0]) {
+      // Handles [{ embedding: [...] }]
+      extractedEmbedding = embedApiResponse[0].embedding;
+      console.log('[embedTextFlow] Accessed embedding via embedApiResponse[0].embedding');
+    } else if (embedApiResponse && typeof embedApiResponse === 'object' && 'embedding' in embedApiResponse) {
+      // Handles { embedding: [...] }
+      extractedEmbedding = (embedApiResponse as { embedding: number[] }).embedding;
+      console.log('[embedTextFlow] Accessed embedding via embedApiResponse.embedding');
+    } else {
+      console.error('[embedTextFlow] Unexpected structure from ai.embed(). Full response:', JSON.stringify(embedApiResponse, null, 2));
+    }
+    
+    if (!extractedEmbedding || !Array.isArray(extractedEmbedding) || extractedEmbedding.length === 0 || !extractedEmbedding.every(n => typeof n === 'number')) {
+        console.error('[embedTextFlow] Failed to extract a valid, non-empty embedding array.');
         console.error('[embedTextFlow] Input text was (first 100 chars):', input.text.substring(0, 100));
-        console.error('[embedTextFlow] Full response from ai.embed was:', JSON.stringify(embedResponse, null, 2));
+        console.error('[embedTextFlow] Original response from ai.embed was:', JSON.stringify(embedApiResponse, null, 2));
+        console.error('[embedTextFlow] Extracted embedding variable was:', JSON.stringify(extractedEmbedding, null, 2));
         throw new Error('Failed to generate a valid embedding for the provided text. The AI model did not return the expected data (e.g., empty or invalid array).');
     }
     
-    // Check for correct dimensions, but treat as a warning for now, still return the embedding if it's otherwise valid.
-    if (embedding.length !== 768) {
-        console.warn(`[embedTextFlow] Generated embedding has ${embedding.length} dimensions, expected 768. This might cause issues with vector search but will be returned. Input text (first 100 chars): ${input.text.substring(0,100)}`);
-        // Depending on strictness, you might throw an error here or allow it but log a warning.
+    if (extractedEmbedding.length !== 768) {
+        console.warn(`[embedTextFlow] Generated embedding has ${extractedEmbedding.length} dimensions, expected 768. This might cause issues with vector search but will be returned. Input text (first 100 chars): ${input.text.substring(0,100)}`);
     }
 
-    return { embedding: embedding };
+    return { embedding: extractedEmbedding };
   }
 );
 
