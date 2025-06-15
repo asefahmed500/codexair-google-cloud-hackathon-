@@ -43,17 +43,16 @@ export async function POST(request: NextRequest) {
     }
      if (queryVector.length !== 768) {
       console.warn(`[API/semantic-text-search] Query vector dimension mismatch. Expected 768, got ${queryVector.length}. Search might be ineffective.`);
-      // Potentially return an error or proceed with caution
-      // For now, we proceed but this indicates an issue with the embedding model or flow
     }
 
 
     // 2. Use this embedding to find similar code
     // For arbitrary search, excludeAnalysisId and excludeFilename are not typically used
+    // Not passing a similarityThresholdParam will allow findSimilarCode to use its dynamic default (0.60 for general)
     const similarCodeResults: SimilarCodeResult[] = await findSimilarCode(
       queryVector,
-      10, // limit results
-      0.75 // similarityThreshold (adjust as needed)
+      10 // limit results
+      // similarityThresholdParam is intentionally omitted here
     );
 
     return NextResponse.json({ results: similarCodeResults });
@@ -67,3 +66,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errorMessage, details: error.message }, { status: 500 });
   }
 }
+
