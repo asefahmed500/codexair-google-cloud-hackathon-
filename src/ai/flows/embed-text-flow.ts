@@ -25,7 +25,7 @@ export async function embedText(input: EmbedTextInput): Promise<EmbedTextOutput>
   return embedTextFlow(input);
 }
 
-// This flow directly calls the embedding model. No complex prompt needed.
+// This flow directly calls the embedding model.
 const embedTextFlow = ai.defineFlow(
   {
     name: 'embedTextFlow',
@@ -33,31 +33,23 @@ const embedTextFlow = ai.defineFlow(
     outputSchema: EmbedTextOutputSchema,
   },
   async (input) => {
-    const { output } = await ai.generate({
-        model: 'googleai/text-embedding-004',
-        prompt: input.text,
-        // No explicit output schema needed here as we expect raw embedding array
+    const { embedding } = await ai.embed({
+        embedder: 'googleai/text-embedding-004',
+        content: input.text,
     });
     
-    let embeddingResult: number[] | undefined;
-
-    if (Array.isArray(output) && output.every(n => typeof n === 'number')) {
-        embeddingResult = output;
-    } else if (output && typeof output === 'object') {
-        // Handle potential nested structures some models might return
-        if ('embedding' in output && Array.isArray(output.embedding)) embeddingResult = output.embedding;
-        else if ('vector' in output && Array.isArray(output.vector)) embeddingResult = output.vector;
-    }
-
-    if (!embeddingResult || !embeddingResult.every(n => typeof n === 'number')) {
-        console.error('[embedTextFlow] Failed to extract a valid embedding array. Output was:', output);
+    if (!embedding || !Array.isArray(embedding) || !embedding.every(n => typeof n === 'number')) {
+        console.error('[embedTextFlow] Failed to extract a valid embedding array. Embedding was:', embedding);
         throw new Error('Failed to generate a valid embedding for the provided text.');
     }
     
-    if (embeddingResult.length !== 768) {
-        console.warn(`[embedTextFlow] Generated embedding has ${embeddingResult.length} dimensions, expected 768. This might cause issues with vector search.`);
+    if (embedding.length !== 768) {
+        console.warn(`[embedTextFlow] Generated embedding has ${embedding.length} dimensions, expected 768. This might cause issues with vector search.`);
+        // Depending on strictness, you might throw an error or allow it but log a warning.
+        // For now, a warning is logged, and the embedding is returned.
     }
 
-    return { embedding: embeddingResult };
+    return { embedding: embedding };
   }
 );
+

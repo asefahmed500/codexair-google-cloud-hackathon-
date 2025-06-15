@@ -158,34 +158,30 @@ export async function POST(request: NextRequest) {
 
           const aiResponse: AIAnalysisOutput = await analyzeCode({ code: contentToAnalyze, filename: file.filename });
           
-          let fileEmbedding: number[] | undefined = undefined;
+          let fileEmbeddingVector: number[] | undefined = undefined;
           if (contentToAnalyze && contentToAnalyze.trim() !== '') { 
             try {
-              const embeddingResult = await ai.generate({
-                model: 'googleai/text-embedding-004',
-                prompt: contentToAnalyze, 
+              const { embedding } = await ai.embed({
+                embedder: 'googleai/text-embedding-004',
+                content: contentToAnalyze,
               });
               
-              let rawEmbedding = embeddingResult.output;
-              if (Array.isArray(rawEmbedding) && rawEmbedding.every(n => typeof n === 'number')) {
-                  fileEmbedding = rawEmbedding;
-              } else if (rawEmbedding && typeof rawEmbedding === 'object') { 
-                  if ('embedding' in rawEmbedding && Array.isArray(rawEmbedding.embedding)) fileEmbedding = rawEmbedding.embedding;
-                  else if ('vector' in rawEmbedding && Array.isArray(rawEmbedding.vector)) fileEmbedding = rawEmbedding.vector;
-              }
+              if (embedding && Array.isArray(embedding) && embedding.every(n => typeof n === 'number')) {
+                fileEmbeddingVector = embedding;
 
-
-              if (!fileEmbedding || !fileEmbedding.every(n => typeof n === 'number')) {
-                 console.warn(`[API/ANALYZE] Unexpected or missing embedding format for ${file.filename}. Output:`, embeddingResult.output);
-                 fileEmbedding = undefined;
-              } else if (fileEmbedding.length !== EMBEDDING_DIMENSIONS) {
-                console.warn(`[API/ANALYZE] Generated embedding for ${file.filename} has ${fileEmbedding.length} dimensions, expected ${EMBEDDING_DIMENSIONS}. Embedding will not be stored.`);
-                fileEmbedding = undefined;
+                if (fileEmbeddingVector.length !== EMBEDDING_DIMENSIONS) {
+                  console.warn(`[API/ANALYZE] Generated embedding for ${file.filename} has ${fileEmbeddingVector.length} dimensions, expected ${EMBEDDING_DIMENSIONS}. Embedding will not be stored.`);
+                  fileEmbeddingVector = undefined;
+                } else {
+                  console.log(`[API/ANALYZE] Successfully generated embedding for ${file.filename} with ${fileEmbeddingVector.length} dimensions.`);
+                }
               } else {
-                console.log(`[API/ANALYZE] Successfully generated embedding for ${file.filename} with ${fileEmbedding.length} dimensions.`);
+                 console.warn(`[API/ANALYZE] ai.embed returned an invalid embedding for ${file.filename}. Embedding:`, embedding);
+                 fileEmbeddingVector = undefined;
               }
             } catch (embeddingError: any) {
               console.error(`[API/ANALYZE] Error generating embedding for file ${file.filename}:`, embeddingError.message);
+              fileEmbeddingVector = undefined; 
             }
           } else {
             console.log(`[API/ANALYZE] Skipping embedding for ${file.filename} due to empty or invalid content.`);
@@ -200,7 +196,7 @@ export async function POST(request: NextRequest) {
             suggestions: aiResponse.suggestions || [],
             metrics: aiResponse.metrics || { linesOfCode: 0, cyclomaticComplexity: 0, cognitiveComplexity: 0, duplicateBlocks: 0 },
             aiInsights: aiResponse.aiInsights || '', 
-            vectorEmbedding: fileEmbedding,
+            vectorEmbedding: fileEmbeddingVector,
           };
         } catch (error: any) {
           console.error(`[API/ANALYZE] Error analyzing file ${file.filename}:`, error.message, error.stack);
