@@ -30,7 +30,7 @@ export async function findSimilarCode(
   }
 
   const defaultGeneralSearchThreshold = 0.50; 
-  const defaultContextualSearchThreshold = 0.75; 
+  const defaultContextualSearchThreshold = 0.75;
 
   let effectiveSimilarityThreshold: number;
   let searchTypeMessage: string;
@@ -38,18 +38,51 @@ export async function findSimilarCode(
   if (similarityThresholdParam !== undefined) {
     effectiveSimilarityThreshold = similarityThresholdParam;
     searchTypeMessage = `explicitly set to ${similarityThresholdParam}`;
-  } else if (excludeAnalysisId) { 
+  } else if (excludeAnalysisId && excludeFilename) { 
     effectiveSimilarityThreshold = defaultContextualSearchThreshold;
     searchTypeMessage = `contextual default (${defaultContextualSearchThreshold})`;
+    console.log("[findSimilarCode] Applying contextual search default threshold:", effectiveSimilarityThreshold);
   } else { 
     effectiveSimilarityThreshold = defaultGeneralSearchThreshold;
     searchTypeMessage = `general default (${defaultGeneralSearchThreshold})`;
+    console.log("[findSimilarCode] Applying general search default threshold:", effectiveSimilarityThreshold);
   }
-
+  
   console.log(`[findSimilarCode] Using effective similarity threshold: ${effectiveSimilarityThreshold} (Search type: ${searchTypeMessage}, Limit: ${limit})`);
   console.log(`[findSimilarCode] Query vector (first 5 dims): ${queryVector.slice(0,5).join(', ')}`);
   if (excludeAnalysisId) console.log(`[findSimilarCode] Excluding analysisId: ${excludeAnalysisId}, filename: ${excludeFilename || 'N/A'}`);
 
+  // Pipeline to get raw candidates and their count
+  const countPipeline: mongoose.PipelineStage[] = [
+    {
+      $vectorSearch: {
+        index: "idx_file_embeddings",
+        path: "fileAnalyses.vectorEmbedding",
+        queryVector: queryVector,
+        numCandidates: limit * 20, // Fetch more candidates initially
+        limit: limit * 10       // Limit the initial set before further processing
+      }
+    },
+    {
+      $count: "rawCandidateCount"
+    }
+  ];
+
+  let rawCandidateCount = 0;
+  try {
+    const countResult = await db.collection('analyses').aggregate(countPipeline).toArray();
+    if (countResult.length > 0 && countResult[0].rawCandidateCount) {
+      rawCandidateCount = countResult[0].rawCandidateCount;
+    }
+    console.log(`[findSimilarCode] Atlas $vectorSearch stage initially identified ${rawCandidateCount} potential candidates (before score filtering).`);
+  } catch (error) {
+    console.error("[findSimilarCode] Error counting raw candidates from $vectorSearch:", error);
+    // Proceed, but this info will be missing
+  }
+
+  if (rawCandidateCount === 0 && limit * 10 > 0) { // Check if we expected candidates
+      console.log("[findSimilarCode] No candidates returned by the $vectorSearch stage itself. This suggests the index might be empty, not configured correctly for 'fileAnalyses.vectorEmbedding', or the query vector is too dissimilar to anything in the index.");
+  }
 
   const pipeline: mongoose.PipelineStage[] = [
     {
@@ -57,8 +90,8 @@ export async function findSimilarCode(
         index: "idx_file_embeddings", 
         path: "fileAnalyses.vectorEmbedding", 
         queryVector: queryVector,
-        numCandidates: limit * 20,
-        limit: limit * 5,
+        numCandidates: limit * 20, 
+        limit: limit * 10, 
       }
     },
     {
@@ -109,7 +142,6 @@ export async function findSimilarCode(
     {
       $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false } 
     },
-    // Removed date filter: "prDetails.createdAt": { $gte: dateFilter }
     {
       $project: {
         _id: 0, 
@@ -131,9 +163,10 @@ export async function findSimilarCode(
 
   try {
     const results = await db.collection('analyses').aggregate(pipeline).toArray();
-    console.log(`[findSimilarCode] Vector search returned ${results.length} results after thresholding and limiting.`);
+    console.log(`[findSimilarCode] Vector search returned ${results.length} results after thresholding (${effectiveSimilarityThreshold}) and limiting.`);
+    
     if (results.length === 0) {
-      console.warn(`[findSimilarCode] No results found. This could be due to the threshold (${effectiveSimilarityThreshold}), no matching data, or an issue with the query/index.`);
+      console.warn(`[findSimilarCode] No results found. This could be due to the threshold (${effectiveSimilarityThreshold}), no matching data, or an issue with the query/index. Raw candidates found by Atlas before scoring: ${rawCandidateCount}.`);
     }
     return results as SimilarCodeResult[];
   } catch (error) {
