@@ -24,23 +24,31 @@ codexair offers a comprehensive suite of features for both individual developers
     *   **Top Security Issues:** Identify the most frequent security vulnerabilities found.
     *   **Top Improvement Suggestions:** Highlight common areas for code enhancement (performance, style, etc.).
     *   **Security Hotspots:** Pinpoint files with recurring critical or high-severity security issues.
-    *   **Contributor Metrics:** (If applicable based on data granularity) Track analysis activity and quality scores by contributors.
-*   **Repository & Pull Request Analysis:**
+    *   **Contributor Metrics:** Track analysis activity and quality scores by contributors.
+    *   **Connected Repositories:** View your recently synced GitHub repositories for quick access.
+*   **Repository Management & Sync:**
     *   **List Synced Repositories:** View and manage repositories connected from GitHub.
-    *   **Sync Repositories:** Easily fetch and update your list of repositories from GitHub.
-    *   **Pull Request Listing:** View pull requests for a selected repository, with their current analysis status.
+    *   **Comprehensive Sync:** Easily fetch and update your list of repositories from GitHub, pulling a broader range of your most recently updated projects.
+*   **Pull Request (PR) Analysis:**
+    *   **PR Listing:** View pull requests for a selected repository, with their current analysis status.
     *   **AI-Powered PR Analysis:**
         *   Initiate in-depth analysis for any open pull request.
         *   Assessment of **Code Quality**, **Complexity**, and **Maintainability**.
         *   Identification of **Security Vulnerabilities** (e.g., CWEs) with severity levels.
         *   Actionable **Improvement Suggestions** (performance, style, potential bugs, code smells).
-*   **Detailed Analysis View:**
-    *   Comprehensive breakdown of metrics for each analyzed PR.
+*   **Full Repository Codebase Analysis:**
+    *   Initiate an AI-powered scan of the entire current codebase of a repository (default branch).
+    *   Provides similar analysis output to PR analysis (Quality, Complexity, Security, Suggestions, AI Summary) for the selected files in the repository.
+    *   Useful for understanding the overall health of a repository, independent of specific PRs.
+    *   *(Note: Current version analyzes a limited number of source files from the default branch for timely results).*
+*   **Detailed Analysis View (for PRs & Full Scans):**
+    *   Comprehensive breakdown of metrics for each analyzed PR or repository scan.
     *   Detailed lists of security issues and improvement suggestions with code examples and file locations.
     *   File-by-file analysis breakdown.
     *   Concise **AI Review Summary** highlighting key findings.
 *   **Semantic Code Search:**
-    *   From an identified security issue or suggestion in an analysis, find semantically similar code patterns and past resolutions from other analyses in the system.
+    *   **Contextual Search:** From an identified security issue or suggestion in an analysis, find semantically similar code patterns and past resolutions from other analyses in the system.
+    *   **General Search:** Use the dedicated search page to find similar code snippets or issue descriptions by pasting code or writing a natural language query.
 *   **Pull Request Comparison:**
     *   Side-by-side comparison of two pull requests from the same repository, including their metadata and (if available) their full analysis summaries.
     *   Option to initiate analysis for unanalyzed PRs directly from the comparison view.
@@ -56,12 +64,12 @@ codexair offers a comprehensive suite of features for both individual developers
     *   View all registered users.
     *   Change user roles (promote to admin, demote to user).
     *   Manage user account status (active, suspended).
-    *   Robust safeguards to prevent accidental admin lockout (e.g., cannot demote the last admin or suspend the last active admin).
+    *   Robust safeguards to prevent accidental admin lockout.
 *   **Analysis Summary Reports:**
     *   Generate system-wide reports summarizing all pull request analyses.
     *   Download reports as a **CSV file** for external use.
 *   **Audit Logs:**
-    *   Track important administrative actions performed on the platform (e.g., role changes, status changes).
+    *   Track important administrative actions performed on the platform.
 
 ## Tech Stack
 
@@ -70,9 +78,8 @@ codexair offers a comprehensive suite of features for both individual developers
 *   **UI Library:** React
 *   **UI Components:** ShadCN UI
 *   **Styling:** Tailwind CSS
-*   **Generative AI:** Genkit (with Google AI - Gemini models)
-    *   Used for code analysis, explanation, and insights.
-    *   Text embedding models for semantic search.
+*   **Generative AI:** Genkit (with Google AI - Gemini models, e.g., `gemini-1.5-flash-latest`, `text-embedding-004`)
+    *   Used for code analysis, explanation, insights, and text embeddings.
 *   **Database:** MongoDB (with Mongoose ODM)
 *   **Authentication:** NextAuth.js (GitHub & Google OAuth providers)
 *   **Vector Search:** MongoDB Atlas Vector Search (for semantic code similarity)
@@ -103,22 +110,23 @@ Follow these steps to run codexair locally:
         *   For Google login: Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Create OAuth 2.0 credentials in Google Cloud Console.
         *   Ensure your OAuth app callback URLs are correctly set (e.g., `http://localhost:9002/api/auth/callback/github` and `http://localhost:9002/api/auth/callback/google`).
     *   **AI Key (Required for AI features):**
-        *   For AI features powered by Genkit and Google AI, set `GOOGLE_API_KEY` with a valid Google AI (Gemini) API key.
+        *   For AI features powered by Genkit and Google AI, set `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) with a valid Google AI (Gemini) API key. The application prioritizes `GEMINI_API_KEY` if both are set.
     *   If you don't have a `.env` file, you can copy the contents of the template provided in the root `.env` file and then fill in your values.
 
 4.  **MongoDB Atlas Vector Search Setup (for Semantic Search):**
     *   The "Semantic Code Search" feature relies on MongoDB Atlas Vector Search.
     *   Go to your MongoDB Atlas cluster.
-    *   Select your database.
+    *   Select your database (e.g., `codexairdb`).
     *   Go to the "Search" tab and click "Create Search Index".
     *   Choose "Atlas Vector Search" (Visual Editor or JSON).
-    *   **Collection:** `analyses`
+    *   **Collection:** `analyses` (for PR analyses) and/or `repositoryscans` (for full repository scans). *Note: Current implementation in `findSimilarCode` primarily targets the `analyses` collection. Future enhancements might expand this.*
     *   **Index Name:** `idx_file_embeddings` (This name must match the one used in `src/lib/vector-search.ts`)
-    *   **Configuration:**
+    *   **Configuration for `analyses` collection:**
         *   Define a field mapping for `fileAnalyses.vectorEmbedding`.
         *   **Type:** `vector`
         *   **Dimensions:** `768` (as used by `text-embedding-004`)
         *   **Similarity:** `cosine` (recommended)
+    *   You might need a similar index on the `repositoryscans` collection if you intend to search within full repo scan results semantically.
     *   Refer to `src/lib/vector-search.ts` `setupVectorSearch` function's console output for guidance if needed (though it doesn't run automatically).
 
 5.  **Run the Development Servers:**
@@ -132,7 +140,7 @@ Follow these steps to run codexair locally:
         ```bash
         npm run genkit:dev
         ```
-        This will start the Genkit development server, usually on `http://localhost:4000`. The AI flows need this server to be running.
+        This will start the Genkit development server, usually on `http://localhost:4000`. The AI flows need this server to be running for features like code analysis and explanation.
 
 6.  **Access the Application:**
     *   Open your browser and navigate to `http://localhost:9002` (or the `NEXTAUTH_URL` you configured).
@@ -149,6 +157,7 @@ In the project directory, you can run:
 *   `npm run start`: Starts the Next.js production server.
 *   `npm run lint`: Lints the codebase using Next.js's built-in ESLint configuration.
 *   `npm run typecheck`: Performs TypeScript type checking.
+*   `npm run db:reset`: Resets the MongoDB database (USE WITH CAUTION).
 
 <!-- ## Screenshots
 Consider adding screenshots here to showcase the application's UI. For example:
@@ -161,10 +170,12 @@ A short GIF demonstrating the AI analysis or code explanation feature would also
 ## Future Enhancements (Potential Roadmap)
 
 *   **CI/CD Integration:** Automatically analyze pull requests on GitHub/GitLab via webhooks.
-*   **Advanced Vector Search:** Implement more sophisticated semantic search queries, historical pattern analysis, and duplicate code detection using vector embeddings.
+*   **Asynchronous Full Repository Scans:** Convert the full repository scan to an asynchronous background job for larger repositories.
+*   **Advanced Vector Search Options:** More sophisticated semantic search queries, filtering, and indexing across different analysis types (PRs, full scans).
 *   **Customizable Analysis Rules:** Allow users to define custom rules or priorities for the AI analysis.
 *   **Team Collaboration Features:** Notifications, shared analysis views, and discussion threads.
 *   **IDE Integration:** Bring codexair insights directly into the developer's IDE.
+*   **Expanded Language Support:** While Genkit is flexible, ensure robust parsing and context for more languages.
 
 ---
 
