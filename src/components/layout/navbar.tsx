@@ -17,8 +17,8 @@ import {
 import {
   Sheet,
   SheetContent,
-  SheetHeader, // Added import
-  SheetTitle,  // Added import
+  SheetHeader,
+  SheetTitle,
   SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
@@ -69,6 +69,7 @@ export default function Navbar() {
       ? { key: 'features-anchor', href: '#features', text: 'Features', icon: <LayoutGrid className="mr-2 h-4 w-4" />, onClick: handleScrollToFeatures, isAnchor: true, show: () => true }
       : { key: 'features-link', href: '/features', text: 'Features', icon: <LayoutGrid className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => true },
     { key: 'about', href: '/about', text: 'About Us', icon: <Info className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => true },
+    // User specific main nav items
     { key: 'dashboard', href: '/dashboard', text: 'Dashboard', icon: <BarChartBig className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && !isAdmin, userOnly: true },
     { key: 'explain', href: '/explain', text: 'Explain Code', icon: <Lightbulb className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && !isAdmin, userOnly: true },
     { key: 'analyze', href: '/analyze', text: 'Analyze Repository', icon: <GitFork className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && !isAdmin, userOnly: true },
@@ -77,13 +78,18 @@ export default function Navbar() {
     { key: 'admin-dashboard', href: '/admin', text: 'Admin Panel', icon: <Shield className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
     { key: 'admin-reports', href: '/admin/reports', text: 'Reports', icon: <FileText className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
     { key: 'admin-audit', href: '/admin/audit', text: 'Audit Logs', icon: <BookCheck className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
+    // User account related items (will be rendered in specific locations like mobile menu or desktop dropdown)
+    { key: 'profile', href: '/profile', text: 'My Profile', icon: <UserCircle className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated, userOnly: true }, // Show for all authenticated
+    { key: 'settings', href: '/settings', text: 'My Settings', icon: <Cog className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated, userOnly: true }, // Show for all authenticated
   ];
 
   const renderNavItem = (item: NavItemDefinition, isMobile: boolean) => {
     const commonProps = {
       variant: "ghost" as const,
-      className: `w-full justify-start ${isMobile ? 'text-base py-3' : 'text-sm'}`, // Adjusted text size for mobile
-      onClick: item.onClick as React.MouseEventHandler<HTMLButtonElement>,
+      className: `w-full justify-start ${isMobile ? 'text-base py-3' : 'text-sm'}`,
+      onClick: (e: React.MouseEvent<HTMLButtonElement>) => { // Ensure event type is correct
+        if (item.onClick) item.onClick(e);
+      },
     };
 
     const linkContent = (
@@ -101,9 +107,17 @@ export default function Navbar() {
         </Button>
       );
     } else if (item.isAnchor && item.href) {
+      // For anchor links, ensure onClick is correctly passed if it's for scrolling
       buttonElement = (
-        <Button {...commonProps} asChild>
-          <a href={item.href}>{linkContent}</a>
+        <Button 
+          variant="ghost" 
+          className={`w-full justify-start ${isMobile ? 'text-base py-3' : 'text-sm'}`} 
+          onClick={(e) => {
+            if (item.onClick) item.onClick(e); // Call the scroll handler
+          }}
+          asChild={!item.onClick} // Only use asChild if no specific onClick for the button itself
+        >
+          {item.onClick ? <>{linkContent}</> : <a href={item.href}>{linkContent}</a>}
         </Button>
       );
     } else {
@@ -141,9 +155,12 @@ export default function Navbar() {
         </Link>
 
         <nav className="hidden md:flex items-center space-x-1">
-          {navItemsDefinition.filter(item => item.show() && !item.adminOnly && !item.userOnly).map(item => renderNavItem(item, false))}
-          {isAuthenticated && !isAdmin && navItemsDefinition.filter(item => item.show() && item.userOnly).map(item => renderNavItem(item, false))}
-          {isAuthenticated && isAdmin && navItemsDefinition.filter(item => item.show() && item.adminOnly).map(item => renderNavItem(item, false))}
+          {/* General public links */}
+          {navItemsDefinition.filter(item => item.show() && !item.adminOnly && !item.userOnly && item.key !== 'profile' && item.key !== 'settings').map(item => renderNavItem(item, false))}
+          {/* Authenticated user specific links (non-admin) */}
+          {isAuthenticated && !isAdmin && navItemsDefinition.filter(item => item.show() && item.userOnly && !item.adminOnly && item.key !== 'profile' && item.key !== 'settings').map(item => renderNavItem(item, false))}
+          {/* Admin specific links */}
+          {isAuthenticated && isAdmin && navItemsDefinition.filter(item => item.show() && item.adminOnly && item.key !== 'profile' && item.key !== 'settings').map(item => renderNavItem(item, false))}
         </nav>
 
         <div className="flex items-center justify-end space-x-2 ml-auto md:ml-4">
@@ -168,12 +185,11 @@ export default function Navbar() {
                 {session.user?.email && <DropdownMenuLabel className="text-xs font-normal text-muted-foreground -mt-1.5">{session.user.email}</DropdownMenuLabel>}
                 <DropdownMenuSeparator />
                 
-                <DropdownMenuItem onClick={() => { router.push('/profile'); }}>
-                  <UserCircle className="mr-2 h-4 w-4" /> My Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { router.push('/settings'); }}>
-                  <Cog className="mr-2 h-4 w-4" /> My Settings
-                </DropdownMenuItem>
+                {navItemsDefinition.filter(item => (item.key === 'profile' || item.key === 'settings') && item.show()).map(item => (
+                  <DropdownMenuItem key={item.key} onClick={() => { if(item.href) router.push(item.href); if(item.onClick) item.onClick(); }}>
+                    {item.icon} {item.text}
+                  </DropdownMenuItem>
+                ))}
                 
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })}>
@@ -195,16 +211,15 @@ export default function Navbar() {
               <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0 flex flex-col">
                 <SheetHeader className="px-4 pt-5 pb-3 border-b">
                   <SheetTitle>
-                    <SheetClose asChild>
-                        <Link href="/" className="flex items-center gap-2" onClick={handleLinkClick}>
+                      <Link href="/" className="flex items-center gap-2" onClick={handleLinkClick}>
                         <BarChartBig className="h-7 w-7 text-primary" />
                         <span className="font-bold text-xl text-foreground font-headline">codexair</span>
-                        </Link>
-                    </SheetClose>
+                      </Link>
                   </SheetTitle>
                 </SheetHeader>
                 <nav className="flex-1 flex flex-col space-y-1 p-4 overflow-y-auto">
-                  {navItemsDefinition.filter(item => item.show()).map(item => renderNavItem(item, true))}
+                  {/* Main nav items for mobile */}
+                  {navItemsDefinition.filter(item => item.show() && item.key !== 'profile' && item.key !== 'settings').map(item => renderNavItem(item, true))}
                   
                   <div className="mt-auto pt-4 border-t border-border">
                     {!session ? (
@@ -219,16 +234,8 @@ export default function Navbar() {
                         </SheetClose>
                     ) : (
                         <>
-                        <SheetClose asChild>
-                            <Button asChild variant="ghost" className="w-full justify-start text-base py-3" onClick={() => { router.push('/profile'); handleLinkClick(); }}>
-                            <Link href="/profile"><UserCircle className="mr-2 h-4 w-4" /> My Profile</Link>
-                            </Button>
-                        </SheetClose>
-                        <SheetClose asChild>
-                            <Button asChild variant="ghost" className="w-full justify-start text-base py-3" onClick={() => { router.push('/settings'); handleLinkClick(); }}>
-                            <Link href="/settings"><Cog className="mr-2 h-4 w-4" /> My Settings</Link>
-                            </Button>
-                        </SheetClose>
+                        {/* User specific links for mobile sheet */}
+                        {navItemsDefinition.filter(item => (item.key === 'profile' || item.key === 'settings') && item.show()).map(item => renderNavItem(item, true))}
                         <DropdownMenuSeparator className="my-2" />
                         <SheetClose asChild>
                             <Button variant="ghost" onClick={() => { signOut({ callbackUrl: '/' }); handleLinkClick(); }} className="w-full justify-start text-base py-3">

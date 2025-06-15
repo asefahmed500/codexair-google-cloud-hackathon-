@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User, ExternalLink, CompareArrows } from 'lucide-react';
+import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User, ExternalLink, GitCompareArrows } from 'lucide-react'; // Changed CompareArrows to GitCompareArrows
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -214,7 +214,7 @@ export default function RepositoryAnalysisPage() {
                     className="w-full sm:w-auto"
                     title={selectedPRsForCompare.length !== 2 ? "Select two PRs to compare" : "Compare selected PRs"}
                   >
-                    <CompareArrows className="mr-2 h-4 w-4" /> Compare ({selectedPRsForCompare.length}/2)
+                    <GitCompareArrows className="mr-2 h-4 w-4" /> Compare ({selectedPRsForCompare.length}/2)
                   </Button>
                 </div>
             </div>
@@ -330,5 +330,3 @@ function SkeletonPRRow() {
     </div>
   )
 }
-
-    
