@@ -16,7 +16,7 @@ export async function _placeholder_createCodeEmbedding(code: string): Promise<nu
 export async function findSimilarCode(
   queryVector: number[],
   limit = 10,
-  similarityThresholdParam?: number, 
+  similarityThresholdParam?: number,
   excludeAnalysisId?: string,
   excludeFilename?: string
 ): Promise<SimilarCodeResult[]> {
@@ -29,11 +29,8 @@ export async function findSimilarCode(
     return [];
   }
 
-  const dateFilter = new Date();
-  dateFilter.setMonth(dateFilter.getMonth() - 12); // Consider analyses from the last 12 months
-
-  const defaultGeneralSearchThreshold = 0.50; // Lowered for general queries from /search page
-  const defaultContextualSearchThreshold = 0.75; // For "find similar issues" from an analysis page
+  const defaultGeneralSearchThreshold = 0.50; 
+  const defaultContextualSearchThreshold = 0.75; 
 
   let effectiveSimilarityThreshold: number;
   let searchTypeMessage: string;
@@ -41,10 +38,10 @@ export async function findSimilarCode(
   if (similarityThresholdParam !== undefined) {
     effectiveSimilarityThreshold = similarityThresholdParam;
     searchTypeMessage = `explicitly set to ${similarityThresholdParam}`;
-  } else if (excludeAnalysisId) { // If excludeAnalysisId is present, it's likely a contextual search
+  } else if (excludeAnalysisId) { 
     effectiveSimilarityThreshold = defaultContextualSearchThreshold;
     searchTypeMessage = `contextual default (${defaultContextualSearchThreshold})`;
-  } else { // General search from /search page
+  } else { 
     effectiveSimilarityThreshold = defaultGeneralSearchThreshold;
     searchTypeMessage = `general default (${defaultGeneralSearchThreshold})`;
   }
@@ -57,11 +54,11 @@ export async function findSimilarCode(
   const pipeline: mongoose.PipelineStage[] = [
     {
       $vectorSearch: {
-        index: "idx_file_embeddings", // Ensure this matches your Atlas Search index name
-        path: "fileAnalyses.vectorEmbedding", // Path to the vector field in your documents
+        index: "idx_file_embeddings", 
+        path: "fileAnalyses.vectorEmbedding", 
         queryVector: queryVector,
-        numCandidates: limit * 20, 
-        limit: limit * 5, 
+        numCandidates: limit * 20,
+        limit: limit * 5,
       }
     },
     {
@@ -71,18 +68,15 @@ export async function findSimilarCode(
     },
     {
       $match: {
-        searchScore: { $gte: effectiveSimilarityThreshold } // Filter by similarity score
+        searchScore: { $gte: effectiveSimilarityThreshold } 
       }
     },
     {
-      $unwind: "$fileAnalyses" // Deconstruct the fileAnalyses array
+      $unwind: "$fileAnalyses" 
     },
-    // Add a more robust check for existing and valid vectorEmbedding AFTER unwinding
     {
       $match: {
         "fileAnalyses.vectorEmbedding": { $exists: true, $ne: null, $not: {$size: 0} },
-        // Ensure it's a non-empty array; checking dimensions here is tricky with $expr if not all elements are numbers
-        // The $vectorSearch stage itself should handle vectors of incorrect dimensions not matching well
         $expr: {
             $and: [
                 { $isArray: "$fileAnalyses.vectorEmbedding" },
@@ -91,7 +85,6 @@ export async function findSimilarCode(
         }
       }
     },
-    // Filter out the source document if excludeAnalysisId and excludeFilename are provided
     ...(excludeAnalysisId && excludeFilename ? [{
       $match: {
         $or: [
@@ -100,7 +93,6 @@ export async function findSimilarCode(
         ]
       }
     }] : []),
-     // Filter out the source document if only excludeAnalysisId is provided
      ...(excludeAnalysisId && !excludeFilename ? [{
       $match: {
          _id: { $ne: new mongoose.Types.ObjectId(excludeAnalysisId) }
@@ -108,24 +100,20 @@ export async function findSimilarCode(
     }] : []),
     {
       $lookup: {
-        from: "pullrequests", // Collection name for pull requests
+        from: "pullrequests", 
         localField: "pullRequestId",
         foreignField: "_id",
         as: "prDetails"
       }
     },
     {
-      $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false } // Ensure PR details exist
+      $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false } 
     },
-    {
-      $match: { // Filter by PR creation date if needed (optional, could be for relevance)
-        "prDetails.createdAt": { $gte: dateFilter }
-      }
-    },
+    // Removed date filter: "prDetails.createdAt": { $gte: dateFilter }
     {
       $project: {
-        _id: 0, // Exclude the original _id of the analysis document
-        analysisId: "$_id", // Keep the analysis ID
+        _id: 0, 
+        analysisId: "$_id", 
         owner: "$prDetails.owner",
         repoName: "$prDetails.repoName",
         prNumber: "$prDetails.number",
@@ -133,19 +121,19 @@ export async function findSimilarCode(
         prAuthorLogin: "$prDetails.author.login",
         prCreatedAt: "$prDetails.createdAt",
         filename: "$fileAnalyses.filename",
-        aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 250 ] }, // Truncate insights for brevity
-        score: "$searchScore" // Include the similarity score
+        aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 250 ] }, 
+        score: "$searchScore" 
       }
     },
-    { $sort: { score: -1 } }, // Sort by similarity score descending
-    { $limit: limit } // Final limit on the number of results
+    { $sort: { score: -1 } }, 
+    { $limit: limit } 
   ];
 
   try {
     const results = await db.collection('analyses').aggregate(pipeline).toArray();
     console.log(`[findSimilarCode] Vector search returned ${results.length} results after thresholding and limiting.`);
     if (results.length === 0) {
-      console.log(`[findSimilarCode] No results found. This could be due to the threshold (${effectiveSimilarityThreshold}), no matching data, or an issue with the query/index.`);
+      console.warn(`[findSimilarCode] No results found. This could be due to the threshold (${effectiveSimilarityThreshold}), no matching data, or an issue with the query/index.`);
     }
     return results as SimilarCodeResult[];
   } catch (error) {
@@ -220,3 +208,4 @@ export async function findTextSearchResults(queryText: string, limit = 10): Prom
   */
   return [];
 }
+
