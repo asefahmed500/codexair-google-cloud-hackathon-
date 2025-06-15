@@ -1,7 +1,7 @@
 
 import { MongoClient } from 'mongodb';
 import mongoose from 'mongoose';
-import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType, FileAnalysisItem, AdminUserView as AdminUserViewType, AuditLogEntry as AuditLogType, RepositoryScanResult } from '@/types';
+import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType, FileAnalysisItem, AdminUserView as AdminUserViewType, AuditLogEntry as AuditLogType, RepositoryScanResult, ContactMessage as ContactMessageType } from '@/types';
 
 const RAW_MONGODB_URI_FROM_ENV = process.env.MONGODB_URI;
 console.log(`[MongoDB Setup] Attempting to use MONGODB_URI. Value read from environment: "${RAW_MONGODB_URI_FROM_ENV}"`);
@@ -235,6 +235,16 @@ auditLogSchema.index({ timestamp: -1 });
 auditLogSchema.index({ adminUserId: 1 });
 auditLogSchema.index({ action: 1 });
 
+const contactMessageSchema = new mongoose.Schema<ContactMessageType>({
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, trim: true, lowercase: true },
+  message: { type: String, required: true, trim: true },
+  isRead: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now },
+});
+contactMessageSchema.index({ createdAt: -1 });
+contactMessageSchema.index({ isRead: 1, createdAt: -1 });
+
 
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
 export const Account = mongoose.models.Account || mongoose.model('Account', accountSchema);
@@ -246,6 +256,7 @@ export const PullRequest = mongoose.models.PullRequest || mongoose.model<PRType>
 export const Analysis = mongoose.models.Analysis || mongoose.model<AnalysisType>('Analysis', analysisSchema);
 export const RepositoryScan = mongoose.models.RepositoryScan || mongoose.model<RepositoryScanResult>('RepositoryScan', repositoryScanSchema);
 export const AuditLog = mongoose.models.AuditLog || mongoose.model<AuditLogType>('AuditLog', auditLogSchema);
+export const ContactMessage = mongoose.models.ContactMessage || mongoose.model<ContactMessageType>('ContactMessage', contactMessageSchema);
 
 
 export const connectMongoose = async () => {

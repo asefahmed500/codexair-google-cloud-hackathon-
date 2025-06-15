@@ -23,7 +23,7 @@ import {
   SheetClose,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield, SearchCode, Menu } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, GitFork, FileText, Users, Lightbulb, BookCheck, Home, Info, LayoutGrid, Cog, Shield, SearchCode, Menu, Mail } from 'lucide-react';
 
 interface NavItemDefinition {
   key: string;
@@ -76,6 +76,7 @@ export default function Navbar() {
     { key: 'search', href: '/search', text: 'Semantic Search', icon: <SearchCode className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && !isAdmin, userOnly: true },
     // Admin specific main nav items
     { key: 'admin-dashboard', href: '/admin', text: 'Admin Panel', icon: <Shield className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
+    { key: 'admin-messages', href: '/admin/messages', text: 'Messages', icon: <Mail className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
     { key: 'admin-reports', href: '/admin/reports', text: 'Reports', icon: <FileText className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
     { key: 'admin-audit', href: '/admin/audit', text: 'Audit Logs', icon: <BookCheck className="mr-2 h-4 w-4" />, onClick: handleLinkClick, show: () => isAuthenticated && isAdmin, adminOnly: true },
     // User account related items (will be rendered in specific locations like mobile menu or desktop dropdown)
@@ -87,7 +88,7 @@ export default function Navbar() {
     const commonProps = {
       variant: "ghost" as const,
       className: `w-full justify-start ${isMobile ? 'text-base py-3' : 'text-sm'}`,
-      onClick: (e: React.MouseEvent<HTMLButtonElement>) => { // Ensure event type is correct
+      onClick: (e: React.MouseEvent<HTMLButtonElement>) => { 
         if (item.onClick) item.onClick(e);
       },
     };
@@ -107,15 +108,14 @@ export default function Navbar() {
         </Button>
       );
     } else if (item.isAnchor && item.href) {
-      // For anchor links, ensure onClick is correctly passed if it's for scrolling
       buttonElement = (
         <Button 
           variant="ghost" 
           className={`w-full justify-start ${isMobile ? 'text-base py-3' : 'text-sm'}`} 
           onClick={(e) => {
-            if (item.onClick) item.onClick(e); // Call the scroll handler
+            if (item.onClick) item.onClick(e); 
           }}
-          asChild={!item.onClick} // Only use asChild if no specific onClick for the button itself
+          asChild={!item.onClick} 
         >
           {item.onClick ? <>{linkContent}</> : <a href={item.href}>{linkContent}</a>}
         </Button>
@@ -155,11 +155,8 @@ export default function Navbar() {
         </Link>
 
         <nav className="hidden md:flex items-center space-x-1">
-          {/* General public links */}
           {navItemsDefinition.filter(item => item.show() && !item.adminOnly && !item.userOnly && item.key !== 'profile' && item.key !== 'settings').map(item => renderNavItem(item, false))}
-          {/* Authenticated user specific links (non-admin) */}
           {isAuthenticated && !isAdmin && navItemsDefinition.filter(item => item.show() && item.userOnly && !item.adminOnly && item.key !== 'profile' && item.key !== 'settings').map(item => renderNavItem(item, false))}
-          {/* Admin specific links */}
           {isAuthenticated && isAdmin && navItemsDefinition.filter(item => item.show() && item.adminOnly && item.key !== 'profile' && item.key !== 'settings').map(item => renderNavItem(item, false))}
         </nav>
 
@@ -218,7 +215,6 @@ export default function Navbar() {
                   </SheetTitle>
                 </SheetHeader>
                 <nav className="flex-1 flex flex-col space-y-1 p-4 overflow-y-auto">
-                  {/* Main nav items for mobile */}
                   {navItemsDefinition.filter(item => item.show() && item.key !== 'profile' && item.key !== 'settings').map(item => renderNavItem(item, true))}
                   
                   <div className="mt-auto pt-4 border-t border-border">
@@ -234,7 +230,6 @@ export default function Navbar() {
                         </SheetClose>
                     ) : (
                         <>
-                        {/* User specific links for mobile sheet */}
                         {navItemsDefinition.filter(item => (item.key === 'profile' || item.key === 'settings') && item.show()).map(item => renderNavItem(item, true))}
                         <DropdownMenuSeparator className="my-2" />
                         <SheetClose asChild>

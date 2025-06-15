@@ -1,7 +1,8 @@
 
 import Navbar from '@/components/layout/navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChartBig, Users, Target, Eye } from 'lucide-react'; // Corrected icon imports
+import { BarChartBig, Users, Target, Eye } from 'lucide-react';
+import ContactForm from '@/components/about/contact-form'; // Import the new form
 
 export default function AboutPage() {
   return (
@@ -62,14 +63,12 @@ export default function AboutPage() {
           </Card>
         </div>
         
-        <section className="mt-16 text-center">
-            <h2 className="text-xl md:text-2xl font-semibold text-foreground mb-4 font-headline">Get In Touch</h2>
-            <p className="text-muted-foreground mb-6">
-                Have questions or want to learn more? We&apos;d love to hear from you.
+        <section className="mt-16 max-w-2xl mx-auto">
+            <h2 className="text-xl md:text-2xl font-semibold text-foreground mb-4 text-center font-headline">Get In Touch</h2>
+            <p className="text-muted-foreground mb-6 text-center">
+                Have questions, feedback, or want to learn more? We&apos;d love to hear from you.
             </p>
-            <p className="text-muted-foreground">
-                (Contact information or a contact form placeholder will be here.)
-            </p>
+            <ContactForm />
         </section>
 
       </main>
