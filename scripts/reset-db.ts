@@ -33,10 +33,14 @@ async function resetDatabase() {
 
   try {
     const confirmationDBName = MONGODB_URI.split('/').pop()?.split('?')[0] || 'unknown';
+    
+    // Added clarification message
+    console.log(`   ℹ️  To proceed, you MUST type the exact database name: "${confirmationDBName}"`);
+    
     const answer = await rl.question(`Type the database name "${confirmationDBName}" to confirm dropping it, or anything else to cancel: `);
     
     if (answer !== confirmationDBName) {
-      console.log('\n🚫 Database reset aborted by user.');
+      console.log('\n🚫 Database reset aborted by user. The string typed did not match the required database name.');
       process.exit(0);
     }
 
@@ -55,13 +59,15 @@ async function resetDatabase() {
     console.error('\n❌ Error resetting database:', error);
     process.exit(1);
   } finally {
-    if (mongoose.connection.readyState === 1) {
+    if (mongoose.connection.readyState === 1) { // Check if connection is open before trying to disconnect
       await mongoose.disconnect();
       console.log('🔌 Disconnected from MongoDB.');
     }
     rl.close();
-    process.exit(0);
+    // Removed process.exit(0) from here as it might exit before disconnect is fully processed in some cases.
+    // The script will exit naturally. If an error occurs in finally, it will be caught or exit with error code.
   }
 }
 
 resetDatabase();
+
