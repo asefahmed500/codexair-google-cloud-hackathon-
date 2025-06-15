@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import type { Repository as RepoType } from '@/types';
-import { Github, Eye, RefreshCw, Search, Star, Lock, Unlock, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { Github, Eye, RefreshCw, Search, Star, Lock, Unlock, ChevronLeft, ChevronRight, Info, GitPullRequest } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import Navbar from '@/components/layout/navbar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -38,17 +38,21 @@ export default function AnalyzePage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/repositories?page=${page}&limit=${ITEMS_PER_PAGE}&sync=${sync}`);
+      // For sync, page requested to API is always 1, as API handles fetching multiple GH pages
+      // and returns page 1 of local DB.
+      // For non-sync, page is passed as is.
+      const apiPage = sync ? 1 : page;
+      const response = await fetch(`/api/repositories?page=${apiPage}&limit=${ITEMS_PER_PAGE}&sync=${sync}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch repositories');
       }
       const data = await response.json();
       setRepositories(data.repositories || []);
-      setCurrentPage(data.currentPage || 1);
+      setCurrentPage(data.currentPage || 1); // API returns current page (1 after sync)
       setTotalPages(data.totalPages || 1);
 
-      if (sync) toast({ title: "Repositories Synced", description: `Fetched page ${data.currentPage || 1} of your repositories.` });
+      if (sync) toast({ title: "Repositories Synced", description: `Fetched your most recently updated repositories from GitHub. Displaying page ${data.currentPage || 1}.` });
       
     } catch (err: any) {
       setError(err.message);
@@ -71,7 +75,7 @@ export default function AnalyzePage() {
   }, [status, router, currentPage, fetchRepositories]); 
 
   const handleSync = () => {
-    setCurrentPage(1); 
+    // setCurrentPage(1); // fetchRepositories with sync=true will effectively reset to page 1 of local DB
     fetchRepositories(1, true);
   };
 
@@ -99,8 +103,14 @@ export default function AnalyzePage() {
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Analyze Repository</CardTitle>
-                    <CardDescription>Select a repository to view its pull requests and initiate AI-powered code analysis. Click "Sync Repositories" to fetch your latest repositories from GitHub.</CardDescription>
+                    <CardTitle className="text-2xl sm:text-3xl font-bold font-headline flex items-center">
+                      <GitPullRequest className="h-7 w-7 sm:h-8 sm:w-8 text-primary mr-2" />
+                      Analyze Repository Pull Requests
+                    </CardTitle>
+                    <CardDescription>
+                      Select a synced repository to view its pull requests. Then, you can initiate AI-powered code analysis on individual PRs.
+                      Use "Sync Repositories" to update this list with your most recently active GitHub repositories.
+                    </CardDescription>
                 </div>
                 <Button 
                     variant="outline" 
@@ -119,7 +129,7 @@ export default function AnalyzePage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input
                   type="search"
-                  placeholder="Search by name or language..."
+                  placeholder="Search synced repositories by name or language..."
                   className="pl-10"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -145,10 +155,10 @@ export default function AnalyzePage() {
               <div className="flex flex-col items-center justify-center text-center py-10 bg-muted/30 rounded-md">
                 <Github className="w-12 h-12 text-muted-foreground mb-3" />
                 <p className="text-lg font-semibold text-foreground">
-                    {searchTerm ? "No repositories match your search." : "No repositories found."}
+                    {searchTerm ? "No synced repositories match your search." : "No repositories synced yet."}
                 </p>
                 <p className="text-muted-foreground mb-4">
-                    {searchTerm ? "Try a different search term or clear your search." : 'Try syncing with GitHub to see your repositories here.'}
+                    {searchTerm ? "Try a different search term or clear your search." : 'Try syncing with GitHub to see your repositories here. This will fetch your most recently updated repos.'}
                 </p>
                 {searchTerm && <Button onClick={() => setSearchTerm('')} variant="outline" className="mr-2">Clear Search</Button>}
                 {!searchTerm && <Button onClick={handleSync} disabled={isSyncing || loading} variant="default">
@@ -261,5 +271,3 @@ function SkeletonRepoCard() {
       </Card>
     )
 }
-
-    
