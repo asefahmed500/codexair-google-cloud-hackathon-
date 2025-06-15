@@ -10,7 +10,7 @@ import type { CodeAnalysisOutput as AIAnalysisOutput, FileAnalysisItem, PullRequ
 import { ai } from '@/ai/genkit';
 
 const MAX_FILES_TO_ANALYZE = 10;
-const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 20000; // Reduced max content length
+const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 20000; 
 const EMBEDDING_DIMENSIONS = 768;
 const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated for this pull request.";
 const EXCLUDED_FILE_PATTERNS_FOR_ANALYSIS = [
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       .filter(file =>
         (file.status === 'added' || file.status === 'modified' || file.status === 'renamed') &&
         file.filename?.match(/\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i) &&
-        !EXCLUDED_FILE_PATTERNS_FOR_ANALYSIS.some(pattern => pattern.test(file.filename!)) && // Exclude specified patterns
+        !EXCLUDED_FILE_PATTERNS_FOR_ANALYSIS.some(pattern => pattern.test(file.filename!)) && 
         (file.changes || 0) < 2000
       )
       .slice(0, MAX_FILES_TO_ANALYZE);
@@ -158,12 +158,12 @@ export async function POST(request: NextRequest) {
           let fileEmbeddingVector: number[] | undefined = undefined;
           if (contentToAnalyze && contentToAnalyze.trim() !== '') {
             try {
+              console.log(`[API/ANALYZE] Attempting to generate embedding for ${file.filename}...`);
               const embedApiResponse = await ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: contentToAnalyze,
               });
 
-              // Expecting response structure: [{ embedding: number[] }]
               if (Array.isArray(embedApiResponse) &&
                   embedApiResponse.length > 0 &&
                   embedApiResponse[0] &&
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
                 fileEmbeddingVector = embedApiResponse[0].embedding;
                 console.log(`[API/ANALYZE] Successfully generated embedding for ${file.filename} with ${fileEmbeddingVector.length} dimensions.`);
               } else {
-                 console.warn(`[API/ANALYZE] Generated embedding for ${file.filename} is invalid or has incorrect dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedApiResponse[0]?.embedding?.length}. Response:`, JSON.stringify(embedApiResponse));
+                 console.warn(`[API/ANALYZE] Generated embedding for ${file.filename} is invalid or has incorrect dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedApiResponse[0]?.embedding?.length}. Response:`, JSON.stringify(embedApiResponse).substring(0, 500));
               }
             } catch (embeddingError: any) {
               console.error(`[API/ANALYZE] Error generating embedding for file ${file.filename}:`, embeddingError.message);
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
               }
             }
           } else {
-            console.log(`[API/ANALYZE] Skipping embedding for ${file.filename} due to empty or invalid content.`);
+            console.log(`[API/ANALYZE] Skipping embedding for ${file.filename} due to empty or invalid content after processing.`);
           }
 
           return {

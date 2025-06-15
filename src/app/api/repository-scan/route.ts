@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import mongoose from 'mongoose';
 
 const MAX_FILES_TO_SCAN = 5;
-const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 20000; // Reduced max content length
+const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 20000; 
 const EMBEDDING_DIMENSIONS = 768;
 const FALLBACK_SUMMARY_MESSAGE = "Overall repository scan summary could not be generated.";
 
@@ -44,9 +44,9 @@ async function generateOverallSummary(
 ): Promise<string> {
   try {
     const promptContext = {
-      prTitle: `${repoName} (Full Scan - ${branchName} branch)`, // Adapted context
+      prTitle: `${repoName} (Full Scan - ${branchName} branch)`, 
       overallQualityScore: aggregatedQualityScore,
-      formattedOverallQualityScore: aggregatedQualityScore.toFixed(1), // Pre-format
+      formattedOverallQualityScore: aggregatedQualityScore.toFixed(1), 
       totalCriticalIssues: totalCriticalIssues,
       totalHighIssues: totalHighIssues,
       totalSuggestions: allSuggestionsCount,
@@ -114,25 +114,26 @@ export async function POST(request: NextRequest) {
       try {
         let contentToAnalyze = await getFileContent(owner, repoName, fileMeta.path!, headCommitSha);
         if (!contentToAnalyze || contentToAnalyze.trim() === '') {
-          console.warn(`[API/RepoScan] No content for ${fileMeta.path}. Skipping.`);
+          console.warn(`[API/RepoScan] No content or empty content for file ${fileMeta.path!}. Skipping analysis and embedding.`);
           return null;
         }
         if (contentToAnalyze.length > MAX_CONTENT_LENGTH_FOR_ANALYSIS) {
-          console.warn(`[API/RepoScan] Content for ${fileMeta.path} too long (${contentToAnalyze.length} chars), truncating to ${MAX_CONTENT_LENGTH_FOR_ANALYSIS}.`);
+          console.warn(`[API/RepoScan] Content for ${fileMeta.path!} too long (${contentToAnalyze.length} chars), truncating to ${MAX_CONTENT_LENGTH_FOR_ANALYSIS}.`);
           contentToAnalyze = contentToAnalyze.substring(0, MAX_CONTENT_LENGTH_FOR_ANALYSIS);
         }
+        console.log(`[API/RepoScan] Analyzing ${fileMeta.path!} (length: ${contentToAnalyze.length} chars)`);
 
         const aiResponse = await analyzeCode({ code: contentToAnalyze, filename: fileMeta.path! });
 
         let fileEmbeddingVector: number[] | undefined = undefined;
-        if (contentToAnalyze && contentToAnalyze.trim() !== '') {
+        if (contentToAnalyze && contentToAnalyze.trim() !== '') { // Redundant check, already handled above, but safe
           try {
+            console.log(`[API/RepoScan] Attempting to generate embedding for ${fileMeta.path!}...`);
             const embedApiResponse = await ai.embed({
               embedder: 'googleai/text-embedding-004',
               content: contentToAnalyze,
             });
             
-            // Expecting response structure: [{ embedding: number[] }]
             if (Array.isArray(embedApiResponse) &&
                 embedApiResponse.length > 0 &&
                 embedApiResponse[0] &&
@@ -144,8 +145,9 @@ export async function POST(request: NextRequest) {
                 embedApiResponse[0].embedding.every((n: any) => typeof n === 'number' && isFinite(n))
                ) {
               fileEmbeddingVector = embedApiResponse[0].embedding;
+              console.log(`[API/RepoScan] Successfully generated embedding for ${fileMeta.path!} with ${fileEmbeddingVector.length} dimensions.`);
             } else {
-              console.warn(`[API/RepoScan] Generated embedding for ${fileMeta.path!} is invalid or has incorrect dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedApiResponse[0]?.embedding?.length}. Response:`, JSON.stringify(embedApiResponse));
+              console.warn(`[API/RepoScan] Generated embedding for ${fileMeta.path!} is invalid or has incorrect dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedApiResponse[0]?.embedding?.length}. Response:`, JSON.stringify(embedApiResponse).substring(0,500));
             }
           } catch (embErr: any) {
             console.error(`[API/RepoScan] Embedding error for ${fileMeta.path!}: ${embErr.message}`);
@@ -153,6 +155,8 @@ export async function POST(request: NextRequest) {
                 console.warn(`[API/RepoScan] Embedding for ${fileMeta.path!} failed due to payload size. Content length was ${contentToAnalyze.length}.`);
             }
           }
+        } else {
+           console.log(`[API/RepoScan] Skipping embedding for ${fileMeta.path!} due to empty or invalid content after processing.`);
         }
 
         return {
@@ -261,7 +265,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
         error: clientMessage,
-        details: detailsForClient.substring(0, 500), // Keep client details concise
+        details: detailsForClient.substring(0, 500), 
     }, { status: statusCode });
   }
 }
