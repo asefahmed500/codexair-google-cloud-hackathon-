@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User, ExternalLink, GitCompareArrows } from 'lucide-react'; // Changed CompareArrows to GitCompareArrows
+import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User, ExternalLink, GitCompareArrows } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
