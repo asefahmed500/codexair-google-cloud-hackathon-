@@ -1,16 +1,13 @@
 
 import { MongoClient } from 'mongodb';
 import mongoose from 'mongoose';
-import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType, FileAnalysisItem, AdminUserView as AdminUserViewType, AuditLogEntry as AuditLogType } from '@/types';
+import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType, FileAnalysisItem, AdminUserView as AdminUserViewType, AuditLogEntry as AuditLogType, RepositoryScanResult } from '@/types';
 
 const RAW_MONGODB_URI_FROM_ENV = process.env.MONGODB_URI;
 console.log(`[MongoDB Setup] Attempting to use MONGODB_URI. Value read from environment: "${RAW_MONGODB_URI_FROM_ENV}"`);
 
 const MONGODB_URI = RAW_MONGODB_URI_FROM_ENV;
 
-// IMPORTANT: If you see the error below in your console, it means you MUST set your MONGODB_URI in the .env file.
-// The .env file is in the root of your project. Open it and replace the placeholder value.
-// THE ERROR: "CRITICAL CONFIGURATION ERROR: The MONGODB_URI environment variable is not defined..."
 if (!MONGODB_URI || MONGODB_URI.trim() === "" || !(MONGODB_URI.startsWith("mongodb://") || MONGODB_URI.startsWith("mongodb+srv://"))) {
   console.error('------------------------------------------------------------------------------------------');
   console.error('CRITICAL CONFIGURATION ERROR: MONGODB_URI IS MISSING OR INVALID IN YOUR .env FILE!');
@@ -56,7 +53,7 @@ export default clientPromise;
 
 const userSchema = new mongoose.Schema({
   name: String,
-  email: { type: String, unique: true, required: true }, // Email is required for linking accounts
+  email: { type: String, unique: true, required: true }, 
   emailVerified: Date,
   image: String,
   role: { type: String, default: 'user', enum: ['user', 'admin'], required: true },
@@ -114,7 +111,7 @@ const codeFileSchema = new mongoose.Schema({
   deletions: Number,
   changes: Number,
   patch: String,
-  content: String,
+  content: String, 
 }, { _id: false });
 
 const securityIssueSubSchema = new mongoose.Schema({
@@ -195,6 +192,26 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   indexes: [{ fields: { repositoryId: 1, number: 1 }, unique: true }]
 });
 
+const repositoryScanSchema = new mongoose.Schema<RepositoryScanResult>({
+  repositoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Repository', required: true },
+  userId: { type: String, required: true },
+  owner: { type: String, required: true },
+  repoName: { type: String, required: true },
+  branchAnalyzed: { type: String, required: true },
+  commitShaAnalyzed: { type: String, required: true },
+  status: { type: String, enum: ['pending', 'completed', 'failed'], required: true },
+  qualityScore: Number,
+  complexity: Number,
+  maintainability: Number,
+  securityIssues: [securityIssueSubSchema],
+  suggestions: [suggestionSubSchema],
+  metrics: codeAnalysisMetricsSubSchema, // Aggregated metrics for the scan
+  summaryAiInsights: String, // Overall summary for the repository scan
+  fileAnalyses: [fileAnalysisItemSchema], // Analysis for each file scanned
+}, { timestamps: true });
+repositoryScanSchema.index({ repositoryId: 1, createdAt: -1 });
+
+
 const AUDIT_LOG_ACTIONS = [
   'USER_ROLE_CHANGED',
   'USER_STATUS_CHANGED_ACTIVE',
@@ -213,7 +230,7 @@ const auditLogSchemaDefinition: Record<keyof Omit<AuditLogType, '_id'>, any> = {
   details: { type: mongoose.Schema.Types.Mixed, required: false },
 };
 
-const auditLogSchema = new mongoose.Schema(auditLogSchemaDefinition, { timestamps: false }); // No Mongoose timestamps needed, we have our own.
+const auditLogSchema = new mongoose.Schema(auditLogSchemaDefinition, { timestamps: false }); 
 auditLogSchema.index({ timestamp: -1 }); 
 auditLogSchema.index({ adminUserId: 1 });
 auditLogSchema.index({ action: 1 });
@@ -227,6 +244,7 @@ export const VerificationToken = mongoose.models.VerificationToken || mongoose.m
 export const Repository = mongoose.models.Repository || mongoose.model<RepoType>('Repository', repositorySchema);
 export const PullRequest = mongoose.models.PullRequest || mongoose.model<PRType>('PullRequest', pullRequestSchema);
 export const Analysis = mongoose.models.Analysis || mongoose.model<AnalysisType>('Analysis', analysisSchema);
+export const RepositoryScan = mongoose.models.RepositoryScan || mongoose.model<RepositoryScanResult>('RepositoryScan', repositoryScanSchema);
 export const AuditLog = mongoose.models.AuditLog || mongoose.model<AuditLogType>('AuditLog', auditLogSchema);
 
 

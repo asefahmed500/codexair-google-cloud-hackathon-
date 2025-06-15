@@ -25,9 +25,6 @@ export async function GET(
     
     const repoFullName = `${owner}/${repoName}`;
 
-    // Ensure the user has this repository synced/connected in our system
-    // For admins, this check might be different or skipped if they should see all system PRs.
-    // For now, assuming non-admins can only see PRs of repos they've synced.
     let localRepoQuery: any = { fullName: repoFullName };
     if (session.user.role !== 'admin') {
       localRepoQuery.userId = session.user.id;
@@ -38,10 +35,12 @@ export async function GET(
         return NextResponse.json({ error: `Repository ${repoFullName} not associated with user or not found in system.` }, { status: 404 });
     }
 
-    // Fetch open PRs from GitHub by default. Could be made configurable via query params.
-    const githubPRs = await getGitHubPullRequests(owner, repoName, 'open', 1, 50); 
+    // getGitHubPullRequests now fetches all PRs due to pagination in lib/github.ts
+    const githubPRs = await getGitHubPullRequests(owner, repoName, 'open'); 
 
     const prNumbersFromGithub = githubPRs.map(pr => pr.number);
+
+    // Fetch local PR data for these PR numbers to get analysis status
     const localPRs = await LocalPullRequest.find({
       repositoryId: localRepo._id.toString(),
       number: { $in: prNumbersFromGithub },
@@ -51,14 +50,15 @@ export async function GET(
       const localMatch = localPRs.find(localDbPr => localDbPr.number === ghPR.number);
       
       let analysisStatus: 'analyzed' | 'pending' | 'failed' | 'not_started' = 'not_started';
-      if (localMatch?.analysis) {
+      if (localMatch?.analysisStatus) { // Prefer status from local DB if explicitly set
+        analysisStatus = localMatch.analysisStatus;
+      } else if (localMatch?.analysis) {
         analysisStatus = 'analyzed';
       }
-      // "pending" and "failed" statuses are typically client-side optimistic updates or from a background job system.
-      // For this API, we primarily know if an analysis record exists ('analyzed') or not ('not_started').
-
+      
       return {
         id: ghPR.id, 
+        _id: localMatch?._id?.toString(), // Our DB PullRequest document _id
         number: ghPR.number,
         title: ghPR.title,
         body: ghPR.body,
@@ -70,17 +70,15 @@ export async function GET(
             login: ghPR.user?.login || 'unknown',
             avatar_url: ghPR.user?.avatar_url || ''
         },
-        branch: ghPR.head?.ref, // Branch name from head.ref
-        // Local DB derived data
-        _id: localMatch?._id?.toString(), // Our DB's PullRequest document _id
-        author: localMatch?.author || { login: ghPR.user?.login || 'unknown', avatar: ghPR.user?.avatar_url || '' }, // Prefer local DB stored author if available
+        author: localMatch?.author || { login: ghPR.user?.login || 'unknown', avatar: ghPR.user?.avatar_url || '' },
+        branch: ghPR.head?.ref,
         analysisStatus: analysisStatus,
         analysisId: localMatch?.analysis?._id?.toString() || (typeof localMatch?.analysis === 'string' ? localMatch.analysis : undefined),
         qualityScore: (localMatch?.analysis as any)?.qualityScore, 
       };
     });
 
-    return NextResponse.json({ pull_requests: mergedPRs });
+    return NextResponse.json({ pull_requests: mergedPRs.sort((a,b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()) });
 
   } catch (error: any) {
     console.error(`Error fetching pull requests for ${params.owner}/${params.repoName}:`, error);

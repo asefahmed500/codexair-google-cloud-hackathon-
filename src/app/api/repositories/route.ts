@@ -6,8 +6,9 @@ import { getUserRepositories, getRepositoryDetails } from '@/lib/github';
 import { Repository, connectMongoose } from '@/lib/mongodb';
 import type { Repository as RepoType } from '@/types';
 
-const GITHUB_PAGES_TO_SYNC_ON_REQUEST = 3; // Number of pages to fetch from GitHub during a manual sync
-const GITHUB_REPOS_PER_PAGE = 30; // Default per_page for GitHub API, match this in getUserRepositories if configurable
+// Increase pages fetched during sync to get a more comprehensive list of recent repos
+const GITHUB_PAGES_TO_SYNC_ON_REQUEST = 10; 
+const GITHUB_REPOS_PER_PAGE = 30;
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10'); // This limit applies to the response from THIS API
+    const limit = parseInt(searchParams.get('limit') || '10');
     const sync = searchParams.get('sync') === 'true';
 
     if (sync) {
@@ -29,22 +30,20 @@ export async function GET(request: NextRequest) {
       let allFetchedGithubRepos: any[] = [];
       for (let i = 1; i <= GITHUB_PAGES_TO_SYNC_ON_REQUEST; i++) {
         try {
-          const githubReposPage = await getUserRepositories(i, GITHUB_REPOS_PER_PAGE);
+          // getUserRepositories now fetches only one page by default, so we iterate
+          const githubReposPage = await getUserRepositories(i, GITHUB_REPOS_PER_PAGE, true); // Pass sync=true to indicate it's part of a larger sync
           allFetchedGithubRepos.push(...githubReposPage);
           if (githubReposPage.length < GITHUB_REPOS_PER_PAGE) {
             console.log(`[API/Repositories] SYNC: Reached end of GitHub repos on page ${i}.`);
-            break; // No more repos on GitHub
+            break; 
           }
         } catch (ghError: any) {
           console.error(`[API/Repositories] SYNC: Error fetching page ${i} from GitHub:`, ghError.message);
-          // If one page fails, we can decide to stop or continue with what we have.
-          // For now, let's stop and report an issue if the first page fails, otherwise continue.
-          if (i === 1) throw ghError; // Re-throw if first page fails.
+          if (i === 1) throw ghError; 
           break; 
         }
       }
 
-      // Deduplicate based on githubId before upserting
       const uniqueGithubRepos = Array.from(new Map(allFetchedGithubRepos.map(repo => [repo.id, repo])).values());
       console.log(`[API/Repositories] SYNC: Fetched ${allFetchedGithubRepos.length} raw repos, ${uniqueGithubRepos.length} unique repos from GitHub.`);
 
@@ -59,7 +58,7 @@ export async function GET(request: NextRequest) {
             stars: ghRepo.stargazers_count || 0,
             isPrivate: ghRepo.private,
             userId: session.user.id!,
-            updatedAt: new Date(ghRepo.updated_at), // Use GitHub's updated_at for sorting consistency
+            updatedAt: new Date(ghRepo.updated_at),
           };
           try {
             await Repository.findOneAndUpdate(
@@ -73,12 +72,11 @@ export async function GET(request: NextRequest) {
         })
       );
       
-      // After syncing, return the *first page* of the user's *locally stored* repositories
       const userSyncedReposQuery = { userId: session.user.id! };
       const refreshedLocalRepos = await Repository.find(userSyncedReposQuery)
-        .sort({ updatedAt: -1 }) // Sort by the updatedAt from GitHub
-        .skip(0) // Always return first page of local DB after sync
-        .limit(limit) // Use the original limit for the response
+        .sort({ updatedAt: -1 })
+        .skip(0) 
+        .limit(limit)
         .lean();
       const totalUserSyncedRepos = await Repository.countDocuments(userSyncedReposQuery);
       
@@ -87,17 +85,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         repositories: refreshedLocalRepos,
         totalPages: Math.ceil(totalUserSyncedRepos / limit),
-        currentPage: 1, // Always return page 1 of local DB after sync
+        currentPage: 1, 
       });
 
     } else {
-      // Standard fetch from local DB (paginated)
       const skip = (page - 1) * limit;
       const query = { userId: session.user.id! }; 
       
       console.log(`[API/Repositories] DB FETCH: User ${session.user.id}, Page ${page}, Limit ${limit}`);
       const fetchedRepositories = await Repository.find(query) 
-        .sort({ updatedAt: -1 }) // Sort by the updatedAt from GitHub
+        .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(); 

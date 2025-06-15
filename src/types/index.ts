@@ -17,19 +17,19 @@ export interface Repository {
 
 export interface CodeFile {
   filename: string;
-  status: 'added' | 'modified' | 'removed' | 'renamed' | 'copied' | 'changed' | 'unchanged'; // GitHub uses more statuses
+  status: 'added' | 'modified' | 'removed' | 'renamed' | 'copied' | 'changed' | 'unchanged'; 
   additions: number;
   deletions: number;
   changes: number;
   patch: string;
-  content?: string; // Full content of the file, if fetched
+  content?: string; 
 }
 
 export interface PullRequest {
   _id: string;
-  repositoryId: string | Repository; // Can be ObjectId string or populated Repository object
-  owner: string; // For easier linking and display
-  repoName: string; // For easier linking and display
+  repositoryId: string | Repository; 
+  owner: string; 
+  repoName: string; 
   githubId: number;
   number: number;
   title: string;
@@ -42,7 +42,7 @@ export interface PullRequest {
   files: CodeFile[];
   createdAt: Date;
   updatedAt: Date;
-  analysis?: CodeAnalysis | string; // Can be ObjectId string or populated object
+  analysis?: CodeAnalysis | string; 
   userId?: string;
   analysisStatus?: 'analyzed' | 'pending' | 'failed' | 'not_started';
   qualityScore?: number | null;
@@ -83,23 +83,45 @@ export interface FileAnalysisItem {
   securityIssues: SecurityIssue[];
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics;
-  aiInsights: string; // Per-file AI insights
+  aiInsights: string; 
   vectorEmbedding?: number[];
 }
 
 export interface CodeAnalysis {
   _id: string;
-  pullRequestId: string | PullRequest; // Can be ObjectId string or populated PullRequest object
+  pullRequestId: string | PullRequest; 
   qualityScore: number;
   complexity: number;
   maintainability: number;
   securityIssues: SecurityIssue[];
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics;
-  aiInsights: string; // Overall PR AI insights
+  aiInsights: string; 
   fileAnalyses?: FileAnalysisItem[];
   createdAt: Date;
 }
+
+export interface RepositoryScanResult {
+  _id: string;
+  repositoryId: string | Repository;
+  userId: string;
+  owner: string;
+  repoName: string;
+  branchAnalyzed: string;
+  commitShaAnalyzed: string;
+  status: 'pending' | 'completed' | 'failed';
+  qualityScore: number;
+  complexity: number;
+  maintainability: number;
+  securityIssues: SecurityIssue[];
+  suggestions: Suggestion[];
+  metrics: CodeAnalysisMetrics; // Aggregated metrics
+  summaryAiInsights: string; // Overall summary for the scan
+  fileAnalyses: FileAnalysisItem[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 
 export interface TopIssueItem {
   title: string;
@@ -117,15 +139,15 @@ export interface DashboardOverview {
 }
 
 export interface RecentAnalysisItem {
-  id: string; // analysisId
+  id: string; 
   pullRequestTitle?: string;
-  repositoryName?: string; // This will be fullName like "owner/repo"
+  repositoryName?: string; 
   prNumber?: number;
-  owner?: string; // Extracted owner for link construction
-  repo?: string;  // Extracted repoName for link construction
+  owner?: string; 
+  repo?: string;  
   qualityScore: number;
-  securityIssues: number; // Count of critical/high
-  createdAt: Date; // Analysis creation date
+  securityIssues: number; 
+  createdAt: Date; 
 }
 
 export interface QualityTrendItem {
@@ -159,7 +181,7 @@ export interface ConnectedRepositoryItem {
   language: string | null;
   owner: string;
   name: string;
-  updatedAt: Date; // from our DB, reflects sync time or GitHub's last update time if we store that
+  updatedAt: Date; 
 }
 
 export interface DashboardData {
@@ -174,19 +196,18 @@ export interface DashboardData {
 }
 
 export interface SimilarCodeResult {
-  analysisId: string; // _id of the Analysis document where similar code was found
-  owner: string; // From populated PR details
-  repoName: string; // From populated PR details
-  prNumber: number; // From populated PR details
-  prTitle: string; // From populated PR details
-  prAuthorLogin: string; // From populated PR details author.login
-  prCreatedAt: Date; // From populated PR details createdAt
-  filename: string; // Filename within that PR's analysis
-  aiInsights: string; // AI insights for that specific file in the historical analysis
-  score: number; // Similarity score from vector search
+  analysisId: string; 
+  owner: string; 
+  repoName: string; 
+  prNumber: number; 
+  prTitle: string; 
+  prAuthorLogin: string; 
+  prCreatedAt: Date; 
+  filename: string; 
+  aiInsights: string; 
+  score: number; 
 }
 
-// Type for user data displayed in admin panel
 export interface AdminUserView {
   _id: string;
   name?: string | null;
@@ -215,10 +236,10 @@ export interface AnalysisReportItem {
 export interface AuditLogEntry {
   _id: string;
   timestamp: Date;
-  adminUserId: string; // Should be ObjectId string from User model
-  adminUserEmail: string; // Email of the admin who performed the action
-  action: AuditLogActionType; // The type of action performed
-  targetUserId?: string; // ObjectId string from User model, if action targets a user
-  targetUserEmail?: string; // Email of the target user, if applicable
-  details?: any; // Flexible object for action-specific details
+  adminUserId: string; 
+  adminUserEmail: string; 
+  action: AuditLogActionType; 
+  targetUserId?: string; 
+  targetUserEmail?: string; 
+  details?: any; 
 }
