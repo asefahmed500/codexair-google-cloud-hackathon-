@@ -138,7 +138,7 @@ export default function ProfilePage() {
           </CardHeader>
           <CardContent className="pt-8 space-y-6">
             <InfoItem icon={<AtSign />} label="Email" value={profile.email || 'Not set'} />
-            <InfoItem icon={<Shield />} label="Role" value={profile.role} badgeVariant={profile.role === 'admin' ? 'default' : 'secondary'} />
+            <InfoItem icon={<Shield />} label="Role" value={profile.role} badgeVariant={profile.role.toLowerCase() === 'admin' ? 'default' : 'secondary'} />
             <InfoItem icon={profile.status === 'active' ? <CheckCircle className="text-green-500" /> : <Clock className="text-amber-500" />} label="Status" value={profile.status} badgeVariant={profile.status === 'active' ? 'outline' : 'destructive'} />
             <InfoItem icon={<CalendarDays />} label="Joined" value={formattedJoinedDate} />
             
