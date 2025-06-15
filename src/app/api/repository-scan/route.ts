@@ -3,20 +3,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { Repository, RepositoryScan, connectMongoose } from '@/lib/mongodb';
-import { getDefaultBranch, getRepoFileTree, getFileContent, getRepositoryDetails, getGithubClient } from '@/lib/github'; // Added getGithubClient
+import { getDefaultBranch, getRepoFileTree, getFileContent, getGithubClient } from '@/lib/github';
 import { analyzeCode } from '@/ai/flows/code-quality-analysis';
-import { summarizePrAnalysis } from '@/ai/flows/summarize-pr-analysis-flow'; 
+import { summarizePrAnalysis } from '@/ai/flows/summarize-pr-analysis-flow';
 import type { FileAnalysisItem, SecurityIssue, Suggestion, CodeAnalysisMetrics, RepositoryScanResult } from '@/types';
-import { ai } from '@/ai/genkit'; 
+import { ai } from '@/ai/genkit';
 import mongoose from 'mongoose';
 
-const MAX_FILES_TO_SCAN = 5; 
+const MAX_FILES_TO_SCAN = 5;
 const MAX_CONTENT_LENGTH_FOR_ANALYSIS = 70000;
 const EMBEDDING_DIMENSIONS = 768;
 const FALLBACK_SUMMARY_MESSAGE = "Overall repository scan summary could not be generated.";
 
 const RELEVANT_FILE_EXTENSIONS = /\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i;
-
 
 async function generateOverallSummary(
   repoName: string,
@@ -30,7 +29,7 @@ async function generateOverallSummary(
 ): Promise<string> {
   try {
     const summaryInput = {
-      prTitle: `${repoName} (Full Scan - ${branchName} branch)`, 
+      prTitle: `${repoName} (Full Scan - ${branchName} branch)`,
       overallQualityScore: aggregatedQualityScore,
       totalCriticalIssues: totalCriticalIssues,
       totalHighIssues: totalHighIssues,
@@ -38,6 +37,7 @@ async function generateOverallSummary(
       fileCount: analyzedFileCount,
       perFileSummaries: perFileSummaries,
     };
+    // Using summarizePrAnalysis flow, context adapted by prTitle.
     const summaryOutput = await summarizePrAnalysis(summaryInput);
     return summaryOutput.prSummary || FALLBACK_SUMMARY_MESSAGE;
   } catch (error) {
@@ -45,7 +45,6 @@ async function generateOverallSummary(
     return FALLBACK_SUMMARY_MESSAGE;
   }
 }
-
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,7 +69,7 @@ export async function POST(request: NextRequest) {
     if (!defaultBranch) {
       return NextResponse.json({ error: 'Could not determine default branch for repository' }, { status: 500 });
     }
-    
+
     let headCommitSha: string;
     try {
       const octokit = await getGithubClient();
@@ -83,7 +82,6 @@ export async function POST(request: NextRequest) {
       console.error(`[API/RepoScan POST] Error fetching head commit SHA for branch ${defaultBranch} of ${owner}/${repoName}:`, e.message);
       return NextResponse.json({ error: `Failed to get branch details for ${defaultBranch}. Ensure the branch exists and the app has access.`, details: e.message }, { status: 500 });
     }
-
 
     const fileTree = await getRepoFileTree(owner, repoName, headCommitSha);
     const relevantFiles = fileTree
@@ -100,25 +98,33 @@ export async function POST(request: NextRequest) {
           return null;
         }
         if (contentToAnalyze.length > MAX_CONTENT_LENGTH_FOR_ANALYSIS) {
-          console.warn(`[API/RepoScan] Content for ${fileMeta.path} too long, truncating.`);
+          console.warn(`[API/RepoScan] Content for ${fileMeta.path} too long (${contentToAnalyze.length} chars), truncating to ${MAX_CONTENT_LENGTH_FOR_ANALYSIS}.`);
           contentToAnalyze = contentToAnalyze.substring(0, MAX_CONTENT_LENGTH_FOR_ANALYSIS);
         }
 
         const aiResponse = await analyzeCode({ code: contentToAnalyze, filename: fileMeta.path! });
-        
+
         let fileEmbeddingVector: number[] | undefined = undefined;
-        try {
-            const { embedding } = await ai.embed({
-            embedder: 'googleai/text-embedding-004',
-            content: contentToAnalyze,
+        if (contentToAnalyze && contentToAnalyze.trim() !== '') {
+          try {
+            const embedApiResponse = await ai.embed({
+              embedder: 'googleai/text-embedding-004',
+              content: contentToAnalyze,
             });
-            if (embedding && Array.isArray(embedding) && embedding.length === EMBEDDING_DIMENSIONS) {
-                fileEmbeddingVector = embedding;
+
+            if (Array.isArray(embedApiResponse) && embedApiResponse.length > 0 && embedApiResponse[0]?.embedding) {
+              const potentialEmbedding = embedApiResponse[0].embedding;
+              if (Array.isArray(potentialEmbedding) && potentialEmbedding.length === EMBEDDING_DIMENSIONS && potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
+                fileEmbeddingVector = potentialEmbedding;
+              } else {
+                console.warn(`[API/RepoScan] Generated embedding for ${fileMeta.path!} is invalid or has incorrect dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${potentialEmbedding?.length}.`);
+              }
             } else {
-                 console.warn(`[API/RepoScan] Invalid embedding for ${fileMeta.path!}. Dimensions: ${embedding?.length}`);
+               console.warn(`[API/RepoScan] ai.embed returned an unexpected structure for ${fileMeta.path!}. Response:`, JSON.stringify(embedApiResponse));
             }
-        } catch (embErr: any) {
+          } catch (embErr: any) {
             console.error(`[API/RepoScan] Embedding error for ${fileMeta.path!}: ${embErr.message}`);
+          }
         }
 
         return {
@@ -152,7 +158,7 @@ export async function POST(request: NextRequest) {
       cognitiveComplexity: totalAnalyzed > 0 ? parseFloat((analyzedFiles.reduce((sum, a) => sum + (a.metrics?.cognitiveComplexity || 0), 0) / totalAnalyzed).toFixed(1)) : 0,
       duplicateBlocks: analyzedFiles.reduce((sum, a) => sum + (a.metrics?.duplicateBlocks || 0), 0),
     };
-    
+
     const overallSummary = await generateOverallSummary(
         repoName,
         defaultBranch,
@@ -164,14 +170,13 @@ export async function POST(request: NextRequest) {
         analyzedFiles.map(fa => ({ filename: fa.filename, insight: fa.aiInsights }))
     );
 
-
     const newScan = new RepositoryScan({
-      repositoryId: new mongoose.Types.ObjectId(localRepo._id as string), // Ensure it's ObjectId
+      repositoryId: new mongoose.Types.ObjectId(localRepo._id as string),
       userId: session.user.id,
       owner,
       repoName,
       branchAnalyzed: defaultBranch,
-      commitShaAnalyzed: headCommitSha, 
+      commitShaAnalyzed: headCommitSha,
       status: 'completed',
       qualityScore: aggQuality,
       complexity: aggComplexity,
@@ -181,8 +186,8 @@ export async function POST(request: NextRequest) {
       metrics: aggMetrics,
       summaryAiInsights: overallSummary,
       fileAnalyses: analyzedFiles,
-      createdAt: new Date(), // Explicitly set
-      updatedAt: new Date(), // Explicitly set
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
     await newScan.save();
@@ -194,24 +199,25 @@ export async function POST(request: NextRequest) {
     console.error('[API/RepoScan POST] Error Object Type:', Object.prototype.toString.call(error));
     console.error('[API/RepoScan POST] Error Is Error Instance:', error instanceof Error);
     console.error('[API/RepoScan POST] Error Properties:', Object.getOwnPropertyNames(error));
-    console.error('[API/RepoScan POST] Full Error Log:', error); 
+    console.error('[API/RepoScan POST] Full Error Log:', error);
 
     let clientMessage = 'Failed to initiate repository scan.';
     let detailsForClient = error instanceof Error ? error.message : 'An unexpected error occurred.';
     
     if (detailsForClient.toLowerCase().includes('fetch failed') || detailsForClient.toLowerCase().includes('econnrefused') || detailsForClient.toLowerCase().includes('socket hang up')) {
         clientMessage = "Network error: Could not connect to a required backend service (e.g., AI model server or Genkit development server). Please ensure all backend services are running correctly.";
-        detailsForClient = clientMessage; // Simplify client details for network issues
+        detailsForClient = clientMessage;
+    } else if (detailsForClient.includes("Could not retrieve valid commit SHA for branch")) {
+        clientMessage = "Configuration Error: Could not get essential repository information (commit SHA for default branch). Please ensure the repository is accessible and the default branch exists.";
     }
     
-    // For server logs, keep more detailed info
     let detailsForServerLog = 'No further details available.';
     if (error instanceof Error && error.stack) {
         detailsForServerLog = error.stack;
     } else if (typeof error === 'string') {
         detailsForServerLog = error;
-    } else if (error.details) {
-        detailsForServerLog = String(error.details);
+    } else if ((error as any).details) {
+        detailsForServerLog = String((error as any).details);
     } else {
         try {
             detailsForServerLog = JSON.stringify(error);
@@ -219,13 +225,11 @@ export async function POST(request: NextRequest) {
             detailsForServerLog = "Could not stringify error object for server log."
         }
     }
-    console.error('[API/RepoScan POST] Server Log Details:', detailsForServerLog.substring(0,1000));
+    console.error('[API/RepoScan POST] Server Log Details (first 1000 chars):', detailsForServerLog.substring(0,1000));
 
-
-    return NextResponse.json({ 
-        error: clientMessage, 
-        details: detailsForClient.substring(0, 500), // Keep client details concise
+    return NextResponse.json({
+        error: clientMessage,
+        details: detailsForClient.substring(0, 500),
     }, { status: 500 });
   }
 }
-
