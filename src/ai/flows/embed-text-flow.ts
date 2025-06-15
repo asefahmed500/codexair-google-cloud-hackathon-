@@ -51,7 +51,7 @@ const embedTextFlow = ai.defineFlow(
 
     let extractedEmbedding: number[] | undefined = undefined;
 
-    // Standard structure for text-embedding-004 with single content: [ { embedding: [...] } ]
+    // Handle case where response is an array with the embedding object inside
     if (Array.isArray(embedApiResponse) &&
         embedApiResponse.length > 0 &&
         embedApiResponse[0] &&
@@ -72,7 +72,7 @@ const embedTextFlow = ai.defineFlow(
             console.warn('[embedTextFlow] Value of (embedApiResponse[0] as any).embedding (first 10 elements):', JSON.stringify(potentialEmbedding?.slice(0,10)));
         }
     } 
-    // Fallback for potential direct { embedding: number[] } structure (less likely for text-embedding-004)
+    // Handle case where response is the embedding object directly
     else if (embedApiResponse && typeof embedApiResponse === 'object' && Object.prototype.hasOwnProperty.call(embedApiResponse, 'embedding')) {
         const potentialEmbedding = (embedApiResponse as any).embedding;
         if (Array.isArray(potentialEmbedding) &&
@@ -103,3 +103,4 @@ const embedTextFlow = ai.defineFlow(
     return { embedding: extractedEmbedding };
   }
 );
+
