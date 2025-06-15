@@ -15,8 +15,8 @@ export async function _placeholder_createCodeEmbedding(code: string): Promise<nu
 
 export async function findSimilarCode(
   queryVector: number[],
-  limit = 5,
-  similarityThresholdParam?: number, // Allow explicit override from caller
+  limit = 10,
+  similarityThresholdParam?: number, 
   excludeAnalysisId?: string,
   excludeFilename?: string
 ): Promise<SimilarCodeResult[]> {
@@ -25,25 +25,31 @@ export async function findSimilarCode(
   const db = client.db();
 
   if (!Array.isArray(queryVector) || queryVector.length !== 768 || !queryVector.every(n => typeof n === 'number' && isFinite(n))) {
-    console.error("[findSimilarCode] Invalid queryVector. Must be an array of 768 finite numbers. Received:", queryVector ? queryVector.slice(0,10) : queryVector);
+    console.error("[findSimilarCode] Invalid queryVector. Must be an array of 768 finite numbers. Received (first 10 elements):", queryVector ? queryVector.slice(0,10) : queryVector);
     return [];
   }
 
   const dateFilter = new Date();
-  dateFilter.setMonth(dateFilter.getMonth() - 12);
+  dateFilter.setMonth(dateFilter.getMonth() - 12); // Consider analyses from the last 12 months
 
-  // More lenient for broad general searches, stricter for contextual "find similar issues"
-  const defaultGeneralSearchThreshold = 0.60; // Lowered for general queries
-  const defaultContextualSearchThreshold = 0.75; // Relaxed slightly for contextual
+  const defaultGeneralSearchThreshold = 0.50; // Lowered for general queries from /search page
+  const defaultContextualSearchThreshold = 0.75; // For "find similar issues" from an analysis page
 
-  const effectiveSimilarityThreshold =
-    similarityThresholdParam !== undefined
-      ? similarityThresholdParam
-      : excludeAnalysisId // If excludeAnalysisId is present, it's likely a contextual search
-      ? defaultContextualSearchThreshold
-      : defaultGeneralSearchThreshold;
+  let effectiveSimilarityThreshold: number;
+  let searchTypeMessage: string;
 
-  console.log(`[findSimilarCode] Using effective similarity threshold: ${effectiveSimilarityThreshold} (Limit: ${limit})`);
+  if (similarityThresholdParam !== undefined) {
+    effectiveSimilarityThreshold = similarityThresholdParam;
+    searchTypeMessage = `explicitly set to ${similarityThresholdParam}`;
+  } else if (excludeAnalysisId) { // If excludeAnalysisId is present, it's likely a contextual search
+    effectiveSimilarityThreshold = defaultContextualSearchThreshold;
+    searchTypeMessage = `contextual default (${defaultContextualSearchThreshold})`;
+  } else { // General search from /search page
+    effectiveSimilarityThreshold = defaultGeneralSearchThreshold;
+    searchTypeMessage = `general default (${defaultGeneralSearchThreshold})`;
+  }
+
+  console.log(`[findSimilarCode] Using effective similarity threshold: ${effectiveSimilarityThreshold} (Search type: ${searchTypeMessage}, Limit: ${limit})`);
   console.log(`[findSimilarCode] Query vector (first 5 dims): ${queryVector.slice(0,5).join(', ')}`);
   if (excludeAnalysisId) console.log(`[findSimilarCode] Excluding analysisId: ${excludeAnalysisId}, filename: ${excludeFilename || 'N/A'}`);
 
@@ -51,11 +57,11 @@ export async function findSimilarCode(
   const pipeline: mongoose.PipelineStage[] = [
     {
       $vectorSearch: {
-        index: "idx_file_embeddings",
-        path: "fileAnalyses.vectorEmbedding",
+        index: "idx_file_embeddings", // Ensure this matches your Atlas Search index name
+        path: "fileAnalyses.vectorEmbedding", // Path to the vector field in your documents
         queryVector: queryVector,
-        numCandidates: limit * 20, // Increase candidates to give more room for threshold filtering
-        limit: limit * 5, // Fetch more initially, then filter by score and final limit
+        numCandidates: limit * 20, 
+        limit: limit * 5, 
       }
     },
     {
@@ -65,15 +71,18 @@ export async function findSimilarCode(
     },
     {
       $match: {
-        searchScore: { $gte: effectiveSimilarityThreshold }
+        searchScore: { $gte: effectiveSimilarityThreshold } // Filter by similarity score
       }
     },
     {
-      $unwind: "$fileAnalyses"
+      $unwind: "$fileAnalyses" // Deconstruct the fileAnalyses array
     },
+    // Add a more robust check for existing and valid vectorEmbedding AFTER unwinding
     {
       $match: {
         "fileAnalyses.vectorEmbedding": { $exists: true, $ne: null, $not: {$size: 0} },
+        // Ensure it's a non-empty array; checking dimensions here is tricky with $expr if not all elements are numbers
+        // The $vectorSearch stage itself should handle vectors of incorrect dimensions not matching well
         $expr: {
             $and: [
                 { $isArray: "$fileAnalyses.vectorEmbedding" },
@@ -82,6 +91,7 @@ export async function findSimilarCode(
         }
       }
     },
+    // Filter out the source document if excludeAnalysisId and excludeFilename are provided
     ...(excludeAnalysisId && excludeFilename ? [{
       $match: {
         $or: [
@@ -90,6 +100,7 @@ export async function findSimilarCode(
         ]
       }
     }] : []),
+     // Filter out the source document if only excludeAnalysisId is provided
      ...(excludeAnalysisId && !excludeFilename ? [{
       $match: {
          _id: { $ne: new mongoose.Types.ObjectId(excludeAnalysisId) }
@@ -97,24 +108,24 @@ export async function findSimilarCode(
     }] : []),
     {
       $lookup: {
-        from: "pullrequests",
+        from: "pullrequests", // Collection name for pull requests
         localField: "pullRequestId",
         foreignField: "_id",
         as: "prDetails"
       }
     },
     {
-      $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false }
+      $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false } // Ensure PR details exist
     },
     {
-      $match: {
+      $match: { // Filter by PR creation date if needed (optional, could be for relevance)
         "prDetails.createdAt": { $gte: dateFilter }
       }
     },
     {
       $project: {
-        _id: 0,
-        analysisId: "$_id",
+        _id: 0, // Exclude the original _id of the analysis document
+        analysisId: "$_id", // Keep the analysis ID
         owner: "$prDetails.owner",
         repoName: "$prDetails.repoName",
         prNumber: "$prDetails.number",
@@ -122,24 +133,24 @@ export async function findSimilarCode(
         prAuthorLogin: "$prDetails.author.login",
         prCreatedAt: "$prDetails.createdAt",
         filename: "$fileAnalyses.filename",
-        aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 250 ] },
-        score: "$searchScore"
+        aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 250 ] }, // Truncate insights for brevity
+        score: "$searchScore" // Include the similarity score
       }
     },
-    { $sort: { score: -1 } },
-    { $limit: limit }
+    { $sort: { score: -1 } }, // Sort by similarity score descending
+    { $limit: limit } // Final limit on the number of results
   ];
 
   try {
     const results = await db.collection('analyses').aggregate(pipeline).toArray();
     console.log(`[findSimilarCode] Vector search returned ${results.length} results after thresholding and limiting.`);
     if (results.length === 0) {
-      console.log(`[findSimilarCode] No results found. This could be due to a strict threshold (${effectiveSimilarityThreshold}), no matching data, or an issue with the query/index.`);
+      console.log(`[findSimilarCode] No results found. This could be due to the threshold (${effectiveSimilarityThreshold}), no matching data, or an issue with the query/index.`);
     }
     return results as SimilarCodeResult[];
   } catch (error) {
     console.error("[findSimilarCode] Error during Atlas Vector Search aggregation:", error);
-    console.warn("[findSimilarCode] Atlas Vector Search failed. Check index 'idx_file_embeddings' on 'analyses' collection (path 'fileAnalyses.vectorEmbedding', 768 dims, cosine). Also verify pipeline stages.");
+    console.warn("[findSimilarCode] Atlas Vector Search failed. Check index 'idx_file_embeddings' on 'analyses' collection (path 'fileAnalyses.vectorEmbedding', 768 dims, cosine). Also verify pipeline stages and data integrity (valid vector embeddings).");
     return [];
   }
 }
@@ -188,6 +199,24 @@ export async function findTextSearchResults(queryText: string, limit = 10): Prom
   const db = client.db();
 
   console.warn("findTextSearchResults is a placeholder. To implement Atlas Full-Text Search, define a Search Index in Atlas.");
+  // Example (requires a text search index named 'default' on 'fileAnalyses.filename' and 'fileAnalyses.aiInsights'):
+  /*
+  const pipeline = [
+    {
+      $search: {
+        index: 'default_text_search_index', // replace with your Atlas Search text index name
+        text: {
+          query: queryText,
+          path: { wildcard: 'fileAnalyses.*' }, // Search multiple fields within fileAnalyses
+          fuzzy: { maxEdits: 1, prefixLength: 2 }
+        }
+      }
+    },
+    // ... (similar $unwind, $lookup, $project stages as vector search if needed)
+    { $limit: limit }
+  ];
+  const results = await db.collection('analyses').aggregate(pipeline).toArray();
+  return results;
+  */
   return [];
 }
-
