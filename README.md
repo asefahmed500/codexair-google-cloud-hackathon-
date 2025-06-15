@@ -28,9 +28,9 @@ codexair offers a comprehensive suite of features for both individual developers
     *   **Connected Repositories:** View your recently synced GitHub repositories for quick access.
 *   **Repository Management & Sync:**
     *   **List Synced Repositories:** View and manage repositories connected from GitHub.
-    *   **Comprehensive Sync:** Easily fetch and update your list of repositories from GitHub, pulling a broader range of your most recently updated projects.
+    *   **Comprehensive Sync:** Easily fetch and update your list of repositories from GitHub, pulling a broader range of your most recently updated projects (attempts to fetch up to 10 pages of your most recent repos).
 *   **Pull Request (PR) Analysis:**
-    *   **PR Listing:** View pull requests for a selected repository, with their current analysis status.
+    *   **PR Listing:** View pull requests for a selected repository, with their current analysis status. Fetches all PRs for a repository.
     *   **AI-Powered PR Analysis:**
         *   Initiate in-depth analysis for any open pull request.
         *   Assessment of **Code Quality**, **Complexity**, and **Maintainability**.
@@ -40,15 +40,48 @@ codexair offers a comprehensive suite of features for both individual developers
     *   Initiate an AI-powered scan of the entire current codebase of a repository (default branch).
     *   Provides similar analysis output to PR analysis (Quality, Complexity, Security, Suggestions, AI Summary) for the selected files in the repository.
     *   Useful for understanding the overall health of a repository, independent of specific PRs.
-    *   *(Note: Current version analyzes a limited number of source files from the default branch for timely results).*
+    *   *(Note: Current version analyzes a limited number of source files (e.g., up to 5) from the default branch for timely results).*
 *   **Detailed Analysis View (for PRs & Full Scans):**
     *   Comprehensive breakdown of metrics for each analyzed PR or repository scan.
     *   Detailed lists of security issues and improvement suggestions with code examples and file locations.
     *   File-by-file analysis breakdown.
     *   Concise **AI Review Summary** highlighting key findings.
 *   **Semantic Code Search:**
-    *   **Contextual Search:** From an identified security issue or suggestion in an analysis, find semantically similar code patterns and past resolutions from other analyses in the system.
-    *   **General Search:** Use the dedicated search page to find similar code snippets or issue descriptions by pasting code or writing a natural language query.
+    codexair's semantic search helps you find relevant code snippets or issue resolutions based on the *meaning* of your query, not just exact keyword matches. This is powered by AI-generated vector embeddings.
+
+    You can use semantic search in two main ways:
+
+    *   **Contextual Search (from an Analysis):**
+        *   When viewing a detailed PR analysis, you'll find "Find similar past issues" or "Find similar past patterns" links next to identified security issues or improvement suggestions.
+        *   Clicking these links automatically uses the context of that specific issue or suggestion (including its title and the file it was found in) to search for semantically similar occurrences in other recently analyzed pull requests.
+        *   **What to do:** Simply click the link! The system handles creating the search query for you.
+
+    *   **General Search Page (`/search`):**
+        *   This dedicated page allows you to perform a free-form semantic search across all indexed PR analyses.
+        *   **What to put in the search box:**
+            *   **Code Snippets:** Paste a piece of code you're trying to understand, debug, or find examples of.
+                *   *Example:*
+                    ```javascript
+                    function handleRequest(url) {
+                      if (!isValidUrl(url)) {
+                        throw new Error("Invalid URL provided");
+                      }
+                      // ... further processing
+                    }
+                    ```
+            *   **Natural Language Descriptions of Problems/Patterns:** Describe an issue you're facing or a code pattern you're looking for.
+                *   *Example:* "How to securely handle file uploads in Node.js to prevent path traversal."
+                *   *Example:* "Examples of React custom hooks for managing form state with validation."
+                *   *Example:* "Common off-by-one errors in loop conditions when processing arrays."
+            *   **Error Messages (or parts of them):** If you have a cryptic error message, you can paste it in to see if similar errors and their contexts have been seen before.
+                *   *Example:* "TypeError: Cannot read property 'data' of undefined when fetching user profile"
+
+    *   **How it works:** The text you enter is converted into a vector embedding. This embedding is then compared against the embeddings of all analyzed files from past pull requests. The results will show you files (and the PRs they belong to) that are most semantically similar to your query, along with the AI insights for those files.
+
+    **Tips for Effective Semantic Search:**
+    *   **Be specific but not overly verbose.** A concise code snippet or a clear description of a problem works best.
+    *   **For code snippets, include enough context** for the AI to understand its purpose (e.g., a function, a class, or a significant block).
+    *   **For natural language, use clear terms** that describe the core of what you're looking for or the problem you're encountering.
 *   **Pull Request Comparison:**
     *   Side-by-side comparison of two pull requests from the same repository, including their metadata and (if available) their full analysis summaries.
     *   Option to initiate analysis for unanalyzed PRs directly from the comparison view.
@@ -170,8 +203,10 @@ A short GIF demonstrating the AI analysis or code explanation feature would also
 ## Future Enhancements (Potential Roadmap)
 
 *   **CI/CD Integration:** Automatically analyze pull requests on GitHub/GitLab via webhooks.
-*   **Asynchronous Full Repository Scans:** Convert the full repository scan to an asynchronous background job for larger repositories.
-*   **Advanced Vector Search Options:** More sophisticated semantic search queries, filtering, and indexing across different analysis types (PRs, full scans).
+*   **Asynchronous Full Repository Scans:** Convert the full repository scan to an asynchronous background job for larger repositories and analyze more files.
+*   **Enhanced Vector Search:**
+    *   Include embeddings from full repository scans in semantic search.
+    *   More sophisticated semantic search queries, filtering, and indexing across different analysis types (PRs, full scans).
 *   **Customizable Analysis Rules:** Allow users to define custom rules or priorities for the AI analysis.
 *   **Team Collaboration Features:** Notifications, shared analysis views, and discussion threads.
 *   **IDE Integration:** Bring codexair insights directly into the developer's IDE.
