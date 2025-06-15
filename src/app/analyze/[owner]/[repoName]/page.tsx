@@ -277,15 +277,16 @@ export default function RepositoryAnalysisPage() {
             ) : pullRequests.length === 0 ? (
                 <div className="text-center py-10">
                     <GitPullRequest className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-lg text-muted-foreground mb-2">No open pull requests found in this repository.</p>
-                    <p className="text-sm text-muted-foreground mb-4">You can still analyze the entire repository codebase.</p>
+                    <p className="text-lg text-muted-foreground mb-2">No pull requests found in this repository yet.</p>
+                    <p className="text-sm text-muted-foreground mb-4">You can still run an AI analysis on the entire codebase.</p>
                      <Button 
                         onClick={handleAnalyzeFullRepository} 
                         disabled={isScanningRepo}
                         size="lg"
+                        variant="default"
                     >
                         <ScanSearch className={`mr-2 h-5 w-5 ${isScanningRepo && 'animate-spin'}`} />
-                        {isScanningRepo ? 'Scanning Repository...' : 'Analyze Repository Codebase Now'}
+                        {isScanningRepo ? 'Analyzing Repository...' : 'Analyze Repository with AI'}
                     </Button>
                 </div>
             ) : (

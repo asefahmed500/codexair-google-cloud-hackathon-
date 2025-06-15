@@ -71,9 +71,7 @@ export default function RepositoryScanDetailsPage() {
 
   // Semantic search handler (can be adapted from PR analysis page if needed, for now placeholder)
   const handleFindSimilarCode = async (queryFilename: string, contextTitle: string, type: 'security' | 'suggestion') => {
-    if (!scanId) return; // This scanId is for RepositoryScan, not an Analysis for PR.
-                        // Semantic search currently uses Analysis._id for context.
-                        // This needs adjustment if semantic search is to work from full repo scans.
+    if (!scanId) return; 
     toast({title: "Semantic Search Info", description: "Semantic search from full repository scans is contextually different and will be refined. Currently uses PR analysis context.", variant: "default"})
 
     setIsSearchingSimilarCode(true);
@@ -82,16 +80,9 @@ export default function RepositoryScanDetailsPage() {
     setCurrentSearchContext({ type, title: contextTitle, filename: queryFilename});
 
     try {
-      // TODO: Adapt this if `findSimilarCode` backend needs different parameters for repo scans.
-      // For now, it expects an `queryAnalysisId` which is a PR Analysis ID.
-      // We might need a different vector search strategy or a way to link repo scan files to a searchable context.
-      // As a temporary measure, we can disable it or use a placeholder for the queryAnalysisId if not applicable.
-      // For now, let's assume the semantic search might not work optimally from this page without backend changes to `findSimilarCode`.
       const response = await fetch('/api/search/similar-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // This is problematic: queryAnalysisId expects a PR Analysis ID.
-        // For now, this feature might be limited from this page.
         body: JSON.stringify({ queryAnalysisId: scanData?.repositoryId, queryFilename }), // Using repositoryId might be wrong
       });
       if (!response.ok) {
@@ -174,7 +165,7 @@ export default function RepositoryScanDetailsPage() {
       <Navbar /> 
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex justify-between items-center">
-             <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>Back to PRs for {owner}/{repoName}</Button>
+             <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>Back to {owner}/{repoName}</Button>
         </div>
 
         <Card className="mb-6 shadow-lg">
@@ -200,8 +191,9 @@ export default function RepositoryScanDetailsPage() {
                     <Info className="h-5 w-5 text-primary" />
                     <AlertBoxTitle className="text-md font-semibold text-primary">Full Repository Scan Information</AlertBoxTitle>
                     <AlertBoxDescription className="text-sm text-primary-foreground/80">
-                        This analysis reflects the state of the repository's default branch (<code className="bg-primary/10 px-1 rounded text-xs">{scanData.branchAnalyzed}</code>) at commit <code className="bg-primary/10 px-1 rounded text-xs">{scanData.commitShaAnalyzed.substring(0,7)}</code>. 
-                        For this version, AI analysis was performed on a limited number of source files (up to 5).
+                        This is a full repository scan of the default branch (<code className="bg-primary/10 px-1 rounded text-xs">{scanData.branchAnalyzed}</code>).
+                        For this version, AI analysis was performed on a limited number of source files (up to 5) to ensure timely results.
+                        This analysis is not tied to a specific Pull Request.
                     </AlertBoxDescription>
                 </Alert>
 
