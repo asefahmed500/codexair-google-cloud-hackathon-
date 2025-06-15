@@ -14,9 +14,9 @@ export async function _placeholder_createCodeEmbedding(code: string): Promise<nu
 }
 
 export async function findSimilarCode(
-  queryVector: number[], 
-  limit = 5, 
-  similarityThreshold = 0.8, // Adjusted threshold slightly
+  queryVector: number[],
+  limit = 5,
+  similarityThresholdParam?: number, // Allow explicit override from caller
   excludeAnalysisId?: string,
   excludeFilename?: string
 ): Promise<SimilarCodeResult[]> {
@@ -24,8 +24,8 @@ export async function findSimilarCode(
   const client = await clientPromise;
   const db = client.db(); 
   
-  if (!Array.isArray(queryVector) || queryVector.length !== 768 || !queryVector.every(n => typeof n === 'number')) {
-    console.error("Invalid queryVector provided to findSimilarCode. Must be an array of 768 numbers.");
+  if (!Array.isArray(queryVector) || queryVector.length !== 768 || !queryVector.every(n => typeof n === 'number' && isFinite(n))) {
+    console.error("Invalid queryVector provided to findSimilarCode. Must be an array of 768 finite numbers.");
     return [];
   }
 
@@ -33,14 +33,28 @@ export async function findSimilarCode(
   const dateFilter = new Date();
   dateFilter.setMonth(dateFilter.getMonth() - 12);
 
+  // Determine the effective similarity threshold
+  const defaultGeneralSearchThreshold = 0.70; // More lenient for broad searches
+  const defaultContextualSearchThreshold = 0.78; // Stricter for finding very similar issues
+
+  const effectiveSimilarityThreshold =
+    similarityThresholdParam !== undefined
+      ? similarityThresholdParam
+      : excludeAnalysisId // If excludeAnalysisId is present, it's likely a contextual search
+      ? defaultContextualSearchThreshold
+      : defaultGeneralSearchThreshold;
+  
+  console.log(`[findSimilarCode] Using effective similarity threshold: ${effectiveSimilarityThreshold}`);
+
+
   const pipeline: mongoose.PipelineStage[] = [
     {
       $vectorSearch: {
         index: "idx_file_embeddings", 
         path: "fileAnalyses.vectorEmbedding", 
         queryVector: queryVector,
-        numCandidates: limit * 20, // Increased candidates for better filtering
-        limit: limit * 5, // Fetch more initially to allow for filtering
+        numCandidates: limit * 20, 
+        limit: limit * 5, 
       }
     },
     {
@@ -48,23 +62,31 @@ export async function findSimilarCode(
         searchScore: { $meta: "vectorSearchScore" }
       }
     },
-    {
-      $match: { // Initial match on vector search score
-        searchScore: { $gte: similarityThreshold }
+    { 
+      $match: { 
+        searchScore: { $gte: effectiveSimilarityThreshold } // Use the determined threshold
       }
     },
-    { // Unwind fileAnalyses to access individual file details and embeddings
+    { 
       $unwind: "$fileAnalyses"
     },
-    { // Secondary match to ensure the unwound file has an embedding and contributes to score
+    { 
       $match: {
         "fileAnalyses.vectorEmbedding": { $exists: true, $ne: null, $not: {$size: 0} },
-        // This re-match on score after unwind isn't strictly necessary if the score is top-level,
-        // but ensures we are dealing with relevant files.
-        // The score is per-document, so we rely on vectorSearch hitting right docs.
+        // Match again on searchScore after unwind, but specifically for the file's contribution if possible.
+        // This needs a more complex check if we want to ensure the *unwound file's embedding* caused the high score.
+        // For now, we rely on the document-level score and that the unwound file has an embedding.
+        // A more advanced approach might involve re-scoring or ensuring the specific unwound file's embedding
+        // is highly similar to the query vector if the document score is a composite.
+        // However, with current $vectorSearch, score is per-document.
+        $expr: { // Ensure the specific unwound file has an embedding that *could* match
+            $and: [
+                { $isArray: "$fileAnalyses.vectorEmbedding" },
+                { $gt: [ { $size: "$fileAnalyses.vectorEmbedding" }, 0 ] }
+            ]
+        }
       }
     },
-    // Filter out the exact source document/file if specified
     ...(excludeAnalysisId && excludeFilename ? [{
       $match: {
         $or: [
@@ -73,7 +95,7 @@ export async function findSimilarCode(
         ]
       }
     }] : []),
-     ...(excludeAnalysisId && !excludeFilename ? [{ // Only exclude by analysisId if filename not provided
+     ...(excludeAnalysisId && !excludeFilename ? [{ 
       $match: {
          _id: { $ne: new mongoose.Types.ObjectId(excludeAnalysisId) } 
       }
@@ -87,17 +109,17 @@ export async function findSimilarCode(
       }
     },
     {
-      $unwind: "$prDetails"
+      $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false } // Ensure prDetails exists
     },
     {
-      $match: { // Filter by PR date
+      $match: { 
         "prDetails.createdAt": { $gte: dateFilter }
       }
     },
     { 
       $project: { 
         _id: 0, 
-        analysisId: "$_id", // ID of the Analysis document where similar code found
+        analysisId: "$_id", 
         owner: "$prDetails.owner",
         repoName: "$prDetails.repoName",
         prNumber: "$prDetails.number",
@@ -105,17 +127,17 @@ export async function findSimilarCode(
         prAuthorLogin: "$prDetails.author.login",
         prCreatedAt: "$prDetails.createdAt",
         filename: "$fileAnalyses.filename",
-        // Select a concise part of aiInsights, or description if more suitable
-        aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 150 ] }, // Snippet
+        aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 250 ] }, // Slightly longer snippet
         score: "$searchScore"
       }
     },
     { $sort: { score: -1 } }, 
-    { $limit: limit } // Final limit after all filtering
+    { $limit: limit } 
   ];
 
   try {
     const results = await db.collection('analyses').aggregate(pipeline).toArray();
+    console.log(`[findSimilarCode] Found ${results.length} results after aggregation.`);
     return results as SimilarCodeResult[];
   } catch (error) {
     console.error("Error during Atlas Vector Search for semantic code matching:", error);
