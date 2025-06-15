@@ -24,3 +24,4 @@ export const ai = genkit({
   plugins: [googleAiPlugin],
   model: 'googleai/gemini-1.5-flash-latest', 
 });
+
