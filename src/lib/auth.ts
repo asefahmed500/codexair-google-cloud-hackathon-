@@ -56,18 +56,16 @@ if (providers.length === 0) {
   console.error('[Auth Setup] CRITICAL ERROR: No OAuth providers configured. Login will not function. Please provide credentials for at least one provider in your .env file.');
 }
 
-const isProduction = process.env.NODE_ENV === 'production';
 const useSecureCookies = process.env.NEXTAUTH_URL!.startsWith("https:");
 
 const getCookieName = (baseName: string) => {
-  // For production and HTTPS, use __Host- for CSRF and __Secure- for others if appropriate
-  // For local HTTP, use the base name.
-  if (isProduction && useSecureCookies) {
-    if (baseName === 'next-auth.csrf-token') return `__Host-${baseName}`;
-    // For other cookies like session-token, callback-url, state, pkce, nonce, __Secure- is appropriate.
-    return `__Secure-${baseName}`;
+  if (useSecureCookies) {
+    if (baseName.includes('csrf-token') || baseName.includes('state')) { // Host- for CSRF/state
+      return `__Host-${baseName}`;
+    }
+    return `__Secure-${baseName}`; // Secure- for others
   }
-  return baseName;
+  return baseName; // Plain name for HTTP
 };
 
 
@@ -145,16 +143,34 @@ export const authOptions: NextAuthOptions = {
       }
       console.log(`[SignIn Callback] Attempting sign-in for email: '${userEmail}', Provider: '${account?.provider}', isNewUser flag from NextAuth: ${isNewUser}`);
 
-      const existingUserInDB = await UserModel.findOne({ email: userEmail }).select('_id status role').lean();
+      let existingUserInDB = await UserModel.findOne({ email: userEmail }).select('_id status role').lean();
 
       if (existingUserInDB) {
-        const userStatus = existingUserInDB.status || 'active';
-        const userRole = existingUserInDB.role || 'user';
+        const userStatus = existingUserInDB.status || 'active'; // Default to active if undefined
+        const userRole = existingUserInDB.role || 'user';     // Default to user if undefined
+
         console.log(`[SignIn Callback] Existing user found in DB: ${existingUserInDB._id}, DB Status: ${existingUserInDB.status} (Effective: ${userStatus}), DB Role: ${existingUserInDB.role} (Effective: ${userRole})`);
+        
         if (userStatus === 'suspended') {
           console.warn(`[SignIn Callback] Denied: Account for email '${userEmail}' is suspended.`);
           return `/auth/signin?error=AccountSuspended&email=${encodeURIComponent(userEmail)}`;
         }
+
+        // If status or role were missing from DB, ensure they are set (should be rare with schema defaults if DB connection is good)
+        if (!existingUserInDB.status || !existingUserInDB.role) {
+            console.warn(`[SignIn Callback] Existing user ${existingUserInDB._id} missing status or role in DB. Attempting to update with defaults.`);
+            const updates: any = {};
+            if (!existingUserInDB.status) updates.status = 'active';
+            if (!existingUserInDB.role) updates.role = 'user';
+            try {
+                await UserModel.findByIdAndUpdate(existingUserInDB._id, { $set: updates });
+                console.log(`[SignIn Callback] Updated existing user ${existingUserInDB._id} with defaults in DB.`);
+            } catch (dbUpdateError) {
+                console.error(`[SignIn Callback] Error updating existing user ${existingUserInDB._id} with defaults:`, dbUpdateError);
+                // Proceed with sign-in, JWT callback will handle token population
+            }
+        }
+
       } else {
         console.log(`[SignIn Callback] New user with email '${userEmail}'. Adapter will create this user. Mongoose schema defaults for role ('user') and status ('active') should apply.`);
       }
@@ -167,25 +183,24 @@ export const authOptions: NextAuthOptions = {
       await connectMongoose();
 
       if (account && user && user.id) { // This branch is typically for initial sign-in
-        console.log(`[JWT Callback] Initial JWT creation for user: ${user.id} (isNewUser by NextAuth: ${isNewUser})`); // Log isNewUser from NextAuth
+        console.log(`[JWT Callback] Initial JWT creation for user: ${user.id} (isNewUser by NextAuth: ${isNewUser})`);
         
         let dbUser = await UserModel.findById(user.id).select('_id role email status name image').lean();
 
         if (!dbUser) {
-          console.error(`[JWT Callback - New User Path] CRITICAL: User ${user.id} (from adapter) NOT FOUND in DB immediately after creation. Invalidating token.`);
+          console.error(`[JWT Callback - Initial] CRITICAL: User ${user.id} (from adapter) NOT FOUND in DB immediately after creation/linking. Invalidating token.`);
           return {}; // Invalidate token
         }
         
-        // Ensure role and status are explicitly set in the DB for new users if schema defaults didn't catch it.
-        // This also covers the case where isNewUser flag from NextAuth might be false but dbUser.role/status are missing.
+        // Ensure role and status are explicitly set in the DB for new users if schema defaults didn't catch it or if linking an existing user profile that might be missing them.
         const updatesToApply: { role?: string; status?: string } = {};
         if (!dbUser.role) {
-          updatesToApply.role = 'user';
-          console.warn(`[JWT Callback] User ${dbUser._id} was missing 'role' in DB. Preparing to set to 'user'.`);
+          updatesToApply.role = 'user'; // Default role
+          console.warn(`[JWT Callback - Initial] User ${dbUser._id} was missing 'role' in DB. Preparing to set to 'user'.`);
         }
         if (!dbUser.status) {
-          updatesToApply.status = 'active';
-          console.warn(`[JWT Callback] User ${dbUser._id} was missing 'status' in DB. Preparing to set to 'active'.`);
+          updatesToApply.status = 'active'; // Default status
+          console.warn(`[JWT Callback - Initial] User ${dbUser._id} was missing 'status' in DB. Preparing to set to 'active'.`);
         }
 
         if (Object.keys(updatesToApply).length > 0) {
@@ -198,12 +213,14 @@ export const authOptions: NextAuthOptions = {
 
             if (updatedUserInDB) {
               dbUser = updatedUserInDB; // Use the updated user for subsequent logic
-              console.log(`[JWT Callback] User ${dbUser._id} DB record explicitly updated with defaults. Role: ${dbUser.role}, Status: ${dbUser.status}`);
+              console.log(`[JWT Callback - Initial] User ${dbUser._id} DB record explicitly updated with defaults. Role: ${dbUser.role}, Status: ${dbUser.status}`);
             } else {
-              console.error(`[JWT Callback] Failed to explicitly update user ${dbUser._id} with defaults in DB.`);
+              console.error(`[JWT Callback - Initial] Failed to explicitly update user ${dbUser._id} with defaults in DB.`);
+              // Proceed with potentially incomplete dbUser, token population will use defaults.
             }
           } catch (updateError) {
-            console.error(`[JWT Callback] Error explicitly updating user ${dbUser._id} with defaults:`, updateError);
+            console.error(`[JWT Callback - Initial] Error explicitly updating user ${dbUser._id} with defaults:`, updateError);
+            // Proceed with potentially incomplete dbUser.
           }
         }
         
@@ -215,16 +232,15 @@ export const authOptions: NextAuthOptions = {
         token.picture = dbUser.image || (profile as any)?.avatar_url;
         if (account.access_token) token.accessToken = account.access_token;
 
-        // First user admin promotion logic (only if truly new OR if their role is still 'user')
-        // This check is now more robust as dbUser.role should be reliably 'user' from the above update.
+        // First user admin promotion logic
         const totalUsers = await UserModel.countDocuments();
-        console.log(`[JWT Callback] Total users in DB: ${totalUsers}. Role for user ${token.id} (after DB updates): ${dbUser.role}`);
-        if (totalUsers === 1 && dbUser.role === 'user') { 
-          console.log(`[JWT Callback] This is the first user (${token.id}) and their role is 'user'. Promoting to 'admin'.`);
+        console.log(`[JWT Callback - Initial] Total users in DB: ${totalUsers}. Role for user ${token.id} (after DB updates): ${token.role}`);
+        if (totalUsers === 1 && token.role === 'user') { 
+          console.log(`[JWT Callback - Initial] This is the first user (${token.id}) and their role is 'user'. Promoting to 'admin'.`);
           try {
             const promotedUser = await UserModel.findByIdAndUpdate(
               token.id,
-              { $set: { role: 'admin', status: 'active' } },
+              { $set: { role: 'admin', status: 'active' } }, // Ensure status is active too
               { new: true }
             ).select('_id role status').lean();
 
@@ -238,10 +254,8 @@ export const authOptions: NextAuthOptions = {
           } catch (err) {
             console.error(`[JWT Callback - First User Admin Promotion] Error promoting user ${token.id} to admin:`, err);
           }
-        } else if (totalUsers > 1 && dbUser.role === 'admin') {
-            console.warn(`[JWT Callback] User ${token.id} has role 'admin' but is not the first user (total: ${totalUsers}). This might be unexpected. No change to role.`);
         } else {
-            console.log(`[JWT Callback] User ${token.id} (total users: ${totalUsers}, role: ${dbUser.role}). No admin promotion needed or applicable.`);
+            console.log(`[JWT Callback - Initial] User ${token.id} (total users: ${totalUsers}, role: ${token.role}). No admin promotion needed or applicable.`);
         }
         return token;
       }
@@ -257,13 +271,13 @@ export const authOptions: NextAuthOptions = {
           token.picture = dbUserFromRefresh.image || token.picture;
         } else {
           console.warn(`[JWT Callback - Subsequent] User with ID ${token.id} not found in DB during refresh. Invalidating token.`);
-          return {}; 
+          return {}; // Invalidate token by returning an empty object
         }
         return token;
       }
       
       console.warn(`[JWT Callback] Unhandled token processing path. Token (keys): ${Object.keys(token).join(', ')}, account: ${!!account}, user: ${!!user}`);
-      return token;
+      return token; // Return existing token if no specific logic applied
     },
 
     async session({ session, token }) {
@@ -272,7 +286,6 @@ export const authOptions: NextAuthOptions = {
         if(session.user) { 
           session.user = {} as any; // Clear user object
         }
-        // Potentially remove accessToken as well if token is completely invalid
         delete session.accessToken;
         return session;
       }
@@ -282,16 +295,17 @@ export const authOptions: NextAuthOptions = {
       }
       
       if (!session.user) {
-        session.user = {} as any;
+        session.user = {} as any; // Ensure user object exists
       }
       
       session.user.id = token.id as string;
-      session.user.role = (token.role as 'user' | 'admin') || 'user';
-      session.user.status = (token.status as 'active' | 'suspended') || 'active';
+      session.user.role = (token.role as 'user' | 'admin') || 'user'; // Default to 'user' if missing
+      session.user.status = (token.status as 'active' | 'suspended') || 'active'; // Default to 'active' if missing
 
-      if (token.email) session.user.email = token.email as string;
-      if (token.name) session.user.name as string;
-      if (token.picture) session.user.image as string;
+      // Ensure optional fields are correctly typed or undefined
+      session.user.email = (token.email as string) || undefined;
+      session.user.name = (token.name as string) || undefined;
+      session.user.image = (token.picture as string) || undefined;
       
       return session;
     },
@@ -307,4 +321,6 @@ export const authOptions: NextAuthOptions = {
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };
+    
+
     
