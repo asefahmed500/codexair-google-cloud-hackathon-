@@ -17,7 +17,7 @@ export async function findSimilarCode(
   queryVector: number[],
   limit = 10,
   similarityThresholdParam?: number,
-  excludeAnalysisOrScanId?: string, // Renamed for clarity, can be PR Analysis ID or Repo Scan ID
+  excludeAnalysisOrScanId?: string, 
   excludeFilename?: string
 ): Promise<SimilarCodeResult[]> {
   await connectMongoose();
@@ -49,14 +49,15 @@ export async function findSimilarCode(
   console.log(`[findSimilarCode] Using effective similarity threshold: ${effectiveSimilarityThreshold} (Search type: ${searchTypeMessage}, Limit: ${limit})`);
   if (excludeAnalysisOrScanId) console.log(`[findSimilarCode] Excluding ID: ${excludeAnalysisOrScanId}, filename: ${excludeFilename || 'N/A'}`);
 
+  // Pipeline for PR Analyses
   const prAnalysisPipeline: mongoose.PipelineStage[] = [
     {
       $vectorSearch: {
-        index: "idx_file_embeddings", // Assumes index on `analyses` collection
+        index: "idx_file_embeddings",
         path: "fileAnalyses.vectorEmbedding", 
         queryVector: queryVector,
-        numCandidates: limit * 20, 
-        limit: limit * 10, 
+        numCandidates: limit * 20, // Fetch more candidates to sort/filter later
+        limit: limit * 10, // Higher internal limit for vector search itself
       }
     },
     { $addFields: { searchScore: { $meta: "vectorSearchScore" } } },
@@ -84,7 +85,7 @@ export async function findSimilarCode(
         as: "prDetails"
       }
     },
-    { $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false } },
+    { $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false } }, // Ensure PR details exist
     {
       $project: {
         _id: 0, 
@@ -98,18 +99,19 @@ export async function findSimilarCode(
         filename: "$fileAnalyses.filename",
         aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 250 ] }, 
         score: "$searchScore",
-        searchResultType: "pr_analysis",
-        scanBranch: null, // Placeholder
-        scanCommitSha: null, // Placeholder
-        scanCreatedAt: null, // Placeholder
+        searchResultType: "pr_analysis" as const, // Type assertion
+        scanBranch: null, 
+        scanCommitSha: null, 
+        scanCreatedAt: null, 
       }
     }
   ];
 
+  // Pipeline for Repository Scans
   const repoScanPipeline: mongoose.PipelineStage[] = [
     {
       $vectorSearch: {
-        index: "idx_repo_scan_file_embeddings", // This index needs to exist on `repositoryscans`
+        index: "idx_repo_scan_file_embeddings", 
         path: "fileAnalyses.vectorEmbedding",
         queryVector: queryVector,
         numCandidates: limit * 20,
@@ -120,7 +122,7 @@ export async function findSimilarCode(
     { $match: { searchScore: { $gte: effectiveSimilarityThreshold } } },
     { $unwind: "$fileAnalyses" },
     { $match: { "fileAnalyses.vectorEmbedding": { $exists: true, $ne: null, $not: {$size: 0} } } },
-    ...(excludeAnalysisOrScanId && excludeFilename ? [{ // If excluding, assumes excludeAnalysisOrScanId is a scanId
+    ...(excludeAnalysisOrScanId && excludeFilename ? [{
       $match: {
         $or: [
           { _id: { $ne: new mongoose.Types.ObjectId(excludeAnalysisOrScanId) } },
@@ -136,60 +138,55 @@ export async function findSimilarCode(
     {
       $project: {
         _id: 0,
-        analysisId: "$_id", // This is the RepositoryScan ID
+        analysisId: "$_id", 
         owner: "$owner",
         repoName: "$repoName",
         filename: "$fileAnalyses.filename",
         aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 250 ] },
         score: "$searchScore",
-        searchResultType: "repo_scan",
+        searchResultType: "repo_scan" as const, // Type assertion
         scanBranch: "$branchAnalyzed",
         scanCommitSha: "$commitShaAnalyzed",
         scanCreatedAt: "$createdAt",
-        prNumber: null, // Placeholder
-        prTitle: null, // Placeholder
-        prAuthorLogin: null, // Placeholder
-        prCreatedAt: null, // Placeholder
+        prNumber: null, 
+        prTitle: null, 
+        prAuthorLogin: null, 
+        prCreatedAt: null, 
       }
     }
   ];
-
-  const combinedPipeline: mongoose.PipelineStage[] = [
-    { $facet: {
-        prResults: prAnalysisPipeline,
-        scanResults: repoScanPipeline
-    }},
-    { $project: {
-        allResults: { $concatArrays: ["$prResults", "$scanResults"] }
-    }},
-    { $unwind: "$allResults" },
-    { $replaceRoot: { newRoot: "$allResults" } },
-    { $sort: { score: -1 } },
-    { $limit: limit }
-  ];
   
   try {
-    console.log(`[findSimilarCode] Executing combined search. Threshold: ${effectiveSimilarityThreshold}, Limit: ${limit}`);
-    const results = await db.collection('analyses').aggregate(combinedPipeline).toArray(); 
-    // Note: The aggregation starts on 'analyses', but $facet allows bringing in 'repositoryscans'.
-    // This might be slightly less efficient than two separate queries then merging,
-    // but $facet + $unionWith (if Atlas version supports it directly in $vectorSearch context) is cleaner.
-    // Given the structure, it's like running the PR part, then the Scan part, then merging and sorting.
-    // Let's assume the $facet works fine for now to combine results.
-    // A more direct approach if $facet has issues with $vectorSearch on different collections might be:
-    // const prResults = await db.collection('analyses').aggregate(prAnalysisPipelineWithoutLimit).toArray();
-    // const scanResults = await db.collection('repositoryscans').aggregate(repoScanPipelineWithoutLimit).toArray();
-    // const combined = [...prResults, ...scanResults].sort((a,b) => b.score - a.score).slice(0, limit);
-
-    console.log(`[findSimilarCode] Combined search returned ${results.length} results after thresholding and limiting.`);
+    console.log(`[findSimilarCode] Executing separate searches. Threshold: ${effectiveSimilarityThreshold}`);
     
-    if (results.length === 0) {
+    const prResultsPromise = db.collection('analyses').aggregate(prAnalysisPipeline).toArray();
+    const scanResultsPromise = db.collection('repositoryscans').aggregate(repoScanPipeline).toArray();
+
+    const [prResults, scanResults] = await Promise.all([prResultsPromise, scanResultsPromise]);
+
+    console.log(`[findSimilarCode] PR search returned ${prResults.length} results.`);
+    console.log(`[findSimilarCode] Repo Scan search returned ${scanResults.length} results.`);
+
+    const combinedResults = [
+      ...(prResults as SimilarCodeResult[]), 
+      ...(scanResults as SimilarCodeResult[])
+    ];
+
+    // Sort by score descending and then limit
+    const sortedAndLimitedResults = combinedResults
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+    
+    console.log(`[findSimilarCode] Combined, sorted, and limited search returned ${sortedAndLimitedResults.length} results.`);
+    
+    if (sortedAndLimitedResults.length === 0) {
       console.warn(`[findSimilarCode] No results found from combined search. Threshold (${effectiveSimilarityThreshold}).`);
     }
-    return results as SimilarCodeResult[];
+    return sortedAndLimitedResults;
+
   } catch (error) {
-    console.error("[findSimilarCode] Error during combined Atlas Vector Search aggregation:", error);
-    console.warn("[findSimilarCode] Atlas Vector Search failed. Check indices 'idx_file_embeddings' on 'analyses' and 'idx_repo_scan_file_embeddings' on 'repositoryscans'. Path: 'fileAnalyses.vectorEmbedding', 768 dims, cosine.");
+    console.error("[findSimilarCode] Error during Atlas Vector Search aggregation (separate queries):", error);
+    console.warn("[findSimilarCode] Atlas Vector Search failed. Check indices 'idx_file_embeddings' on 'analyses' AND 'idx_repo_scan_file_embeddings' on 'repositoryscans'. Path: 'fileAnalyses.vectorEmbedding', 768 dims, cosine.");
     return [];
   }
 }
