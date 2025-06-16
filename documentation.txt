@@ -39,11 +39,11 @@ Provides a comprehensive overview of the user's (or platform's for admin) code a
 ### 3.3. Repository Management & Sync (`/analyze`)
 - **List Synced Repositories:** Displays repositories the user has connected from GitHub, with server-side pagination and search.
 - **Server-Side Search:** Users can search their synced repositories by name, full name, or primary language. The search is performed on the server.
-- **Comprehensive Sync:** Allows users to fetch and update their list of repositories from GitHub. This process attempts to retrieve up to 10 pages (approx. 300 repos) of the user's most recently updated repositories from GitHub and stores/updates their metadata in the local database.
+- **Comprehensive Sync:** Allows users to fetch and update their list of repositories from GitHub. This process attempts to retrieve up to 10 pages (approx. 300 repos) of the user's most recently updated repositories from GitHub, stores/updates their metadata in the local database, and also fetches the user's total repository count from GitHub.
 
 ### 3.4. Pull Request (PR) Analysis (`/analyze/[owner]/[repoName]`)
 - **PR Listing:** View all open and recently closed pull requests for a selected repository, along with their current analysis status (e.g., Not Analyzed, Pending, Analyzed, Failed).
-- **AI-Powered PR Analysis Initiation:** Users can initiate an in-depth analysis for any open pull request by clicking the "Analyze" button.
+- **AI-Powered PR Analysis Initiation:** Users can initiate an in-depth analysis for any open pull request by clicking the "Analyze" button. This process generates vector embeddings for changed/added files, which are stored in the `Analyses` collection.
 - **Detailed Analysis View (`/analyze/[owner]/[repoName]/[prNumber]/[analysisId]`):**
     - **AI Review Summary (Overall PR):** A concise, AI-generated summary of the key findings for the entire pull request.
     - **Overall Metrics:** Displays aggregated quality score, complexity, and maintainability scores for the PR.
@@ -55,18 +55,18 @@ Provides a comprehensive overview of the user's (or platform's for admin) code a
 - **Initiation:** From the repository's PR listing page (`/analyze/[owner]/[repoName]`), users can click "Analyze Repository Codebase".
 - **Scope:** This feature analyzes the current state of the repository's default branch (e.g., `main`, `master`).
     - **Note:** The current version analyzes a limited number of source files (e.g., up to 5) from the default branch to ensure timely results in a synchronous operation. This is clearly communicated to the user on the scan results page.
+    - Vector embeddings are generated for analyzed files and stored in the `RepositoryScans` collection.
 - **Analysis Output (`/analyze/[owner]/[repoName]/scan/[scanId]`):**
     - Provides overall quality, complexity, maintainability scores, lists of security issues and suggestions, and file-by-file breakdowns for the analyzed files.
     - Includes an AI-generated summary for the entire repository scan (based on the analyzed files).
     - Clearly indicates that it's a full repository scan, not tied to a specific PR, and mentions the file analysis limitation.
-    - Vector embeddings are generated and stored for analyzed files, making them searchable via semantic search.
 
 ### 3.6. Semantic Code Search
 Leverages AI-generated vector embeddings to find semantically similar code snippets or issue resolutions across **both PR analyses and full repository scans**.
 - **Contextual Search (from PR Analysis or Repository Scan):**
     - When viewing a detailed PR analysis or repository scan, users can click "Find similar past issues" or "Find similar past patterns" next to identified security issues or improvement suggestions.
     - This automatically uses the context of that specific issue/suggestion to search for semantically similar occurrences in other recently analyzed pull requests and full repository scans.
-    - The system uses the `sourceType` parameter to fetch the embedding from the correct collection (`analyses` or `repositoryscans`).
+    - The system uses a `sourceType` parameter ('pr_analysis' or 'repo_scan') to fetch the source embedding from the correct collection (`analyses` or `repositoryscans`).
 - **General Search Page (`/search`):**
     - A dedicated page for free-form semantic search across all indexed PR analyses and full repository scans.
     - **User Input:** Code snippets or natural language descriptions of problems/patterns.
@@ -132,14 +132,14 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
 ### 5.3. Database (MongoDB with Mongoose)
 - **MongoDB, Mongoose.**
 - **Key Collections (Models defined in `src/lib/mongodb.ts`):**
-    - `Users`, `Accounts`, `Sessions`, `VerificationTokens`.
+    - `Users`, `Accounts`, `Sessions`, `VerificationTokens`. (User model includes `lastKnownTotalGitHubRepos` and `lastGitHubRepoCountSync`).
     - `Repositories`: Stores metadata for GitHub repositories synced by users.
     - `PullRequests`: Stores details of GitHub pull requests, linking to `Analyses`.
     - `Analyses`: Stores results of PR analyses, including file-level breakdowns and `fileAnalyses.vectorEmbedding`.
     - `RepositoryScans`: Stores results of full repository codebase scans, including `fileAnalyses.vectorEmbedding`.
     - `AuditLogs`: Records administrative actions.
     - `ContactMessages`: Stores messages submitted via the contact form.
-- **Vector Embeddings:** Generated by `text-embedding-004` and stored in `Analyses` and `RepositoryScans` for semantic search.
+- **Vector Embeddings:** Generated by `text-embedding-004` and stored in `Analyses.fileAnalyses.vectorEmbedding` and `RepositoryScans.fileAnalyses.vectorEmbedding` for semantic search.
 
 ### 5.4. Authentication (NextAuth.js)
 - Manages user sign-up, sign-in, session handling (GitHub, Google).
@@ -147,7 +147,7 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
 - Explicit cookie configuration for improved reliability.
 
 ### 5.5. GitHub Integration (Octokit.js)
-- Centralized in `src/lib/github.ts`. Fetches repos, PRs, file content.
+- Centralized in `src/lib/github.ts`. Fetches repos, PRs, file content, user's total repo count.
 
 ## 6. Generative AI Integration (Genkit & Models)
 
@@ -164,7 +164,7 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
 - **`googleai/text-embedding-004`:**
     - **Embedding Generation:** Generates 768-dimension vector embeddings.
     - Used in:
-        - `embed-text-flow.ts`: For embedding arbitrary user queries.
+        - `embed-text-flow.ts`: For embedding arbitrary user queries for the general search page.
         - `/api/analyze/route.ts` (PR Analysis): Embeds content of changed/added files.
         - `/api/repository-scan/route.ts` (Full Repo Scan): Embeds content of analyzed files.
     - Embeddings are stored in `fileAnalyses.vectorEmbedding` within both `Analyses` and `RepositoryScans` documents.
@@ -187,7 +187,7 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
     - Calls `analyzeCode` Genkit flow.
     - Generates vector embedding via `ai.embed()`.
 - Aggregates results, calls `summarizePrAnalysis` flow.
-- Saves results to `PullRequests` and `Analyses` collections (including embeddings).
+- Saves results to `PullRequests` and `Analyses` collections (including embeddings in `Analyses.fileAnalyses.vectorEmbedding`).
 
 ### 7.2. Full Repository Codebase Scan
 - User initiates scan.
@@ -196,7 +196,7 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
     - Calls `analyzeCode` flow.
     - Generates embedding via `ai.embed()`.
 - Aggregates results and generates an overall summary by calling `summarizePrAnalysis` flow.
-- Saves results to `RepositoryScans` collection (including embeddings).
+- Saves results to `RepositoryScans` collection (including embeddings in `RepositoryScans.fileAnalyses.vectorEmbedding`).
 
 ### 7.3. Semantic Search (General Query via `/search` page)
 - User submits query.
@@ -240,7 +240,7 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
 ## 10. Future Enhancements (from README.md)
 - CI/CD Integration.
 - Asynchronous Full Repository Scans (and analysis of more files).
-- Enhanced Vector Search (more sophisticated queries, filtering).
+- Enhanced Semantic Search (more sophisticated queries, filtering).
 - Customizable Analysis Rules.
 - Team Collaboration Features.
 - IDE Integration.
