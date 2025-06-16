@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
             stars: ghRepoDetails.stargazers_count || 0,
             isPrivate: ghRepoDetails.private,
             userId: session.user.id,
-            updatedAt: new Date(ghRepoDetails.updated_at), // Ensure updatedAt is also set/updated
+            updatedAt: new Date(ghRepoDetails.updated_at), 
           }
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -110,8 +110,6 @@ export async function POST(request: NextRequest) {
     );
     if (!updatedPrForPending) {
         console.error(`[API/ANALYZE] Failed to upsert PR #${pullNumber} for ${repoFullName} to set pending status.`);
-        // This is a significant issue, but we might still be able to proceed if GitHub fetch works.
-        // However, it's better to fail early if the DB operation for 'pending' fails.
         throw new Error(`Database error: Could not update PR #${pullNumber} to 'pending' status.`);
     }
     pullRequestIdForCatch = updatedPrForPending._id.toString();
@@ -121,7 +119,6 @@ export async function POST(request: NextRequest) {
     console.log(`[API/ANALYZE] Fetching PR details for ${repoFullName} PR #${pullNumber} from GitHub...`);
     const ghPullRequest = await getPullRequestDetails(owner, repoName, pullNumber);
     if (!ghPullRequest) {
-      // The pullRequestIdForCatch should be valid here due to the check above
       await PullRequest.updateOne(
         { _id: new mongoose.Types.ObjectId(pullRequestIdForCatch) },
         { $set: { analysisStatus: 'failed', updatedAt: new Date() } }
@@ -140,8 +137,8 @@ export async function POST(request: NextRequest) {
         (file.status === 'added' || file.status === 'modified' || file.status === 'renamed') &&
         file.filename?.match(/\.(js|ts|jsx|tsx|py|java|cs|go|rb|php|html|css|scss|json|md|yaml|yml)$/i) &&
         !EXCLUDED_FILE_PATTERNS_FOR_ANALYSIS.some(pattern => pattern.test(file.filename!)) && 
-        (file.changes || 0) < 2000 && // Avoid extremely large diffs
-        file.filename // Ensure filename is not undefined
+        (file.changes || 0) < 2000 && 
+        file.filename 
       )
       .slice(0, MAX_FILES_TO_ANALYZE);
     console.log(`[API/ANALYZE] ${filesToConsider.length} files selected for detailed analysis.`);
@@ -185,28 +182,45 @@ export async function POST(request: NextRequest) {
 
 
           let fileEmbeddingVector: number[] | undefined = undefined;
-          if (contentToAnalyze && contentToAnalyze.trim() !== "") { // Check again after potential truncation
+          if (contentToAnalyze && contentToAnalyze.trim() !== "") { 
             try {
               console.log(`[API/ANALYZE] Generating embedding for ${file.filename}...`);
               const embedApiResponse = await ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: contentToAnalyze,
               });
-
+              
+              let extractedEmbedding: number[] | undefined = undefined;
+              // Handle case where response is an array with the embedding object inside
               if (Array.isArray(embedApiResponse) &&
                   embedApiResponse.length > 0 &&
                   embedApiResponse[0] &&
                   typeof embedApiResponse[0] === 'object' &&
                   embedApiResponse[0] !== null &&
-                  Object.prototype.hasOwnProperty.call(embedApiResponse[0], 'embedding') &&
-                  Array.isArray(embedApiResponse[0].embedding) &&
-                  embedApiResponse[0].embedding.length === EMBEDDING_DIMENSIONS &&
-                  embedApiResponse[0].embedding.every((n: any) => typeof n === 'number' && isFinite(n))
-                 ) {
-                fileEmbeddingVector = embedApiResponse[0].embedding;
+                  Object.prototype.hasOwnProperty.call(embedApiResponse[0], 'embedding')) {
+                  
+                  const potentialEmbedding = (embedApiResponse[0] as any).embedding;
+                  if (Array.isArray(potentialEmbedding) &&
+                      potentialEmbedding.length > 0 && 
+                      potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
+                      extractedEmbedding = potentialEmbedding;
+                  }
+              } 
+              // Handle case where response is the embedding object directly
+              else if (embedApiResponse && typeof embedApiResponse === 'object' && Object.prototype.hasOwnProperty.call(embedApiResponse, 'embedding')) {
+                  const potentialEmbedding = (embedApiResponse as any).embedding;
+                  if (Array.isArray(potentialEmbedding) &&
+                      potentialEmbedding.length > 0 &&
+                      potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
+                      extractedEmbedding = potentialEmbedding;
+                  }
+              }
+
+              if (extractedEmbedding && extractedEmbedding.length === EMBEDDING_DIMENSIONS) {
+                fileEmbeddingVector = extractedEmbedding;
                 console.log(`[API/ANALYZE] Embedding success for ${file.filename} (${fileEmbeddingVector.length} dims).`);
               } else {
-                 console.warn(`[API/ANALYZE] Embedding for ${file.filename} invalid or wrong dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedApiResponse[0]?.embedding?.length}. Resp snippet:`, JSON.stringify(embedApiResponse).substring(0, 200));
+                console.warn(`[API/ANALYZE] Embedding for ${file.filename} invalid or wrong dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${extractedEmbedding?.length}. Resp snippet:`, JSON.stringify(embedApiResponse).substring(0, 200));
               }
             } catch (embeddingError: any) {
               console.error(`[API/ANALYZE] Embedding error for ${file.filename}: ${embeddingError.message}. Content length: ${contentToAnalyze.length}. Error details:`, embeddingError);
@@ -228,7 +242,7 @@ export async function POST(request: NextRequest) {
           };
         } catch (error: any) {
           console.error(`[API/ANALYZE] CRITICAL Error processing file ${file.filename}:`, error.message, error.stack);
-          return null; // Ensure null is returned so Promise.all doesn't break
+          return null; 
         }
       });
 
@@ -273,7 +287,7 @@ export async function POST(request: NextRequest) {
     }
 
     const finalAnalysisData = {
-      pullRequestId: pullRequestIdForCatch, // Use the ID of the PR document we've been working with
+      pullRequestId: pullRequestIdForCatch, 
       qualityScore: aggregatedQualityScore,
       complexity: aggregatedComplexity,
       maintainability: aggregatedMaintainability,
@@ -291,7 +305,7 @@ export async function POST(request: NextRequest) {
     };
 
     const prFiles: CodeFileType[] = ghFiles.map(f => ({
-        filename: f.filename!, // Filename should exist if it passed the filter
+        filename: f.filename!, 
         status: f.status as CodeFileType['status'],
         additions: f.additions,
         deletions: f.deletions,
@@ -301,12 +315,10 @@ export async function POST(request: NextRequest) {
 
     let savedPR = await PullRequest.findById(pullRequestIdForCatch);
     if (!savedPR) {
-        // This should ideally not happen if updatedPrForPending was successful
         console.error(`[API/ANALYZE] CRITICAL: PR document ${pullRequestIdForCatch} not found before saving analysis. Aborting.`);
         throw new Error(`Database error: PR document with ID ${pullRequestIdForCatch} vanished.`);
     }
     
-    // Update PR details from GitHub that might have changed since last sync
     savedPR.title = ghPullRequest.title;
     savedPR.body = ghPullRequest.body || '';
     savedPR.state = ghPullRequest.state as PRType['state'];
@@ -315,10 +327,9 @@ export async function POST(request: NextRequest) {
         login: ghPullRequest.user?.login || savedPR.author?.login || 'unknown',
         avatar: ghPullRequest.user?.avatar_url || savedPR.author?.avatar || '',
     };
-    savedPR.updatedAt = new Date(ghPullRequest.updated_at); // GitHub's PR update time
-    savedPR.githubId = ghPullRequest.id; // Ensure GitHub ID is also set/updated
+    savedPR.updatedAt = new Date(ghPullRequest.updated_at); 
+    savedPR.githubId = ghPullRequest.id; 
 
-    // Delete old analysis if it exists, before creating a new one
     if (savedPR.analysis) {
         let oldAnalysisId = savedPR.analysis;
         if (typeof oldAnalysisId !== 'string' && oldAnalysisId && (oldAnalysisId as any).toString) {
@@ -341,7 +352,6 @@ export async function POST(request: NextRequest) {
     savedPR.analysis = analysisDoc._id;
     savedPR.analysisStatus = 'analyzed';
     savedPR.qualityScore = aggregatedQualityScore;
-    // No need to $set updatedAt here, Mongoose timestamps will handle it on save
     await savedPR.save();
     console.log(`[API/ANALYZE] Updated PullRequest ${savedPR._id} with new analysis ID ${analysisDoc._id} and status 'analyzed'.`);
 
@@ -355,7 +365,7 @@ export async function POST(request: NextRequest) {
       console.error('[API/ANALYZE] Full error object (non-Error instance):', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     }
 
-    if (pullRequestIdForCatch) { // pullRequestIdForCatch should be valid if we reached this point after 'pending' status was set
+    if (pullRequestIdForCatch) { 
         try {
             await PullRequest.updateOne(
               { _id: new mongoose.Types.ObjectId(pullRequestIdForCatch) },
@@ -366,8 +376,7 @@ export async function POST(request: NextRequest) {
             console.error(`[API/ANALYZE] Failed to update PR ${pullRequestIdForCatch} status to 'failed' in DB:`, dbError.message);
         }
     }
-    // Removed the more complex fallback using localRepoIdForCatch as pullRequestIdForCatch should be reliable here.
-
+    
     let errorMessage = 'Internal server error during analysis';
     let statusCode = 500;
 
@@ -379,7 +388,7 @@ export async function POST(request: NextRequest) {
             errorMessage = `AI processing error: ${error.message}`;
         } else if (error.message.includes('payload size exceeds the limit')) {
             errorMessage = 'Content too large for AI embedding service. Try analyzing smaller files or changes.';
-            statusCode = 413; // Payload Too Large
+            statusCode = 413; 
         } else {
             errorMessage = error.message; 
         }

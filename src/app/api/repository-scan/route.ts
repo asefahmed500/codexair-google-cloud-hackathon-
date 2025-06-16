@@ -68,7 +68,7 @@ async function generateOverallSummary(
 
 export async function POST(request: NextRequest) {
   let owner: string | undefined, repoName: string | undefined;
-  let sessionUserIdForCatch: string | undefined; // For logging context in catch block
+  let sessionUserIdForCatch: string | undefined; 
 
   try {
     console.log('[API/RepoScan] Received repository scan request.');
@@ -171,20 +171,37 @@ export async function POST(request: NextRequest) {
               content: contentToAnalyze,
             });
             
+            let extractedEmbedding: number[] | undefined = undefined;
+            // Handle case where response is an array with the embedding object inside
             if (Array.isArray(embedApiResponse) &&
                 embedApiResponse.length > 0 &&
                 embedApiResponse[0] &&
                 typeof embedApiResponse[0] === 'object' &&
                 embedApiResponse[0] !== null &&
-                Object.prototype.hasOwnProperty.call(embedApiResponse[0], 'embedding') &&
-                Array.isArray(embedApiResponse[0].embedding) &&
-                embedApiResponse[0].embedding.length === EMBEDDING_DIMENSIONS &&
-                embedApiResponse[0].embedding.every((n: any) => typeof n === 'number' && isFinite(n))
-               ) {
-              fileEmbeddingVector = embedApiResponse[0].embedding;
+                Object.prototype.hasOwnProperty.call(embedApiResponse[0], 'embedding')) {
+                
+                const potentialEmbedding = (embedApiResponse[0] as any).embedding;
+                if (Array.isArray(potentialEmbedding) &&
+                    potentialEmbedding.length > 0 && 
+                    potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
+                    extractedEmbedding = potentialEmbedding;
+                }
+            } 
+            // Handle case where response is the embedding object directly
+            else if (embedApiResponse && typeof embedApiResponse === 'object' && Object.prototype.hasOwnProperty.call(embedApiResponse, 'embedding')) {
+                const potentialEmbedding = (embedApiResponse as any).embedding;
+                if (Array.isArray(potentialEmbedding) &&
+                    potentialEmbedding.length > 0 &&
+                    potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
+                    extractedEmbedding = potentialEmbedding;
+                }
+            }
+
+            if (extractedEmbedding && extractedEmbedding.length === EMBEDDING_DIMENSIONS) {
+              fileEmbeddingVector = extractedEmbedding;
               console.log(`[API/RepoScan] Embedding success for ${fileMeta.path!} (${fileEmbeddingVector.length} dims).`);
             } else {
-              console.warn(`[API/RepoScan] Embedding for ${fileMeta.path!} invalid or wrong dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${embedApiResponse[0]?.embedding?.length}. Resp snippet:`, JSON.stringify(embedApiResponse).substring(0,200));
+              console.warn(`[API/RepoScan] Embedding for ${fileMeta.path!} invalid or wrong dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${extractedEmbedding?.length}. Resp snippet:`, JSON.stringify(embedApiResponse).substring(0,200));
             }
           } catch (embErr: any) {
             console.error(`[API/RepoScan] Embedding error for ${fileMeta.path!}: ${embErr.message}. Content length: ${contentToAnalyze.length}. Error details:`, embErr);
