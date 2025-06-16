@@ -22,13 +22,25 @@ export default function AnalyzePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const ITEMS_PER_PAGE = 9; // Display 9 repos per page (3x3 grid)
+  const ITEMS_PER_PAGE = 9;
 
-  const fetchRepositories = useCallback(async (page = 1, sync = false) => {
+  // Debounce search term
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500); // 500ms delay
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
+
+  const fetchRepositories = useCallback(async (page = 1, term = '', sync = false) => {
     if (sync) {
       setIsSyncing(true);
       toast({ title: "Syncing Repositories...", description: "Fetching latest data from GitHub. This may take a moment." });
@@ -38,25 +50,22 @@ export default function AnalyzePage() {
     setError(null);
 
     try {
-      // For sync, page requested to API is always 1, as API handles fetching multiple GH pages
-      // and returns page 1 of local DB.
-      // For non-sync, page is passed as is.
       const apiPage = sync ? 1 : page;
-      const response = await fetch(`/api/repositories?page=${apiPage}&limit=${ITEMS_PER_PAGE}&sync=${sync}`);
+      const response = await fetch(`/api/repositories?page=${apiPage}&limit=${ITEMS_PER_PAGE}&sync=${sync}&searchTerm=${encodeURIComponent(term)}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch repositories');
       }
       const data = await response.json();
       setRepositories(data.repositories || []);
-      setCurrentPage(data.currentPage || 1); // API returns current page (1 after sync)
+      setCurrentPage(data.currentPage || 1);
       setTotalPages(data.totalPages || 1);
 
-      if (sync) toast({ title: "Repositories Synced", description: `Fetched your most recently updated repositories from GitHub. Displaying page ${data.currentPage || 1}.` });
+      if (sync) toast({ title: "Repositories Synced", description: `Fetched your most recently updated repositories from GitHub. Displaying page ${data.currentPage || 1} ${term ? `for search "${term}"` : ''}.` });
       
     } catch (err: any) {
       setError(err.message);
-      setRepositories([]); 
+      setRepositories([]);
       setCurrentPage(1);
       setTotalPages(1);
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -64,40 +73,57 @@ export default function AnalyzePage() {
       if (sync) setIsSyncing(false);
       else setLoading(false);
     }
-  }, [ITEMS_PER_PAGE]); 
+  }, [ITEMS_PER_PAGE]);
   
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
     } else if (status === 'authenticated') {
-      fetchRepositories(currentPage);
+      // Fetch initially or when debouncedSearchTerm changes, resetting page to 1 for new search
+      fetchRepositories(1, debouncedSearchTerm);
     }
-  }, [status, router, currentPage, fetchRepositories]); 
+  }, [status, router, debouncedSearchTerm, fetchRepositories]);
+
+  // Effect for page changes (but not for initial load or search term changes, handled above)
+  useEffect(() => {
+    if (status === 'authenticated' && !loading && !isSyncing && currentPage > 1) {
+       // Only fetch if it's not the initial load and page actually changed due to pagination click
+       // The check `debouncedSearchTerm` here ensures we don't re-fetch if page is 1 due to search term change
+       // This might need refinement if currentPage is reset to 1 by search AND then immediately another effect runs.
+       // The primary fetch is now driven by debouncedSearchTerm, or direct pagination.
+       if (currentPage !== 1 || !debouncedSearchTerm) { // Avoid double fetch if search term reset page to 1
+         fetchRepositories(currentPage, debouncedSearchTerm);
+       }
+    }
+  }, [currentPage]); // Only re-run if currentPage changes manually
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    if (currentPage !== 1) setCurrentPage(1); // Reset to page 1 when search term changes
+  };
 
   const handleSync = () => {
-    // setCurrentPage(1); // fetchRepositories with sync=true will effectively reset to page 1 of local DB
-    fetchRepositories(1, true);
+    // When syncing, always fetch with current debouncedSearchTerm, resetting page to 1
+    // The API will handle the sync and then filter by the term for the first page.
+    setCurrentPage(1);
+    fetchRepositories(1, debouncedSearchTerm, true);
   };
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage && !loading && !isSyncing) {
       setCurrentPage(newPage);
+      // fetchRepositories(newPage, debouncedSearchTerm); // Now handled by useEffect on currentPage
     }
   };
-
-  const filteredRepositories = repositories.filter(repo =>
-    repo.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (repo.language && repo.language.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
 
   if (status === 'loading') {
     return <div className="flex flex-col min-h-screen"><Navbar /><div className="flex-1 flex items-center justify-center">Loading session...</div></div>;
   }
-  if (!session) return null; 
+  if (!session) return null;
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <Navbar /> 
+      <Navbar />
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card className="shadow-lg">
           <CardHeader>
@@ -112,10 +138,10 @@ export default function AnalyzePage() {
                       Use "Sync Repositories" to update this list with your most recently active GitHub repositories.
                     </CardDescription>
                 </div>
-                <Button 
-                    variant="outline" 
-                    className="w-full sm:w-auto" 
-                    onClick={handleSync} 
+                <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={handleSync}
                     disabled={isSyncing || loading}
                 >
                     <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing && 'animate-spin'}`} />
@@ -132,13 +158,13 @@ export default function AnalyzePage() {
                   placeholder="Search synced repositories by name or language..."
                   className="pl-10"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={handleSearchInputChange}
                   disabled={loading || isSyncing}
                 />
               </div>
             </div>
 
-            {loading && !repositories.length && !isSyncing ? ( 
+            {(loading && !repositories.length && !isSyncing) ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[...Array(ITEMS_PER_PAGE)].map((_, i) => (
                   <SkeletonRepoCard key={i} />
@@ -149,25 +175,25 @@ export default function AnalyzePage() {
                 <Info className="w-12 h-12 text-destructive mb-3" />
                 <p className="text-lg font-semibold text-destructive">Failed to load repositories</p>
                 <p className="text-muted-foreground mb-4">{error}</p>
-                <Button onClick={() => fetchRepositories(currentPage)} variant="outline">Try Again</Button>
+                <Button onClick={() => fetchRepositories(currentPage, debouncedSearchTerm)} variant="outline">Try Again</Button>
               </div>
-            ) : filteredRepositories.length === 0 ? (
+            ) : repositories.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-10 bg-muted/30 rounded-md">
                 <Github className="w-12 h-12 text-muted-foreground mb-3" />
                 <p className="text-lg font-semibold text-foreground">
-                    {searchTerm ? "No synced repositories match your search." : "No repositories synced yet."}
+                    {debouncedSearchTerm ? "No synced repositories match your search." : "No repositories synced yet."}
                 </p>
                 <p className="text-muted-foreground mb-4">
-                    {searchTerm ? "Try a different search term or clear your search." : 'Try syncing with GitHub to see your repositories here. This will fetch your most recently updated repos.'}
+                    {debouncedSearchTerm ? "Try a different search term or clear your search." : 'Try syncing with GitHub to see your repositories here. This will fetch your most recently updated repos.'}
                 </p>
-                {searchTerm && <Button onClick={() => setSearchTerm('')} variant="outline" className="mr-2">Clear Search</Button>}
-                {!searchTerm && <Button onClick={handleSync} disabled={isSyncing || loading} variant="default">
+                {debouncedSearchTerm && <Button onClick={() => {setSearchTerm(''); setCurrentPage(1);}} variant="outline" className="mr-2">Clear Search</Button>}
+                {!debouncedSearchTerm && <Button onClick={handleSync} disabled={isSyncing || loading} variant="default">
                     <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing && 'animate-spin'}`} /> Sync Now
                 </Button>}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredRepositories.map(repo => (
+                {repositories.map(repo => (
                   <Card key={repo._id} className="hover:shadow-xl transition-all duration-300 ease-in-out flex flex-col bg-card">
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between mb-1">
@@ -211,7 +237,7 @@ export default function AnalyzePage() {
               </div>
             )}
             
-            {totalPages > 1 && filteredRepositories.length > 0 && (
+            {totalPages > 1 && repositories.length > 0 && (
               <div className="mt-8 flex justify-center items-center gap-3">
                 <Button
                   variant="outline"

@@ -6,8 +6,7 @@ import { getUserRepositories, getRepositoryDetails } from '@/lib/github';
 import { Repository, connectMongoose } from '@/lib/mongodb';
 import type { Repository as RepoType } from '@/types';
 
-// Increase pages fetched during sync to get a more comprehensive list of recent repos
-const GITHUB_PAGES_TO_SYNC_ON_REQUEST = 10; 
+const GITHUB_PAGES_TO_SYNC_ON_REQUEST = 10;
 const GITHUB_REPOS_PER_PAGE = 30;
 
 export async function GET(request: NextRequest) {
@@ -23,24 +22,34 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const sync = searchParams.get('sync') === 'true';
+    const searchTerm = searchParams.get('searchTerm');
+
+    let query: any = { userId: session.user.id! };
+    if (searchTerm && searchTerm.trim() !== "") {
+      const regex = new RegExp(searchTerm.trim(), 'i'); // Case-insensitive regex
+      query.$or = [
+        { fullName: regex },
+        { name: regex },
+        { language: regex }
+      ];
+    }
 
     if (sync) {
-      console.log(`[API/Repositories] SYNC: User ${session.user.id}. Will attempt to fetch up to ${GITHUB_PAGES_TO_SYNC_ON_REQUEST} pages from GitHub.`);
-      
+      console.log(`[API/Repositories] SYNC: User ${session.user.id}. Search: "${searchTerm || 'N/A'}". Will attempt to fetch up to ${GITHUB_PAGES_TO_SYNC_ON_REQUEST} pages from GitHub.`);
+
       let allFetchedGithubRepos: any[] = [];
       for (let i = 1; i <= GITHUB_PAGES_TO_SYNC_ON_REQUEST; i++) {
         try {
-          // getUserRepositories now fetches only one page by default, so we iterate
-          const githubReposPage = await getUserRepositories(i, GITHUB_REPOS_PER_PAGE, true); // Pass sync=true to indicate it's part of a larger sync
+          const githubReposPage = await getUserRepositories(i, GITHUB_REPOS_PER_PAGE, true);
           allFetchedGithubRepos.push(...githubReposPage);
           if (githubReposPage.length < GITHUB_REPOS_PER_PAGE) {
             console.log(`[API/Repositories] SYNC: Reached end of GitHub repos on page ${i}.`);
-            break; 
+            break;
           }
         } catch (ghError: any) {
           console.error(`[API/Repositories] SYNC: Error fetching page ${i} from GitHub:`, ghError.message);
-          if (i === 1) throw ghError; 
-          break; 
+          if (i === 1) throw ghError;
+          break;
         }
       }
 
@@ -71,38 +80,37 @@ export async function GET(request: NextRequest) {
           }
         })
       );
-      
-      const userSyncedReposQuery = { userId: session.user.id! };
-      const refreshedLocalRepos = await Repository.find(userSyncedReposQuery)
+
+      // After sync, fetch the first page of results based on the query (which includes searchTerm)
+      const refreshedLocalRepos = await Repository.find(query)
         .sort({ updatedAt: -1 })
-        .skip(0) 
+        .skip(0)
         .limit(limit)
         .lean();
-      const totalUserSyncedRepos = await Repository.countDocuments(userSyncedReposQuery);
-      
-      console.log(`[API/Repositories] SYNC complete. Returning first page of ${totalUserSyncedRepos} local repos for user ${session.user.id}.`);
+      const totalUserSyncedRepos = await Repository.countDocuments(query);
+
+      console.log(`[API/Repositories] SYNC complete. Returning first page of ${totalUserSyncedRepos} (filtered by search: "${searchTerm || 'N/A'}") local repos for user ${session.user.id}.`);
 
       return NextResponse.json({
         repositories: refreshedLocalRepos,
         totalPages: Math.ceil(totalUserSyncedRepos / limit),
-        currentPage: 1, 
+        currentPage: 1,
       });
 
     } else {
       const skip = (page - 1) * limit;
-      const query = { userId: session.user.id! }; 
+      console.log(`[API/Repositories] DB FETCH: User ${session.user.id}, Page ${page}, Limit ${limit}, Search: "${searchTerm || 'N/A'}"`);
       
-      console.log(`[API/Repositories] DB FETCH: User ${session.user.id}, Page ${page}, Limit ${limit}`);
-      const fetchedRepositories = await Repository.find(query) 
+      const fetchedRepositories = await Repository.find(query)
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit)
-        .lean(); 
+        .lean();
       
-      const totalRepos = await Repository.countDocuments(query); 
-      console.log(`[API/Repositories] DB FETCH complete. Returned ${fetchedRepositories.length}. Total for user: ${totalRepos}`);
+      const totalRepos = await Repository.countDocuments(query);
+      console.log(`[API/Repositories] DB FETCH complete. Returned ${fetchedRepositories.length} (filtered by search: "${searchTerm || 'N/A'}"). Total matching: ${totalRepos}`);
       
-      return NextResponse.json({ 
+      return NextResponse.json({
         repositories: fetchedRepositories,
         totalPages: Math.ceil(totalRepos / limit),
         currentPage: page,
