@@ -191,6 +191,7 @@ export async function POST(request: NextRequest) {
               });
               
               let extractedEmbedding: number[] | undefined = undefined;
+              // Handle case where response is an array with the embedding object inside
               if (Array.isArray(embedApiResponse) &&
                   embedApiResponse.length > 0 &&
                   embedApiResponse[0] &&
@@ -205,6 +206,7 @@ export async function POST(request: NextRequest) {
                       extractedEmbedding = potentialEmbedding;
                   }
               } 
+              // Handle case where response is the embedding object directly
               else if (embedApiResponse && typeof embedApiResponse === 'object' && Object.prototype.hasOwnProperty.call(embedApiResponse, 'embedding')) {
                   const potentialEmbedding = (embedApiResponse as any).embedding;
                   if (Array.isArray(potentialEmbedding) &&
@@ -219,12 +221,15 @@ export async function POST(request: NextRequest) {
                 console.log(`[API/ANALYZE] Embedding success for ${file.filename} (${fileEmbeddingVector.length} dims).`);
               } else {
                 console.warn(`[API/ANALYZE] Embedding for ${file.filename} invalid or wrong dimensions. Expected ${EMBEDDING_DIMENSIONS}, got ${extractedEmbedding?.length}. Resp snippet:`, JSON.stringify(embedApiResponse).substring(0, 200));
+                fileEmbeddingVector = undefined; // Ensure it's undefined if not valid
               }
             } catch (embeddingError: any) {
               console.error(`[API/ANALYZE] Embedding error for ${file.filename}: ${embeddingError.message}. Content length: ${contentToAnalyze.length}. Error details:`, embeddingError);
+              fileEmbeddingVector = undefined;
             }
           } else {
             console.log(`[API/ANALYZE] Skipping embedding for ${file.filename} (empty/whitespace content).`);
+            fileEmbeddingVector = undefined;
           }
 
           return {

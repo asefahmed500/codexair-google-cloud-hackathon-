@@ -11,7 +11,7 @@ import { z } from 'zod';
 const similarCodeRequestSchema = z.object({
   queryAnalysisId: z.string().refine(val => mongoose.Types.ObjectId.isValid(val), { message: "Invalid queryAnalysisId" }),
   queryFilename: z.string().min(1, "queryFilename cannot be empty"),
-  sourceType: z.enum(['pr_analysis', 'repo_scan']).optional(),
+  sourceType: z.enum(['pr_analysis', 'repo_scan']).default('pr_analysis'), // Default to 'pr_analysis' if not provided
 });
 
 export async function POST(request: NextRequest) {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid input', details: validationResult.error.flatten().fieldErrors }, { status: 400 });
     }
 
-    const { queryAnalysisId, queryFilename, sourceType = 'pr_analysis' } = validationResult.data; 
+    const { queryAnalysisId, queryFilename, sourceType } = validationResult.data; 
 
     let sourceDocument: (CodeAnalysis | RepositoryScanResult) | null = null;
 
@@ -89,4 +89,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errorMessage, details: error.message || error.toString() }, { status: 500 });
   }
 }
-

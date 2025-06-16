@@ -50,11 +50,9 @@ export async function POST(request: NextRequest) {
     let errorMessage = 'Internal server error during code explanation';
     if (error.message.toLowerCase().includes('genkit') || error.message.toLowerCase().includes('ai model') || error.message.toLowerCase().includes('flow')) {
         errorMessage = `AI processing error: ${error.message}`;
+    } else if (error.message.toLowerCase().includes("model output validation failed") || error.message.toLowerCase().includes("zoderror")) {
+        errorMessage = `AI model returned an unexpected format. Please try rephrasing your question or simplifying the code. Details: ${error.message.substring(0,150)}`;
     }
     return NextResponse.json({ error: errorMessage, details: error.message }, { status: 500 });
   }
 }
-
-
-
-

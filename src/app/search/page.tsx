@@ -102,6 +102,10 @@ export default function SemanticSearchPage() {
             </CardTitle>
             <CardDescription>
               Find similar code patterns or issues across your analyzed pull requests and repository scans. Paste a code snippet or describe a problem.
+              <br/>
+              <span className="text-xs text-muted-foreground">
+                E.g., "Handle database connection errors gracefully", "function to validate user input", or paste a code snippet.
+              </span>
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -239,4 +243,3 @@ export default function SemanticSearchPage() {
     </div>
   );
 }
-

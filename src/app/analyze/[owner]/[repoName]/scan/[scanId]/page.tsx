@@ -82,7 +82,7 @@ export default function RepositoryScanDetailsPage() {
         body: JSON.stringify({
           queryAnalysisId: scanId, 
           queryFilename,
-          sourceType: 'repo_scan' 
+          sourceType: 'repo_scan' // Critical: specify the source type
         }),
       });
       if (!response.ok) {

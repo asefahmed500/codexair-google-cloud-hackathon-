@@ -48,11 +48,11 @@ export async function POST(request: NextRequest) {
 
     // 2. Use this embedding to find similar code
     // For arbitrary search, excludeAnalysisId and excludeFilename are not typically used
-    // Not passing a similarityThresholdParam will allow findSimilarCode to use its dynamic default (0.60 for general)
+    // Not passing a similarityThresholdParam will allow findSimilarCode to use its dynamic default (0.40 for general)
     const similarCodeResults: SimilarCodeResult[] = await findSimilarCode(
       queryVector,
       10 // limit results
-      // similarityThresholdParam is intentionally omitted here
+      // similarityThresholdParam is intentionally omitted here, findSimilarCode will use its default
     );
 
     return NextResponse.json({ results: similarCodeResults });
@@ -66,4 +66,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errorMessage, details: error.message }, { status: 500 });
   }
 }
-
