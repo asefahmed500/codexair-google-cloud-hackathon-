@@ -33,7 +33,7 @@ const EXCLUDED_FILE_PATTERNS_FOR_SCAN = [
 
 
 async function generateOverallSummary(
-  repoFullName: string, // Changed from repoName to repoFullName for better context
+  repoFullName: string, 
   branchName: string,
   aggregatedQualityScore: number,
   totalCriticalIssues: number,
@@ -44,10 +44,13 @@ async function generateOverallSummary(
 ): Promise<string> {
   try {
     console.log(`[API/RepoScan] Generating overall summary for ${repoFullName}, branch ${branchName}. Files analyzed: ${analyzedFileCount}.`);
+    if (analyzedFileCount === 0) {
+        console.log(`[API/RepoScan] No files were analyzed, returning fallback summary for ${repoFullName}.`);
+        return FALLBACK_SUMMARY_MESSAGE;
+    }
     const promptContext = {
       prTitle: `${repoFullName} (Full Scan - ${branchName} branch)`, 
       overallQualityScore: aggregatedQualityScore,
-      // formattedOverallQualityScore: aggregatedQualityScore.toFixed(1), // This is handled by the flow or can be done in prompt if needed
       totalCriticalIssues: totalCriticalIssues,
       totalHighIssues: totalHighIssues,
       totalSuggestions: allSuggestionsCount,
@@ -65,6 +68,8 @@ async function generateOverallSummary(
 
 export async function POST(request: NextRequest) {
   let owner: string | undefined, repoName: string | undefined;
+  let sessionUserIdForCatch: string | undefined; // For logging context in catch block
+
   try {
     console.log('[API/RepoScan] Received repository scan request.');
     const session = await getServerSession(authOptions);
@@ -72,6 +77,7 @@ export async function POST(request: NextRequest) {
       console.error('[API/RepoScan] Unauthorized: No session user ID.');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    sessionUserIdForCatch = session.user.id;
     console.log(`[API/RepoScan] Authenticated user: ${session.user.id}`);
 
     await connectMongoose();
@@ -118,17 +124,24 @@ export async function POST(request: NextRequest) {
     }
 
     const fileTree = await getRepoFileTree(owner, repoName, headCommitSha);
+    if (!fileTree || fileTree.length === 0) {
+        console.warn(`[API/RepoScan] File tree for ${repoFullName} at commit ${headCommitSha} is empty or could not be fetched.`);
+    }
     const relevantFiles = fileTree
       .filter(file => 
         file.type === 'blob' && 
         file.path && 
         RELEVANT_FILE_EXTENSIONS.test(file.path) &&
         !EXCLUDED_FILE_PATTERNS_FOR_SCAN.some(pattern => pattern.test(file.path!)) &&
-        file.path // Ensure file.path is not undefined
+        file.path 
       )
       .slice(0, MAX_FILES_TO_SCAN);
 
     console.log(`[API/RepoScan] Found ${relevantFiles.length} relevant files (limited to ${MAX_FILES_TO_SCAN}) for ${repoFullName} at commit ${headCommitSha}.`);
+
+    if (relevantFiles.length === 0) {
+        console.warn(`[API/RepoScan] No relevant files found to analyze for ${repoFullName} after filtering. Scan will result in empty analysis.`);
+    }
 
     const fileAnalysesPromises = relevantFiles.map(async (fileMeta): Promise<FileAnalysisItem | null> => {
       let contentToAnalyze: string | null = null;
@@ -150,7 +163,7 @@ export async function POST(request: NextRequest) {
 
 
         let fileEmbeddingVector: number[] | undefined = undefined;
-        if (contentToAnalyze && contentToAnalyze.trim() !== "") { // Check again after potential truncation
+        if (contentToAnalyze && contentToAnalyze.trim() !== "") {
           try {
             console.log(`[API/RepoScan] Generating embedding for ${fileMeta.path!}...`);
             const embedApiResponse = await ai.embed({
@@ -192,8 +205,8 @@ export async function POST(request: NextRequest) {
           vectorEmbedding: fileEmbeddingVector,
         };
       } catch (error: any) {
-        console.error(`[API/RepoScan] CRITICAL Error processing file ${fileMeta.path}:`, error.message, error.stack);
-        return null; // Ensure null is returned so Promise.all doesn't break
+        console.error(`[API/RepoScan] CRITICAL Error processing file ${fileMeta.path!}:`, error.message, error.stack);
+        return null; 
       }
     });
 
@@ -208,8 +221,8 @@ export async function POST(request: NextRequest) {
     const aggQuality = totalAnalyzed > 0 ? analyzedFiles.reduce((sum, a) => sum + a.qualityScore, 0) / totalAnalyzed : 0;
     const aggComplexity = totalAnalyzed > 0 ? analyzedFiles.reduce((sum, a) => sum + a.complexity, 0) / totalAnalyzed : 0;
     const aggMaintainability = totalAnalyzed > 0 ? analyzedFiles.reduce((sum, a) => sum + a.maintainability, 0) / totalAnalyzed : 0;
-    const allSecIssues = analyzedFiles.flatMap(a => a.securityIssues);
-    const allSugs = analyzedFiles.flatMap(a => a.suggestions);
+    const allSecIssues = analyzedFiles.flatMap(a => a.securityIssues || []);
+    const allSugs = analyzedFiles.flatMap(a => a.suggestions || []);
     const aggMetrics: CodeAnalysisMetrics = {
       linesOfCode: analyzedFiles.reduce((sum, a) => sum + (a.metrics?.linesOfCode || 0), 0),
       cyclomaticComplexity: totalAnalyzed > 0 ? parseFloat((analyzedFiles.reduce((sum, a) => sum + (a.metrics?.cyclomaticComplexity || 0), 0) / totalAnalyzed).toFixed(1)) : 0,
@@ -220,7 +233,7 @@ export async function POST(request: NextRequest) {
 
 
     const overallSummary = await generateOverallSummary(
-        repoFullName, // Pass full name
+        repoFullName, 
         defaultBranch,
         aggQuality,
         allSecIssues.filter(s => s.severity === 'critical').length,
@@ -233,8 +246,8 @@ export async function POST(request: NextRequest) {
     const newScanData: Omit<RepositoryScanResult, '_id' | 'updatedAt'> = {
       repositoryId: new mongoose.Types.ObjectId(localRepo._id as string),
       userId: session.user.id,
-      owner: owner!, // owner is validated at the start
-      repoName: repoName!, // repoName is validated at the start
+      owner: owner!, 
+      repoName: repoName!, 
       branchAnalyzed: defaultBranch,
       commitShaAnalyzed: headCommitSha,
       status: 'completed',
@@ -249,7 +262,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date(),
     };
     
-    console.log(`[API/RepoScan] Final repository scan data before saving (snippet):`, JSON.stringify(newScanData, (key, value) => key === 'vectorEmbedding' ? `[${value?.length || 0} numbers]` : value, 2).substring(0, 1000) + "...");
+    console.log(`[API/RepoScan] Final repository scan data before saving (summary: "${newScanData.summaryAiInsights.substring(0,100)}..."):`, JSON.stringify(newScanData, (key, value) => key === 'vectorEmbedding' ? `[${value?.length || 0} numbers]` : value, 2).substring(0, 1000) + "...");
     const newScan = new RepositoryScan(newScanData);
     await newScan.save();
     console.log(`[API/RepoScan] SUCCESSFULLY Saved RepositoryScan document ID: ${newScan._id} for ${repoFullName}.`);
@@ -257,7 +270,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ scanId: newScan._id.toString() });
 
   } catch (error: any) {
-    console.error(`[API/RepoScan] CRITICAL ERROR during repository scan for ${owner}/${repoName}. User: ${session?.user?.id}. Error:`, error.message, error.stack);
+    console.error(`[API/RepoScan] CRITICAL ERROR during repository scan for ${owner ?? 'unknown_owner'}/${repoName ?? 'unknown_repo'}. User: ${sessionUserIdForCatch ?? 'unknown_user'}. Error:`, error.message, error.stack);
     if (!(error instanceof Error)) {
       console.error('[API/RepoScan] Full error object (non-Error instance):', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     }
@@ -273,9 +286,9 @@ export async function POST(request: NextRequest) {
         clientMessage = "Configuration Error: Could not get essential repository information (e.g., commit SHA for default branch). Please ensure the repository is accessible and the default branch exists.";
     } else if (detailsForClient.includes('payload size exceeds the limit')) {
         clientMessage = 'Content too large for AI embedding service. One or more files exceeded the size limit.';
-        statusCode = 413; // Payload Too Large
+        statusCode = 413; 
     } else if (error.message) {
-        clientMessage = error.message; // Use original if more specific and not caught above
+        clientMessage = error.message;
     }
     
     let detailsForServerLog = 'No further details available.';
@@ -296,8 +309,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
         error: clientMessage,
-        details: detailsForClient.substring(0, 500), // Limit length of details sent to client
-        stack: process.env.NODE_ENV === 'development' && error.stack ? error.stack.substring(0,1000) : undefined // Send stack in dev only
+        details: detailsForClient.substring(0, 500), 
+        stack: process.env.NODE_ENV === 'development' && error.stack ? error.stack.substring(0,1000) : undefined 
     }, { status: statusCode });
   }
 }
