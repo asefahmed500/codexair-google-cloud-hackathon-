@@ -4,7 +4,6 @@ import mongoose from 'mongoose';
 import type { Repository as RepoType, PullRequest as PRType, CodeAnalysis as AnalysisType, FileAnalysisItem, AdminUserView as AdminUserViewType, AuditLogEntry as AuditLogType, RepositoryScanResult, ContactMessage as ContactMessageType } from '@/types';
 
 const RAW_MONGODB_URI_FROM_ENV = process.env.MONGODB_URI;
-// Removed the initial console.log for RAW_MONGODB_URI_FROM_ENV to reduce startup noise, validation below is key.
 
 const MONGODB_URI = RAW_MONGODB_URI_FROM_ENV;
 
@@ -285,7 +284,6 @@ connectMongoose().catch(err => {
     // Depending on the error, you might want to exit or handle differently.
     // For now, just logging. The app will likely fail later if DB isn't up.
 });
-
     
-
+    
     
