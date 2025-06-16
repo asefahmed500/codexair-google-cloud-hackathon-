@@ -14,7 +14,7 @@ import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import Navbar from '@/components/layout/navbar'; 
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle as AlertBoxTitle } from '@/components/ui/alert';
 
 
 interface DisplayablePullRequest {
@@ -111,13 +111,16 @@ export default function RepositoryAnalysisPage() {
       }
       
       toast({ title: "Analysis Complete", description: `Analysis for PR #${pullNumber} is complete. View details or redirecting...` });
+      // Update the local state of the specific PR to reflect successful analysis
       setPullRequests(prevPRs => 
-        prevPRs.map(pr => pr.number === pullNumber ? { 
+        prevPRs.map(pr => 
+          pr.number === pullNumber ? { 
             ...pr, 
             analysisStatus: 'analyzed', 
             analysisId: result.analysis?._id, 
             qualityScore: result.analysis?.qualityScore 
-        } : pr)
+          } : pr
+        )
       );
       // Optional: Automatically redirect to the analysis page
       // router.push(`/analyze/${owner}/${repoName}/${pullNumber}/${result.analysis._id}`);
@@ -261,7 +264,7 @@ export default function RepositoryAnalysisPage() {
           <CardContent>
              <Alert variant="default" className="mb-6 border-accent/50 bg-accent/5">
                 <Info className="h-5 w-5 text-accent" />
-                <AlertTitle className="text-md text-accent mb-1 font-semibold">Repository Codebase Analysis</AlertTitle>
+                <AlertBoxTitle className="text-md text-accent mb-1 font-semibold">Repository Codebase Analysis</AlertBoxTitle>
                 <AlertDescription className="text-sm text-accent-foreground/80">
                     The "Analyze Repository Codebase" button will scan the current state of the default branch. 
                     For this version, AI analysis is limited to a small number of source files (e.g., up to 5) to ensure timely results.

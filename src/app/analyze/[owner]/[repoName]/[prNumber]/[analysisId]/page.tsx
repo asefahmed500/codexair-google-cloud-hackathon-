@@ -79,7 +79,11 @@ export default function AnalysisDetailsPage() {
       const response = await fetch('/api/search/similar-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ queryAnalysisId: analysisId, queryFilename }),
+        body: JSON.stringify({ 
+            queryAnalysisId: analysisId, 
+            queryFilename,
+            sourceType: 'pr_analysis' // Explicitly state it's a PR analysis
+        }),
       });
       if (!response.ok) {
         const errorData = await response.json();
