@@ -17,7 +17,7 @@ import Link from 'next/link';
 import Navbar from '@/components/layout/navbar';
 import DashboardLoading from './loading'; 
 import { BarChartBig, Shield, GitFork, Github, AlertTriangle } from 'lucide-react'; // Added Github, AlertTriangle
-import { Alert, AlertDescription } from "@/components/ui/alert"; // Added Alert components
+import { Alert, AlertDescription, AlertTitle as AlertBoxTitle } from "@/components/ui/alert"; // Renamed AlertTitle to avoid conflict
 import { toast } from '@/hooks/use-toast';
 
 interface LinkedAccountProviders {
@@ -99,11 +99,30 @@ export default function DashboardPage() {
     }
   }
   
+  const GitHubConnectPrompt = () => (
+    <Alert variant="default" className="mb-6 border-primary/50 bg-primary/5">
+        <Github className="h-5 w-5 text-primary" />
+        <AlertBoxTitle className="text-lg text-primary mb-1">Connect GitHub for Full Functionality</AlertBoxTitle>
+        <AlertDescription className="text-sm text-primary-foreground/80">
+            👋 It looks like your GitHub account isn't connected yet.
+            To analyze your GitHub repositories and pull requests, please connect your GitHub account.
+        </AlertDescription>
+        <Button
+            onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
+            variant="default"
+            size="sm"
+            className="mt-3 bg-primary hover:bg-primary/90 text-primary-foreground"
+        >
+            <Github className="mr-2 h-4 w-4" /> Connect GitHub Account
+        </Button>
+    </Alert>
+  );
+
   if (session?.user?.role === 'admin' && status === 'authenticated') {
     return <DashboardLoading />; 
   }
 
-  if (status === 'loading' || (loading && !dashboardData && !error) || (loadingLinkedProviders && !linkedProviders)) {
+  if (status === 'loading' || (loading && !dashboardData && !error) || (loadingLinkedProviders && !linkedProviders && status === 'authenticated')) {
     return <DashboardLoading />;
   }
 
@@ -148,23 +167,10 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-               {linkedProviders && !linkedProviders.github && (
-                <Alert variant="default" className="text-left border-primary/50 bg-primary/5">
-                    <Github className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-md text-primary mb-1">Connect GitHub for Full Functionality</CardTitle>
-                    <AlertDescription className="text-sm text-primary-foreground/80">
-                        👋 You appear to be signed in (possibly via Google).
-                        To analyze your GitHub repositories and pull requests, please connect your GitHub account.
-                    </AlertDescription>
-                    <Button
-                        onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
-                        variant="default"
-                        size="sm"
-                        className="mt-3 bg-primary hover:bg-primary/90 text-primary-foreground"
-                    >
-                        <Github className="mr-2 h-4 w-4" /> Connect GitHub Account
-                    </Button>
-                </Alert>
+               {!loadingLinkedProviders && linkedProviders && !linkedProviders.github && (
+                <div className="text-left px-2"> {/* Added padding for Alert within CardContent */}
+                    <GitHubConnectPrompt />
+                </div>
               )}
               <p className="text-lg text-muted-foreground">
                 It looks like you haven't analyzed any pull requests or connected any repositories yet.
@@ -200,22 +206,7 @@ export default function DashboardPage() {
         </div>
         
         {!loadingLinkedProviders && linkedProviders && !linkedProviders.github && (
-           <Alert variant="default" className="mb-6 border-primary/50 bg-primary/5">
-                <Github className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg text-primary mb-1">Connect GitHub for Full Functionality</CardTitle>
-                <AlertDescription className="text-sm text-primary-foreground/80">
-                    👋 You appear to be signed in (possibly via Google).
-                    To analyze your GitHub repositories and pull requests, please connect your GitHub account.
-                </AlertDescription>
-                <Button
-                    onClick={() => signIn('github', { callbackUrl: '/dashboard' })}
-                    variant="default"
-                    size="sm"
-                    className="mt-3 bg-primary hover:bg-primary/90 text-primary-foreground"
-                >
-                    <Github className="mr-2 h-4 w-4" /> Connect GitHub Account
-                </Button>
-            </Alert>
+           <GitHubConnectPrompt />
         )}
         
         {dashboardData && ( 
