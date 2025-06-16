@@ -21,22 +21,25 @@ codexair is an AI-powered Code Review Intelligence Platform designed to help dev
 
 ### 3.1. Authentication
 - **OAuth Integration:** Secure sign-up and login using GitHub or Google.
-- **Automatic Account Creation:** New users are automatically provisioned upon successful OAuth sign-in.
+- **Automatic Account Creation:** New users are automatically provisioned. The first user to sign up is promoted to 'admin'; subsequent users default to 'user'. User `status` defaults to 'active'. These roles and statuses are saved in the database.
+- **Account Linking:** Users can link multiple OAuth providers (e.g., Google and GitHub) to the same codexair account if the emails match.
 
 ### 3.2. Dashboard (`/dashboard`)
 Provides a comprehensive overview of the user's (or platform's for admin) code analysis activities.
 - **Analytics Overview:** At-a-glance summary of total analyses, average quality score, critical/high security issues found, and quality score trends.
 - **Recent Analyses:** A list of recently analyzed pull requests for quick access.
 - **Quality Trends:** A line chart visualizing the average code quality scores over the past 30 days.
-- **Top Security Issues:** Lists the most frequently identified security vulnerabilities (e.g., "SQL Injection", "Reflected XSS") across analyses, ranked by occurrence.
-- **Top Improvement Suggestions:** Highlights common areas for code enhancement (e.g., "Inefficient Loop Detected", "Inconsistent Naming Convention"), ranked by occurrence.
+- **Top Security Issues:** Lists the most frequently identified security vulnerabilities across analyses.
+- **Top Improvement Suggestions:** Highlights common areas for code enhancement.
 - **Security Hotspots:** Pinpoints files with recurring critical or high-severity security issues.
-- **Contributor Metrics:** (Primarily for users with broader visibility, or potentially future team features) Tracks analysis activity and quality scores by contributors (GitHub authors).
-- **Connected Repositories:** Shows a list of the user's most recently synced GitHub repositories for quick navigation to their analysis pages.
+- **Contributor Metrics:** Tracks analysis activity and quality scores by contributors (GitHub authors).
+- **Connected Repositories:** Shows a list of the user's most recently synced GitHub repositories for quick navigation.
+- **GitHub Connection Prompt:** If a user is logged in (e.g., via Google) but hasn't connected their GitHub account, a prompt encourages them to link GitHub to enable full functionality.
 
 ### 3.3. Repository Management & Sync (`/analyze`)
-- **List Synced Repositories:** Displays repositories the user has connected from GitHub.
-- **Comprehensive Sync:** Allows users to fetch and update their list of repositories from GitHub. This process attempts to retrieve up to 10 pages of the user's most recently updated repositories from GitHub and stores/updates their metadata in the local database.
+- **List Synced Repositories:** Displays repositories the user has connected from GitHub, with server-side pagination and search.
+- **Server-Side Search:** Users can search their synced repositories by name, full name, or primary language. The search is performed on the server.
+- **Comprehensive Sync:** Allows users to fetch and update their list of repositories from GitHub. This process attempts to retrieve up to 10 pages (approx. 300 repos) of the user's most recently updated repositories from GitHub and stores/updates their metadata in the local database.
 
 ### 3.4. Pull Request (PR) Analysis (`/analyze/[owner]/[repoName]`)
 - **PR Listing:** View all open and recently closed pull requests for a selected repository, along with their current analysis status (e.g., Not Analyzed, Pending, Analyzed, Failed).
@@ -44,34 +47,31 @@ Provides a comprehensive overview of the user's (or platform's for admin) code a
 - **Detailed Analysis View (`/analyze/[owner]/[repoName]/[prNumber]/[analysisId]`):**
     - **AI Review Summary (Overall PR):** A concise, AI-generated summary of the key findings for the entire pull request.
     - **Overall Metrics:** Displays aggregated quality score, complexity, and maintainability scores for the PR.
-    - **Security Issues Tab:** Lists all identified security vulnerabilities, filterable by severity, with details like title, description, file/line, CWE (if applicable), and AI-suggested fixes.
-    - **Suggestions Tab:** Lists all improvement suggestions (performance, style, potential bugs, code smells), filterable by priority, with details like title, description, file/line, and example code fixes.
-    - **File Details Tab:** An accordion view breaking down the analysis file-by-file, showing individual quality scores, complexity, maintainability, and lists of security issues/suggestions specific to that file, along with a file-level AI insight.
+    - **Security Issues Tab:** Lists all identified security vulnerabilities, filterable by severity, with details.
+    - **Suggestions Tab:** Lists all improvement suggestions, filterable by priority, with details.
+    - **File Details Tab:** An accordion view breaking down the analysis file-by-file, showing individual scores, issues/suggestions, and a file-level AI insight.
 
 ### 3.5. Full Repository Codebase Analysis
 - **Initiation:** From the repository's PR listing page (`/analyze/[owner]/[repoName]`), users can click "Analyze Repository Codebase".
 - **Scope:** This feature analyzes the current state of the repository's default branch (e.g., `main`, `master`).
-    - **Note:** The current version analyzes a limited number of source files (e.g., up to 5) from the default branch to ensure timely results in a synchronous operation. This is clearly communicated to the user.
+    - **Note:** The current version analyzes a limited number of source files (e.g., up to 5) from the default branch to ensure timely results in a synchronous operation. This is clearly communicated to the user on the scan results page.
 - **Analysis Output (`/analyze/[owner]/[repoName]/scan/[scanId]`):**
-    - Similar to PR analysis: provides overall quality, complexity, maintainability scores, a list of security issues and suggestions, and file-by-file breakdowns for the analyzed files.
+    - Provides overall quality, complexity, maintainability scores, lists of security issues and suggestions, and file-by-file breakdowns for the analyzed files.
     - Includes an AI-generated summary for the entire repository scan (based on the analyzed files).
     - Clearly indicates that it's a full repository scan, not tied to a specific PR, and mentions the file analysis limitation.
+    - Vector embeddings are generated and stored for analyzed files, making them searchable via semantic search.
 
 ### 3.6. Semantic Code Search
-Leverages AI-generated vector embeddings to find semantically similar code snippets or issue resolutions.
-- **Contextual Search (from PR Analysis):**
-    - When viewing a detailed PR analysis, users can click "Find similar past issues" or "Find similar past patterns" next to identified security issues or improvement suggestions.
-    - This automatically uses the context of that specific issue/suggestion to search for semantically similar occurrences in other recently analyzed pull requests.
+Leverages AI-generated vector embeddings to find semantically similar code snippets or issue resolutions across **both PR analyses and full repository scans**.
+- **Contextual Search (from PR Analysis or Repository Scan):**
+    - When viewing a detailed PR analysis or repository scan, users can click "Find similar past issues" or "Find similar past patterns" next to identified security issues or improvement suggestions.
+    - This automatically uses the context of that specific issue/suggestion to search for semantically similar occurrences in other recently analyzed pull requests and full repository scans.
+    - The system uses the `sourceType` parameter to fetch the embedding from the correct collection (`analyses` or `repositoryscans`).
 - **General Search Page (`/search`):**
-    - A dedicated page for free-form semantic search across all indexed PR analyses.
-    - **User Input:**
-        - **Code Snippets:** Paste a piece of code.
-        - **Natural Language Descriptions:** Describe a problem, pattern, or error message.
-        - *Examples:*
-            - Code: `function handleRequest(url) { if (!isValidUrl(url)) throw new Error("Invalid URL"); }`
-            - Natural Language: "How to securely handle file uploads in Node.js"
-            - Error: "TypeError: Cannot read property 'data' of undefined"
-    - **Results:** Shows files (and their PRs) that are most semantically similar to the query, along with AI insights for those files.
+    - A dedicated page for free-form semantic search across all indexed PR analyses and full repository scans.
+    - **User Input:** Code snippets or natural language descriptions of problems/patterns.
+    - **How it works:** The input text is converted to a vector embedding. This embedding is compared against the embeddings of all analyzed files from past PRs (from `analyses` collection) and full repository scans (from `repositoryscans` collection).
+    - **Results:** Shows files (and their parent PRs or repository scans) that are most semantically similar to the query, along with AI insights for those files.
 
 ### 3.7. PullRequest Comparison (`/analyze/[owner]/[repoName]/compare/[prNumber1]/vs/[prNumber2]`)
 - **Side-by-Side View:** Compares metadata and, if available, full analysis summaries of two pull requests from the same repository.
@@ -79,201 +79,169 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
 
 ### 3.8. "Explain My Code" AI Tool (`/explain`)
 - **Input:** Users can paste any code snippet and optionally select the programming language.
-- **Interaction:** Choose from predefined questions (e.g., "What does this do?", "Security risks?") or ask a custom question.
-- **Output:** Provides an AI-generated explanation of the code in response to the question.
+- **Interaction:** Choose from predefined questions or ask a custom question.
+- **Output:** Provides an AI-generated explanation.
+
+### 3.9. About Page (`/about`)
+- Provides information about codexair's mission and vision.
+- **Contact Form:** Includes a "Get In Touch" section with a form allowing users to send messages (name, email, message) to the platform administrators. Submitted messages are stored in the database.
 
 ## 4. Admin Features
 
 ### 4.1. Admin Dashboard (`/admin`)
-- **Platform-wide Overview:** Displays statistics like total users, total repositories synced by all users, and total analyses performed across the platform.
-- **User Management Section:** (Integrated into the main admin page)
+- **Platform-wide Overview:** Displays statistics like total users, total repositories synced, and total PR analyses.
+- **User Management Section:** Integrated into the main admin page.
 
 ### 4.2. User Management (on `/admin` page)
-- **View Users:** Lists all registered users with their name, email, role, status, and join date.
+- **View Users:** Lists all registered users with their details.
 - **Role Management:** Admins can promote users to 'admin' or demote 'admin' users to 'user'.
 - **Status Management:** Admins can change user account status between 'active' and 'suspended'.
-- **Safeguards:** Includes checks to prevent accidental lockout of the last admin or last active admin account.
+- **Safeguards:** Includes checks to prevent accidental lockout of the last admin or last active admin.
 
-### 4.3. Analysis Summary Reports (`/admin/reports`)
-- **System-Wide Reports:** Generates a report summarizing all pull request analyses conducted on the platform.
-- **Data Points:** Includes PR number, title, repository, author, analysis date, quality score, critical/high issue counts, and a link to the detailed analysis.
-- **CSV Download:** Allows admins to download the report as a CSV file for external use or record-keeping.
+### 4.3. Contact Messages (`/admin/messages`)
+- **View Messages:** Admins can view messages submitted through the contact form on the About page.
+- **Manage Messages:** Messages can be marked as read/unread and deleted.
+- **Pagination:** Supports pagination for managing a large number of messages.
 
-### 4.4. Audit Logs (`/admin/audit`)
+### 4.4. Analysis Summary Reports (`/admin/reports`)
+- **System-Wide Reports:** Generates a report summarizing all pull request analyses.
+- **CSV Download:** Allows admins to download the report as a CSV file.
+
+### 4.5. Audit Logs (`/admin/audit`)
 - **Track Admin Actions:** Logs important administrative actions such as user role changes, user status updates, and when admin reports are fetched.
-- **Details:** Provides timestamp, admin user, action performed, target user (if applicable), and relevant details of the action.
+- **Details:** Provides timestamp, admin user, action performed, target user (if applicable), and details.
 
 ## 5. Technical Architecture Overview
 
 ### 5.1. Frontend
-- **Next.js (App Router):** Provides server-side rendering (SSR), static site generation (SSG), client-side navigation, and API route capabilities. The App Router is used for improved performance with nested layouts and server components.
-- **React:** Core UI library for building interactive components.
-- **ShadCN UI:** A collection of beautifully designed, accessible, and customizable UI components built on Radix UI and Tailwind CSS.
-- **Tailwind CSS:** Utility-first CSS framework for rapid UI development.
-- **Client-Side State Management:** Primarily through React hooks (`useState`, `useEffect`, `useContext`) and component-level state. `react-hook-form` is used for form handling.
+- **Next.js (App Router), React, ShadCN UI, Tailwind CSS.**
+- **Client-Side State Management:** React hooks, `react-hook-form`.
 
 ### 5.2. Backend (Next.js API Routes)
 - Located in `src/app/api/`.
-- Handle various functionalities:
+- Handles:
     - User authentication (`/api/auth/[...nextauth]`).
-    - User profile and settings management (`/api/profile`, `/api/settings`).
-    - GitHub interactions (fetching repositories, PRs, file content) via routes like `/api/repositories`, `/api/github/repos/...`.
-    - Triggering and managing AI analyses (`/api/analyze` for PRs, `/api/repository-scan` for full repo).
+    - GitHub interactions (`/api/repositories`, `/api/github/repos/...`).
+    - Triggering AI analyses (`/api/analyze` for PRs, `/api/repository-scan` for full repo).
     - Fetching analysis results (`/api/analysis-results/[analysisId]`, `/api/repository-scan/[scanId]`).
     - Semantic search operations (`/api/search/semantic-text-search`, `/api/search/similar-code`).
-    - Admin-specific operations (user management, reports, audit logs) under `/api/admin/...`.
+    - Contact form submissions (`/api/contact`).
+    - Admin operations (`/api/admin/...`, including `/api/admin/messages`, `/api/admin/messages/[messageId]`).
+- The `/api/repositories` route now supports server-side search via a `searchTerm` parameter.
 
 ### 5.3. Database (MongoDB with Mongoose)
-- **MongoDB:** NoSQL document database used for persistent storage.
-- **Mongoose:** Object Data Modeling (ODM) library for MongoDB and Node.js, providing schema validation, type casting, and business logic hooks.
+- **MongoDB, Mongoose.**
 - **Key Collections (Models defined in `src/lib/mongodb.ts`):**
-    - `Users`: Stores user profile information, roles, status, and links to accounts.
-    - `Accounts`: Stores OAuth provider information linked to users (as per NextAuth.js adapter).
-    - `Sessions`, `VerificationTokens`: Used by NextAuth.js.
+    - `Users`, `Accounts`, `Sessions`, `VerificationTokens`.
     - `Repositories`: Stores metadata for GitHub repositories synced by users.
-    - `PullRequests`: Stores details of GitHub pull requests, including references to their analyses.
-    - `Analyses`: Stores the detailed results of AI-powered pull request analyses, including file-level breakdowns and vector embeddings.
-    - `RepositoryScans`: Stores the detailed results of full repository codebase scans, similar in structure to `Analyses`.
+    - `PullRequests`: Stores details of GitHub pull requests, linking to `Analyses`.
+    - `Analyses`: Stores results of PR analyses, including file-level breakdowns and `fileAnalyses.vectorEmbedding`.
+    - `RepositoryScans`: Stores results of full repository codebase scans, including `fileAnalyses.vectorEmbedding`.
     - `AuditLogs`: Records administrative actions.
-- **Vector Embeddings:** Numerical vector representations of code/text are stored within `Analyses` (in `fileAnalyses.vectorEmbedding`) and `RepositoryScans` (in `fileAnalyses.vectorEmbedding`) to enable semantic similarity searches via MongoDB Atlas Vector Search.
+    - `ContactMessages`: Stores messages submitted via the contact form.
+- **Vector Embeddings:** Generated by `text-embedding-004` and stored in `Analyses` and `RepositoryScans` for semantic search.
 
 ### 5.4. Authentication (NextAuth.js)
-- Manages user sign-up, sign-in, and session handling using OAuth providers (GitHub, Google).
-- Uses the MongoDB adapter to persist user and account data.
-- JWT (JSON Web Tokens) are used for session strategy.
-- Callbacks (`signIn`, `jwt`, `session`) are customized to:
-    - Handle user creation and status checks (e.g., preventing suspended users from logging in).
-    - Inject custom data like user ID, role, and status into the JWT and session objects.
+- Manages user sign-up, sign-in, session handling (GitHub, Google).
+- **Role & Status Handling:** The `jwt` callback in `src/lib/auth.ts` is designed to robustly set default `role: 'user'` and `status: 'active'` in the database for new users if the Mongoose schema defaults were not applied during adapter user creation. The first user is promoted to `admin`.
+- Explicit cookie configuration for improved reliability.
 
 ### 5.5. GitHub Integration (Octokit.js)
-- The `src/lib/github.ts` file centralizes interactions with the GitHub REST API using Octokit.js.
-- Fetches user repositories, pull request details, pull request files, and raw file content.
-- Uses the authenticated user's GitHub access token (obtained via NextAuth.js and stored in the session) for API calls.
+- Centralized in `src/lib/github.ts`. Fetches repos, PRs, file content.
 
 ## 6. Generative AI Integration (Genkit & Models)
 
 ### 6.1. Genkit Framework
-- `src/ai/genkit.ts`: Initializes the Genkit instance with the `googleAI` plugin. It's configured to use the `googleai/gemini-1.5-flash-latest` model by default and explicitly sets the API version to `v1` for stability.
-- **Flows (`src/ai/flows/`):** Encapsulate specific AI tasks. Each flow typically defines input/output schemas (using Zod) and a prompt that instructs the AI model.
-- **Prompts:** Defined using Handlebars templating language within flows to structure the input to the LLM.
-- **Tools (`src/ai/tools/`):** Reusable functions that AI models can choose to call to get additional information or perform actions (e.g., `fetchCveDetailsTool`).
+- `src/ai/genkit.ts`: Initializes Genkit with `googleAI` plugin (`gemini-1.5-flash-latest`, `text-embedding-004`).
+- **Flows (`src/ai/flows/`):** Encapsulate AI tasks.
+- **Prompts:** Handlebars templating.
 
 ### 6.2. Google AI Models
 - **`googleai/gemini-1.5-flash-latest` (or similar LLM):**
-    - **Code Analysis (`code-quality-analysis.ts`):** Analyzes code snippets for quality (readability, structure), complexity, maintainability, security vulnerabilities (identifying CWEs), and provides actionable improvement suggestions (performance, style, bugs, code smells). It generates a file-level AI insight summary.
-    - **PR/Repository Scan Summarization (`summarize-pr-analysis-flow.ts`):** Takes aggregated metrics and per-file insights to generate a holistic, narrative summary for an entire pull request or a full repository scan.
-    - **Code Explanation (`explain-code-flow.ts`):** Answers user questions about provided code snippets.
+    - Code Analysis (`code-quality-analysis.ts`).
+    - PR/Repository Scan Summarization (`summarize-pr-analysis-flow.ts`): This flow is used to generate summaries for both individual PRs and full repository scans based on aggregated data.
+    - Code Explanation (`explain-code-flow.ts`).
 - **`googleai/text-embedding-004`:**
-    - **Embedding Generation:** Generates 768-dimension vector embeddings from code snippets or natural language text.
+    - **Embedding Generation:** Generates 768-dimension vector embeddings.
     - Used in:
-        - `embed-text-flow.ts`: For embedding arbitrary user queries for semantic search.
+        - `embed-text-flow.ts`: For embedding arbitrary user queries.
         - `/api/analyze/route.ts` (PR Analysis): Embeds content of changed/added files.
         - `/api/repository-scan/route.ts` (Full Repo Scan): Embeds content of analyzed files.
+    - Embeddings are stored in `fileAnalyses.vectorEmbedding` within both `Analyses` and `RepositoryScans` documents.
 
 ### 6.3. AI Flows Overview
-- **`code-quality-analysis.ts`:**
-    - Input: Code string, filename.
-    - Output: Detailed analysis including quality score, complexity, maintainability, security issues (with CWE lookups via `fetchCveDetailsTool`), suggestions, metrics, and a file-level AI insight summary.
-    - This is the core flow for understanding the characteristics of a single piece of code.
-- **`summarize-pr-analysis-flow.ts`:**
-    - Input: PR title, overall quality score, issue counts, file count, and an array of per-file summaries.
-    - Output: A concise, narrative summary for the entire PR or repository scan.
-- **`explain-code-flow.ts`:**
-    - Input: Code snippet, optional language, user's question.
-    - Output: AI-generated explanation.
-- **`embed-text-flow.ts`:**
-    - Input: Text string.
-    - Output: A 768-dimension vector embedding.
-- **`generate-code-descriptions.ts` & `pull-request-insights.ts`:** These flows exist but are less central to the current core functionality compared to the ones above. `generate-code-descriptions` could be used for auto-generating summaries of code files, and `pull-request-insights` offers a simpler, higher-level summary based on PR title/description/changes.
+- **`code-quality-analysis.ts`:** Core flow for analyzing single code files.
+- **`summarize-pr-analysis-flow.ts`:** Generates narrative summaries for PRs and full repository scans.
+- **`explain-code-flow.ts`:** Explains code snippets.
+- **`embed-text-flow.ts`:** Embeds text for semantic search queries.
 
 ### 6.4. Genkit Tools
-- **`fetchCveDetailsTool` (`src/ai/tools/fetch-cve-details.ts`):**
-    - A Genkit tool that the `analyzeCodePrompt` can call if it identifies a CWE.
-    - Currently provides mocked data for common CWEs (name, description, URL). In a production system, this would query a real CWE database.
+- **`fetchCveDetailsTool` (`src/ai/tools/fetch-cve-details.ts`):** Mocked tool for CWE details.
 
 ## 7. API Workflow Examples (High-Level)
 
 ### 7.1. Pull Request Analysis
-1.  User navigates to `/analyze/[owner]/[repoName]` and clicks "Analyze" for a specific PR.
-2.  Frontend calls `POST /api/analyze` with `owner`, `repoName`, `pullNumber`.
-3.  Backend (`/api/analyze/route.ts`):
-    a.  Authenticates user via session.
-    b.  Fetches PR details and file list from GitHub (using `src/lib/github.ts`).
-    c.  Filters files to analyze (e.g., up to `MAX_FILES_TO_ANALYZE`, excluding certain types, based on status like 'added' or 'modified').
-    d.  For each selected file:
-        i.  Fetches file content (or diff) from GitHub.
-        ii. Truncates if content exceeds `MAX_CONTENT_LENGTH_FOR_ANALYSIS`.
-        iii.Calls the `analyzeCode` Genkit flow (`src/ai/flows/code-quality-analysis.ts`).
-        iv. Generates a vector embedding for the file content using `ai.embed({ embedder: 'googleai/text-embedding-004', ... })`.
-    e.  Aggregates results from all analyzed files (overall scores, combined lists of issues/suggestions).
-    f.  Calls the `summarizePrAnalysis` Genkit flow (`src/ai/flows/summarize-pr-analysis-flow.ts`) to generate an overall PR summary.
-    g.  Saves the PR details (if new) and the comprehensive analysis results (including file analyses and embeddings) to the `PullRequests` and `Analyses` collections in MongoDB.
-    h.  Returns the new `Analysis` document ID and the `PullRequest` document.
-4.  Frontend receives the `analysisId` and navigates to `/analyze/[owner]/[repoName]/[prNumber]/[analysisId]` to display the results.
+- User initiates analysis.
+- Backend (`/api/analyze/route.ts`): Fetches PR details, files from GitHub. Filters files (e.g., up to `MAX_FILES_TO_ANALYZE`). For each selected file:
+    - Fetches content, truncates if needed.
+    - Calls `analyzeCode` Genkit flow.
+    - Generates vector embedding via `ai.embed()`.
+- Aggregates results, calls `summarizePrAnalysis` flow.
+- Saves results to `PullRequests` and `Analyses` collections (including embeddings).
 
 ### 7.2. Full Repository Codebase Scan
-1.  User navigates to `/analyze/[owner]/[repoName]` and clicks "Analyze Repository Codebase".
-2.  Frontend calls `POST /api/repository-scan` with `owner`, `repoName`.
-3.  Backend (`/api/repository-scan/route.ts`):
-    a.  Authenticates user.
-    b.  Determines the default branch and latest commit SHA from GitHub.
-    c.  Fetches the file tree for that commit.
-    d.  Filters and selects a limited number of source files (up to `MAX_FILES_TO_SCAN`, relevant extensions, excluding patterns).
-    e.  For each selected file:
-        i.  Fetches content from GitHub.
-        ii. Truncates if necessary.
-        iii.Calls `analyzeCode` flow.
-        iv. Generates embedding via `ai.embed()`.
-    f.  Aggregates results and generates an overall summary (adapting logic from `summarizePrAnalysis`).
-    g.  Saves the scan results to the `RepositoryScans` collection in MongoDB.
-    h.  Returns the new `RepositoryScan` document ID.
-4.  Frontend receives the `scanId` and navigates to `/analyze/[owner]/[repoName]/scan/[scanId]`.
+- User initiates scan.
+- Backend (`/api/repository-scan/route.ts`): Determines default branch, fetches file tree. Filters and selects a limited number of source files (up to `MAX_FILES_TO_SCAN`). For each file:
+    - Fetches content, truncates.
+    - Calls `analyzeCode` flow.
+    - Generates embedding via `ai.embed()`.
+- Aggregates results and generates an overall summary by calling `summarizePrAnalysis` flow.
+- Saves results to `RepositoryScans` collection (including embeddings).
 
 ### 7.3. Semantic Search (General Query via `/search` page)
-1.  User types a code snippet or natural language query into the textarea on the `/search` page and clicks "Search".
-2.  Frontend calls `POST /api/search/semantic-text-search` with the `queryText`.
-3.  Backend (`/api/search/semantic-text-search/route.ts`):
-    a.  Authenticates user.
-    b.  Calls the `embedText` Genkit flow (`src/ai/flows/embed-text-flow.ts`) to convert `queryText` into a vector embedding.
-    c.  Calls `findSimilarCode` function (from `src/lib/vector-search.ts`).
-    d.  `findSimilarCode` executes a MongoDB Atlas `$vectorSearch` aggregation pipeline against the `analyses` collection, comparing the query vector with the `fileAnalyses.vectorEmbedding` field of stored PR analyses.
-    e.  The pipeline projects and returns relevant data for the most similar file analyses (PR details, filename, snippet of AI insight, similarity score).
-4.  Frontend receives the list of `SimilarCodeResult` objects and displays them.
+- User submits query.
+- Backend (`/api/search/semantic-text-search/route.ts`):
+    - Calls `embedText` Genkit flow for query embedding.
+    - Calls `findSimilarCode` (from `src/lib/vector-search.ts`).
+    - `findSimilarCode` executes two MongoDB Atlas `$vectorSearch` aggregations: one on `analyses` and one on `repositoryscans`. Results are combined, sorted, and limited.
+- Returns list of `SimilarCodeResult` objects.
 
-### 7.4. Semantic Search (Contextual from PR Analysis Page)
-1.  User is viewing a PR analysis on `/analyze/.../[analysisId]` and clicks a "Find similar..." button next to an issue/suggestion.
-2.  Frontend calls `POST /api/search/similar-code` with `queryAnalysisId` (the current PR's analysis ID) and `queryFilename` (the file where the issue was found).
-3.  Backend (`/api/search/similar-code/route.ts`):
-    a.  Authenticates user.
-    b.  Fetches the specified `Analysis` document.
-    c.  Extracts the pre-computed `vectorEmbedding` for the `queryFilename` from that analysis.
-    d.  Calls `findSimilarCode`, passing this embedding as the query vector, and also passes `queryAnalysisId` and `queryFilename` to exclude the source file itself from the results.
-    e.  `findSimilarCode` performs the `$vectorSearch` as described above.
-4.  Frontend receives and displays the results in a dialog.
+### 7.4. Semantic Search (Contextual from Analysis/Scan Page)
+- User clicks "Find similar...".
+- Frontend calls `POST /api/search/similar-code` with `queryAnalysisId` (ID of the current PR Analysis or Repo Scan), `queryFilename`, and `sourceType` ('pr_analysis' or 'repo_scan').
+- Backend (`/api/search/similar-code/route.ts`):
+    - Fetches the specified `Analysis` or `RepositoryScan` document based on `sourceType`.
+    - Extracts pre-computed `vectorEmbedding` for `queryFilename`.
+    - Calls `findSimilarCode`, passing this embedding, `queryAnalysisId` (for exclusion), and `queryFilename`.
+- Returns results.
 
 ## 8. Security Considerations
-- **Authentication & Authorization:** Handled by NextAuth.js with OAuth providers. Session management uses JWTs. API routes and sensitive operations verify user sessions and roles.
-- **Input Validation:** API routes and Genkit flows use Zod schemas to validate inputs, preventing common injection-style attacks and ensuring data integrity.
-- **GitHub API Access:** User-specific GitHub access tokens are managed by NextAuth.js and used by Octokit for GitHub API interactions. These tokens are not exposed client-side.
-- **Database Security:** MongoDB connection URI includes credentials managed via environment variables. Mongoose schemas provide a layer of data structure enforcement.
-- **AI Model Safety:** While not explicitly detailed in the provided code, Genkit and Google AI models have built-in safety filters. Further configuration of these safety settings can be done within Genkit flows if needed.
-- **Rate Limiting & Resource Management:** For a production system, rate limiting on API endpoints and careful management of AI model calls (especially for full repository scans) would be crucial to prevent abuse and manage costs. (Currently, full repo scans are limited by file count for synchronous operation.)
+- Authentication & Authorization by NextAuth.js.
+- Input Validation with Zod schemas.
+- GitHub API Access via user-specific tokens.
+- Database Security with env-managed URI, Mongoose schemas.
+- AI Model Safety (Genkit/Google AI built-in filters).
 
 ## 9. Local Setup & Vector Search
-- **Environment Variables:** Critical variables like `MONGODB_URI`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, OAuth client IDs/secrets, and `GEMINI_API_KEY` must be configured in `.env`.
-- **MongoDB Atlas Vector Search Index:** For semantic search to function, a vector search index must be manually configured in MongoDB Atlas on the `analyses` collection.
-    - **Index Name:** `idx_file_embeddings`
-    - **Field Path:** `fileAnalyses.vectorEmbedding`
-    - **Dimensions:** `768` (matching `text-embedding-004` output)
-    - **Similarity:** `cosine`
-- **Development Servers:** Both the Next.js app (`npm run dev`) and the Genkit development server (`npm run genkit:dev`) must be running for full functionality.
+- **Environment Variables:** Critical variables must be configured in `.env`.
+- **MongoDB Atlas Vector Search Indexes:** For semantic search, **TWO** vector search indexes must be manually configured in MongoDB Atlas:
+    1.  **On the `analyses` collection (for PR Analyses):**
+        -   **Index Name:** `idx_file_embeddings`
+        -   **Field Path:** `fileAnalyses.vectorEmbedding`
+        -   **Dimensions:** `768` (matching `text-embedding-004` output)
+        -   **Similarity:** `cosine`
+    2.  **On the `repositoryscans` collection (for Full Repository Scans):**
+        -   **Index Name:** `idx_repo_scan_file_embeddings`
+        -   **Field Path:** `fileAnalyses.vectorEmbedding`
+        -   **Dimensions:** `768`
+        -   **Similarity:** `cosine`
+- **Development Servers:** Next.js app (`npm run dev`) and Genkit dev server (`npm run genkit:dev`) must be running.
 
 ## 10. Future Enhancements (from README.md)
-- CI/CD Integration (automated PR analysis via webhooks).
-- Asynchronous Full Repository Scans (using background jobs for larger repositories).
-- Enhanced Vector Search (including full repo scan embeddings, more sophisticated queries).
+- CI/CD Integration.
+- Asynchronous Full Repository Scans (and analysis of more files).
+- Enhanced Vector Search (more sophisticated queries, filtering).
 - Customizable Analysis Rules.
 - Team Collaboration Features.
 - IDE Integration.
 - Expanded Language Support.
-```CDATA
