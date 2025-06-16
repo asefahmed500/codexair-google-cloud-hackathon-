@@ -341,7 +341,7 @@ export default function RepositoryAnalysisPage() {
                           ) : (
                             <Button
                               onClick={() => handleAnalyzePR(pr.number)}
-                              disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open' || pr.analysisStatus === 'pending' || pr.analysisStatus === 'failed' || isScanningRepo}
+                              disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open' || pr.analysisStatus === 'pending' || isScanningRepo}
                               title={pr.state.toLowerCase() !== 'open' ? "Can only analyze open PRs" : (pr.analysisStatus === 'pending' ? "Analysis in progress..." : (pr.analysisStatus === 'failed' ? "Analysis failed, try again?" : `Analyze PR #${pr.number}`))}
                               size="sm"
                               variant={pr.analysisStatus === 'failed' ? 'destructive' : 'default'}
@@ -390,3 +390,4 @@ function SkeletonPRRow() {
     </div>
   )
 }
+

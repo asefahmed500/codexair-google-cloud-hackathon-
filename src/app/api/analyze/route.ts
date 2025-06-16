@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
   let owner: string | undefined, repoName: string | undefined, pullNumber: number | undefined;
   let localRepoIdForCatch: string | undefined;
   let pullRequestIdForCatch: string | undefined;
+  let currentSessionUser = 'unknown_user'; // For logging context
 
   try {
     console.log('[API/ANALYZE] Received analysis request.');
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
       console.error('[API/ANALYZE] Unauthorized: No session user ID.');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    currentSessionUser = session.user.id; // Set for context in catch block
     console.log(`[API/ANALYZE] Authenticated user: ${session.user.id}`);
 
     await connectMongoose();
@@ -86,6 +88,7 @@ export async function POST(request: NextRequest) {
             stars: ghRepoDetails.stargazers_count || 0,
             isPrivate: ghRepoDetails.private,
             userId: session.user.id,
+            updatedAt: new Date(ghRepoDetails.updated_at), // Ensure updatedAt is also set/updated
           }
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -102,32 +105,27 @@ export async function POST(request: NextRequest) {
 
     const updatedPrForPending = await PullRequest.findOneAndUpdate(
         { repositoryId: localRepo._id.toString(), number: pullNumber },
-        { $set: { analysisStatus: 'pending', owner: owner, repoName: repoName, userId: session.user.id } },
+        { $set: { analysisStatus: 'pending', owner: owner, repoName: repoName, userId: session.user.id, updatedAt: new Date() } },
         { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     if (!updatedPrForPending) {
         console.error(`[API/ANALYZE] Failed to upsert PR #${pullNumber} for ${repoFullName} to set pending status.`);
-        // This is a significant issue, but we might still be able to proceed if GitHub fetch works
-    } else {
-        pullRequestIdForCatch = updatedPrForPending._id.toString();
-        console.log(`[API/ANALYZE] Set PR ${pullRequestIdForCatch} (#${pullNumber}) status to 'pending' for ${repoFullName}.`);
+        // This is a significant issue, but we might still be able to proceed if GitHub fetch works.
+        // However, it's better to fail early if the DB operation for 'pending' fails.
+        throw new Error(`Database error: Could not update PR #${pullNumber} to 'pending' status.`);
     }
+    pullRequestIdForCatch = updatedPrForPending._id.toString();
+    console.log(`[API/ANALYZE] Set PR ${pullRequestIdForCatch} (#${pullNumber}) status to 'pending' for ${repoFullName}.`);
 
 
     console.log(`[API/ANALYZE] Fetching PR details for ${repoFullName} PR #${pullNumber} from GitHub...`);
     const ghPullRequest = await getPullRequestDetails(owner, repoName, pullNumber);
     if (!ghPullRequest) {
-      if (pullRequestIdForCatch) {
-          await PullRequest.updateOne(
-            { _id: new mongoose.Types.ObjectId(pullRequestIdForCatch) },
-            { $set: { analysisStatus: 'failed' } }
-          );
-      } else if (localRepoIdForCatch) { // Fallback if PR doc wasn't created/found
-          await PullRequest.updateOne(
-            { repositoryId: localRepoIdForCatch, number: pullNumber },
-            { $set: { analysisStatus: 'failed' } }
-          );
-      }
+      // The pullRequestIdForCatch should be valid here due to the check above
+      await PullRequest.updateOne(
+        { _id: new mongoose.Types.ObjectId(pullRequestIdForCatch) },
+        { $set: { analysisStatus: 'failed', updatedAt: new Date() } }
+      );
       console.error('[API/ANALYZE] Pull request not found on GitHub.');
       return NextResponse.json({ error: 'Pull request not found on GitHub' }, { status: 404 });
     }
@@ -269,14 +267,13 @@ export async function POST(request: NextRequest) {
             console.log(`[API/ANALYZE] Generated PR-level summary: "${prLevelSummary.substring(0,100)}..."`);
         } catch (summaryError: any) {
             console.error(`[API/ANALYZE] Error generating PR-level summary for PR #${pullNumber}:`, summaryError.message, summaryError.stack);
-            // prLevelSummary remains FALLBACK_SUMMARY_MESSAGE
         }
     } else {
         console.log('[API/ANALYZE] Skipping PR-level summary as no files were analyzed.');
     }
 
     const finalAnalysisData = {
-      pullRequestId: '', // Will be set after PR doc is saved/found
+      pullRequestId: pullRequestIdForCatch, // Use the ID of the PR document we've been working with
       qualityScore: aggregatedQualityScore,
       complexity: aggregatedComplexity,
       maintainability: aggregatedMaintainability,
@@ -290,11 +287,11 @@ export async function POST(request: NextRequest) {
       },
       aiInsights: prLevelSummary,
       fileAnalyses: fileAnalysesResults,
-      createdAt: new Date(), // Explicitly set creation time for analysis
+      createdAt: new Date(),
     };
 
     const prFiles: CodeFileType[] = ghFiles.map(f => ({
-        filename: f.filename,
+        filename: f.filename!, // Filename should exist if it passed the filter
         status: f.status as CodeFileType['status'],
         additions: f.additions,
         deletions: f.deletions,
@@ -302,57 +299,29 @@ export async function POST(request: NextRequest) {
         patch: f.patch || '',
       }));
 
-    console.log(`[API/ANALYZE] Preparing to save PullRequest document for ${repoFullName} PR #${pullNumber}. Local repo ID: ${localRepo._id.toString()}`);
-    let savedPR = await PullRequest.findOne({
-      repositoryId: localRepo._id.toString(),
-      number: pullNumber,
-    });
-
+    let savedPR = await PullRequest.findById(pullRequestIdForCatch);
     if (!savedPR) {
-      console.log(`[API/ANALYZE] No existing PR document found. Creating new one.`);
-      savedPR = new PullRequest({
-        repositoryId: localRepo._id.toString(),
-        owner: owner,
-        repoName: repoName,
-        githubId: ghPullRequest.id,
-        number: pullNumber,
-        title: ghPullRequest.title,
-        body: ghPullRequest.body || '',
-        state: ghPullRequest.state as PRType['state'],
-        author: {
-          login: ghPullRequest.user?.login || 'unknown',
-          avatar: ghPullRequest.user?.avatar_url || '',
-        },
-        files: prFiles,
-        userId: session.user.id, // User who initiated this
-        createdAt: new Date(ghPullRequest.created_at),
-        updatedAt: new Date(ghPullRequest.updated_at),
-        analysisStatus: 'pending', // Will be updated shortly
-      });
-    } else {
-      console.log(`[API/ANALYZE] Existing PR document found (ID: ${savedPR._id}). Updating it.`);
-      savedPR.title = ghPullRequest.title;
-      savedPR.body = ghPullRequest.body || '';
-      savedPR.state = ghPullRequest.state as PRType['state'];
-      savedPR.files = prFiles; // Update files with latest from GitHub
-      savedPR.owner = owner;
-      savedPR.repoName = repoName;
-      savedPR.author = { // Update author info
-          login: ghPullRequest.user?.login || savedPR.author?.login || 'unknown',
-          avatar: ghPullRequest.user?.avatar_url || savedPR.author?.avatar || '',
-      };
-      savedPR.updatedAt = new Date(ghPullRequest.updated_at); // Update timestamp from GitHub
-      savedPR.userId = savedPR.userId || session.user.id; // Ensure userId is set
+        // This should ideally not happen if updatedPrForPending was successful
+        console.error(`[API/ANALYZE] CRITICAL: PR document ${pullRequestIdForCatch} not found before saving analysis. Aborting.`);
+        throw new Error(`Database error: PR document with ID ${pullRequestIdForCatch} vanished.`);
     }
-    await savedPR.save();
-    pullRequestIdForCatch = savedPR._id.toString(); // Update for catch block
-    console.log(`[API/ANALYZE] Saved/Updated PullRequest document ID: ${savedPR._id}`);
+    
+    // Update PR details from GitHub that might have changed since last sync
+    savedPR.title = ghPullRequest.title;
+    savedPR.body = ghPullRequest.body || '';
+    savedPR.state = ghPullRequest.state as PRType['state'];
+    savedPR.files = prFiles;
+    savedPR.author = {
+        login: ghPullRequest.user?.login || savedPR.author?.login || 'unknown',
+        avatar: ghPullRequest.user?.avatar_url || savedPR.author?.avatar || '',
+    };
+    savedPR.updatedAt = new Date(ghPullRequest.updated_at); // GitHub's PR update time
+    savedPR.githubId = ghPullRequest.id; // Ensure GitHub ID is also set/updated
 
-    finalAnalysisData.pullRequestId = savedPR._id.toString();
-
+    // Delete old analysis if it exists, before creating a new one
     if (savedPR.analysis) {
         let oldAnalysisId = savedPR.analysis;
-        if (typeof oldAnalysisId !== 'string' && oldAnalysisId && (oldAnalysisId as any).toString) { // Handle ObjectId case
+        if (typeof oldAnalysisId !== 'string' && oldAnalysisId && (oldAnalysisId as any).toString) {
             oldAnalysisId = (oldAnalysisId as any).toString();
         }
         if (oldAnalysisId && mongoose.Types.ObjectId.isValid(oldAnalysisId as string)) {
@@ -363,7 +332,7 @@ export async function POST(request: NextRequest) {
             console.warn(`[API/ANALYZE] Invalid or non-ObjectId old analysis ID found for PR ${savedPR._id}: ${savedPR.analysis}. Skipping deletion.`);
         }
     }
-
+    
     console.log(`[API/ANALYZE] Final analysis data before saving Analysis doc (snippet):`, JSON.stringify(finalAnalysisData, (key, value) => key === 'vectorEmbedding' ? `[${value?.length || 0} numbers]` : value, 2).substring(0, 1000) + "...");
     const analysisDoc = new Analysis(finalAnalysisData);
     await analysisDoc.save();
@@ -372,6 +341,7 @@ export async function POST(request: NextRequest) {
     savedPR.analysis = analysisDoc._id;
     savedPR.analysisStatus = 'analyzed';
     savedPR.qualityScore = aggregatedQualityScore;
+    // No need to $set updatedAt here, Mongoose timestamps will handle it on save
     await savedPR.save();
     console.log(`[API/ANALYZE] Updated PullRequest ${savedPR._id} with new analysis ID ${analysisDoc._id} and status 'analyzed'.`);
 
@@ -380,36 +350,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ analysis: analysisDoc.toObject(), pullRequest: populatedPR });
 
   } catch (error: any) {
-    console.error(`[API/ANALYZE] CRITICAL ERROR during PR analysis for ${owner}/${repoName}#${pullNumber}. User: ${session?.user?.id}. Error:`, error.message, error.stack);
-    // Log the full error object structure for better debugging if it's not a standard Error instance
+    console.error(`[API/ANALYZE] CRITICAL ERROR during PR analysis for ${owner ?? 'unknown_owner'}/${repoName ?? 'unknown_repo'}#${pullNumber ?? 'unknown_pr'}. User: ${currentSessionUser}. Error:`, error.message, error.stack);
     if (!(error instanceof Error)) {
       console.error('[API/ANALYZE] Full error object (non-Error instance):', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     }
 
-    if (pullRequestIdForCatch) {
+    if (pullRequestIdForCatch) { // pullRequestIdForCatch should be valid if we reached this point after 'pending' status was set
         try {
             await PullRequest.updateOne(
               { _id: new mongoose.Types.ObjectId(pullRequestIdForCatch) },
-              { $set: { analysisStatus: 'failed' } }
+              { $set: { analysisStatus: 'failed', updatedAt: new Date() } }
             );
             console.log(`[API/ANALYZE] Set PR ${pullRequestIdForCatch} status to 'failed' due to error.`);
         } catch (dbError: any) {
             console.error(`[API/ANALYZE] Failed to update PR ${pullRequestIdForCatch} status to 'failed' in DB:`, dbError.message);
         }
-    } else if (localRepoIdForCatch && owner && repoName && pullNumber !== undefined) {
-         try {
-            const currentSession = await getServerSession(authOptions); // Re-fetch session if needed
-            await PullRequest.updateOne(
-              { repositoryId: localRepoIdForCatch, number: pullNumber, userId: currentSession?.user?.id },
-              { $set: { analysisStatus: 'failed' } },
-              { upsert: false } // Do not upsert if PR doc was never created
-            );
-            console.log(`[API/ANALYZE] Attempted to set PR #${pullNumber} in repo ${localRepoIdForCatch} to 'failed' status due to error.`);
-        } catch (dbError: any) {
-            console.error(`[API/ANALYZE] Failed to update PR status to 'failed' for repo ${localRepoIdForCatch}, PR #${pullNumber}:`, dbError.message);
-        }
     }
-
+    // Removed the more complex fallback using localRepoIdForCatch as pullRequestIdForCatch should be reliable here.
 
     let errorMessage = 'Internal server error during analysis';
     let statusCode = 500;
@@ -424,12 +381,11 @@ export async function POST(request: NextRequest) {
             errorMessage = 'Content too large for AI embedding service. Try analyzing smaller files or changes.';
             statusCode = 413; // Payload Too Large
         } else {
-            errorMessage = error.message; // Use the original error message if more specific
+            errorMessage = error.message; 
         }
     }
     
-    return NextResponse.json({ error: errorMessage, details: error.message, stack: error.stack?.substring(0,1000) }, { status: statusCode });
+    return NextResponse.json({ error: errorMessage, details: error.message, stack: process.env.NODE_ENV === 'development' && error.stack ? error.stack.substring(0,1000) : undefined }, { status: statusCode });
   }
 }
-
     
