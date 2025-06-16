@@ -9,6 +9,11 @@ import type { Repository as RepoType } from '@/types';
 const GITHUB_PAGES_TO_SYNC_ON_REQUEST = 10;
 const GITHUB_REPOS_PER_PAGE = 30;
 
+// Helper function to escape special characters for regex
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -26,7 +31,8 @@ export async function GET(request: NextRequest) {
 
     let query: any = { userId: session.user.id! };
     if (searchTerm && searchTerm.trim() !== "") {
-      const regex = new RegExp(searchTerm.trim(), 'i'); // Case-insensitive regex
+      const safeSearchTerm = escapeRegExp(searchTerm.trim()); // Escape the search term
+      const regex = new RegExp(safeSearchTerm, 'i'); // Case-insensitive regex
       query.$or = [
         { fullName: regex },
         { name: regex },
@@ -48,8 +54,8 @@ export async function GET(request: NextRequest) {
           }
         } catch (ghError: any) {
           console.error(`[API/Repositories] SYNC: Error fetching page ${i} from GitHub:`, ghError.message);
-          if (i === 1) throw ghError;
-          break;
+          if (i === 1) throw ghError; // If first page fails, throw the error
+          break; // Otherwise, proceed with what was fetched
         }
       }
 
@@ -94,10 +100,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         repositories: refreshedLocalRepos,
         totalPages: Math.ceil(totalUserSyncedRepos / limit),
-        currentPage: 1,
+        currentPage: 1, // Sync always returns page 1 of the (potentially filtered) results
       });
 
     } else {
+      // Standard fetch without sync
       const skip = (page - 1) * limit;
       console.log(`[API/Repositories] DB FETCH: User ${session.user.id}, Page ${page}, Limit ${limit}, Search: "${searchTerm || 'N/A'}"`);
       
@@ -120,6 +127,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('[API/Repositories GET] Error:', error.message, error.stack);
     if (error.message.includes('GitHub API error') || error.status === 401 || error.status === 403) {
+      // Handle specific GitHub API errors (e.g., token revoked, insufficient permissions)
       return NextResponse.json({ error: `GitHub API interaction failed: ${error.message}` }, { status: error.status || 500 });
     }
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
