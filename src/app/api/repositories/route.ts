@@ -2,23 +2,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { getUserRepositories, getRepositoryDetails } from '@/lib/github';
-import { Repository, connectMongoose } from '@/lib/mongodb';
+import { getUserRepositories, getGithubClient } from '@/lib/github'; // Added getGithubClient
+import { Repository, User, connectMongoose } from '@/lib/mongodb'; // Added User
 import type { Repository as RepoType } from '@/types';
+import mongoose from 'mongoose';
 
 const GITHUB_PAGES_TO_SYNC_ON_REQUEST = 10;
 const GITHUB_REPOS_PER_PAGE = 30;
 
 // Helper function to escape special characters for regex
 function escapeRegExp(string: string) {
+  if (!string) return '';
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.id || !mongoose.Types.ObjectId.isValid(session.user.id)) {
+      return NextResponse.json({ error: 'Unauthorized or invalid user ID' }, { status: 401 });
     }
 
     await connectMongoose();
@@ -31,8 +33,8 @@ export async function GET(request: NextRequest) {
 
     let query: any = { userId: session.user.id! };
     if (searchTerm && searchTerm.trim() !== "") {
-      const safeSearchTerm = escapeRegExp(searchTerm.trim()); // Escape the search term
-      const regex = new RegExp(safeSearchTerm, 'i'); // Case-insensitive regex
+      const safeSearchTerm = escapeRegExp(searchTerm.trim());
+      const regex = new RegExp(safeSearchTerm, 'i');
       query.$or = [
         { fullName: regex },
         { name: regex },
@@ -40,24 +42,31 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    let userMakingRequest = await User.findById(session.user.id).select('lastKnownTotalGitHubRepos lastGitHubRepoCountSync');
+
     if (sync) {
       console.log(`[API/Repositories] SYNC: User ${session.user.id}. Search: "${searchTerm || 'N/A'}". Will attempt to fetch up to ${GITHUB_PAGES_TO_SYNC_ON_REQUEST} pages from GitHub.`);
 
       let allFetchedGithubRepos: any[] = [];
-      for (let i = 1; i <= GITHUB_PAGES_TO_SYNC_ON_REQUEST; i++) {
-        try {
-          const githubReposPage = await getUserRepositories(i, GITHUB_REPOS_PER_PAGE, true);
-          allFetchedGithubRepos.push(...githubReposPage);
-          if (githubReposPage.length < GITHUB_REPOS_PER_PAGE) {
-            console.log(`[API/Repositories] SYNC: Reached end of GitHub repos on page ${i}.`);
-            break;
-          }
-        } catch (ghError: any) {
-          console.error(`[API/Repositories] SYNC: Error fetching page ${i} from GitHub:`, ghError.message);
-          if (i === 1) throw ghError; // If first page fails, throw the error
-          break; // Otherwise, proceed with what was fetched
+      try {
+        for (let i = 1; i <= GITHUB_PAGES_TO_SYNC_ON_REQUEST; i++) {
+            const githubReposPage = await getUserRepositories(i, GITHUB_REPOS_PER_PAGE, true);
+            allFetchedGithubRepos.push(...githubReposPage);
+            if (githubReposPage.length < GITHUB_REPOS_PER_PAGE) {
+              console.log(`[API/Repositories] SYNC: Reached end of GitHub repos on page ${i}.`);
+              break;
+            }
+        }
+      } catch (ghError: any) {
+        console.error(`[API/Repositories] SYNC: Error fetching repositories from GitHub:`, ghError.message);
+        // If sync fails, still proceed with current DB data but don't update GitHub total count.
+        // Or, could return an error if this is critical. For now, log and continue.
+        // No, if this part fails, we should probably indicate it.
+        if (allFetchedGithubRepos.length === 0) { // If no repos fetched at all due to error
+          throw new Error(`GitHub API error during sync: ${ghError.message}`);
         }
       }
+
 
       const uniqueGithubRepos = Array.from(new Map(allFetchedGithubRepos.map(repo => [repo.id, repo])).values());
       console.log(`[API/Repositories] SYNC: Fetched ${allFetchedGithubRepos.length} raw repos, ${uniqueGithubRepos.length} unique repos from GitHub.`);
@@ -86,21 +95,45 @@ export async function GET(request: NextRequest) {
           }
         })
       );
+      
+      let totalUserGitHubRepos: number | undefined = undefined;
+      let lastGitHubRepoCountSyncTime: Date | undefined = undefined;
+      try {
+        const octokit = await getGithubClient(); // Uses session from getServerSession inside
+        const { data: githubUser } = await octokit.rest.users.getAuthenticated();
+        totalUserGitHubRepos = (githubUser.public_repos || 0) + (githubUser.total_private_repos || 0);
+        lastGitHubRepoCountSyncTime = new Date();
 
-      // After sync, fetch the first page of results based on the query (which includes searchTerm)
+        if (userMakingRequest) {
+          userMakingRequest.lastKnownTotalGitHubRepos = totalUserGitHubRepos;
+          userMakingRequest.lastGitHubRepoCountSync = lastGitHubRepoCountSyncTime;
+          await userMakingRequest.save();
+          console.log(`[API/Repositories] SYNC: Updated user ${session.user.id} with total GitHub repos: ${totalUserGitHubRepos}`);
+        } else {
+          console.warn(`[API/Repositories] SYNC: User document not found for ID ${session.user.id} to save GitHub repo count.`);
+        }
+      } catch (e: any) {
+        console.error(`[API/Repositories] SYNC: Failed to get authenticated user's total repo count from GitHub: ${e.message}. Will use previous count if available.`);
+        totalUserGitHubRepos = userMakingRequest?.lastKnownTotalGitHubRepos;
+        lastGitHubRepoCountSyncTime = userMakingRequest?.lastGitHubRepoCountSync;
+      }
+
       const refreshedLocalRepos = await Repository.find(query)
         .sort({ updatedAt: -1 })
         .skip(0)
         .limit(limit)
         .lean();
-      const totalUserSyncedRepos = await Repository.countDocuments(query);
+      const totalMatchingDbRepos = await Repository.countDocuments(query);
 
-      console.log(`[API/Repositories] SYNC complete. Returning first page of ${totalUserSyncedRepos} (filtered by search: "${searchTerm || 'N/A'}") local repos for user ${session.user.id}.`);
+      console.log(`[API/Repositories] SYNC complete. Returning first page of ${totalMatchingDbRepos} (filtered by search: "${searchTerm || 'N/A'}") local repos for user ${session.user.id}.`);
 
       return NextResponse.json({
         repositories: refreshedLocalRepos,
-        totalPages: Math.ceil(totalUserSyncedRepos / limit),
-        currentPage: 1, // Sync always returns page 1 of the (potentially filtered) results
+        totalPages: Math.ceil(totalMatchingDbRepos / limit),
+        currentPage: 1,
+        totalMatchingDbRepos: totalMatchingDbRepos,
+        totalUserGitHubRepos: totalUserGitHubRepos,
+        lastGitHubRepoCountSync: lastGitHubRepoCountSyncTime,
       });
 
     } else {
@@ -114,20 +147,22 @@ export async function GET(request: NextRequest) {
         .limit(limit)
         .lean();
       
-      const totalRepos = await Repository.countDocuments(query);
-      console.log(`[API/Repositories] DB FETCH complete. Returned ${fetchedRepositories.length} (filtered by search: "${searchTerm || 'N/A'}"). Total matching: ${totalRepos}`);
+      const totalMatchingDbRepos = await Repository.countDocuments(query);
+      console.log(`[API/Repositories] DB FETCH complete. Returned ${fetchedRepositories.length} (filtered by search: "${searchTerm || 'N/A'}"). Total matching: ${totalMatchingDbRepos}`);
       
       return NextResponse.json({
         repositories: fetchedRepositories,
-        totalPages: Math.ceil(totalRepos / limit),
+        totalPages: Math.ceil(totalMatchingDbRepos / limit),
         currentPage: page,
+        totalMatchingDbRepos: totalMatchingDbRepos,
+        totalUserGitHubRepos: userMakingRequest?.lastKnownTotalGitHubRepos,
+        lastGitHubRepoCountSync: userMakingRequest?.lastGitHubRepoCountSync,
       });
     }
 
   } catch (error: any) {
     console.error('[API/Repositories GET] Error:', error.message, error.stack);
     if (error.message.includes('GitHub API error') || error.status === 401 || error.status === 403) {
-      // Handle specific GitHub API errors (e.g., token revoked, insufficient permissions)
       return NextResponse.json({ error: `GitHub API interaction failed: ${error.message}` }, { status: error.status || 500 });
     }
     return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });

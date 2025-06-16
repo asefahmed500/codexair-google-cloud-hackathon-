@@ -55,6 +55,9 @@ const userSchema = new mongoose.Schema({
   status: { type: String, enum: ['active', 'suspended'], default: 'active', required: true },
   accounts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Account' }],
   sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Session' }],
+  // New fields for GitHub repository count
+  lastKnownTotalGitHubRepos: Number,
+  lastGitHubRepoCountSync: Date,
 }, { timestamps: true });
 
 const accountSchema = new mongoose.Schema({

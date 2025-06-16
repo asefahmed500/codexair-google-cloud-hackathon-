@@ -14,6 +14,7 @@ import { toast } from '@/hooks/use-toast';
 import Navbar from '@/components/layout/navbar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { formatDistanceToNow, format } from 'date-fns'; // Import format
 
 export default function AnalyzePage() {
   const { data: session, status } = useSession();
@@ -26,6 +27,10 @@ export default function AnalyzePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  const [totalMatchingDbRepos, setTotalMatchingDbRepos] = useState(0);
+  const [lastKnownTotalGitHubRepos, setLastKnownTotalGitHubRepos] = useState<number | null>(null);
+  const [lastGitHubRepoCountSync, setLastGitHubRepoCountSync] = useState<Date | null>(null);
 
   const ITEMS_PER_PAGE = 9;
 
@@ -50,7 +55,7 @@ export default function AnalyzePage() {
     setError(null);
 
     try {
-      const apiPage = sync ? 1 : page;
+      const apiPage = sync ? 1 : page; // For sync, always fetch page 1 of new data
       const response = await fetch(`/api/repositories?page=${apiPage}&limit=${ITEMS_PER_PAGE}&sync=${sync}&searchTerm=${encodeURIComponent(term)}`);
       if (!response.ok) {
         const errorData = await response.json();
@@ -60,14 +65,20 @@ export default function AnalyzePage() {
       setRepositories(data.repositories || []);
       setCurrentPage(data.currentPage || 1);
       setTotalPages(data.totalPages || 1);
+      setTotalMatchingDbRepos(data.totalMatchingDbRepos || 0);
+      setLastKnownTotalGitHubRepos(data.totalUserGitHubRepos !== undefined ? data.totalUserGitHubRepos : null);
+      setLastGitHubRepoCountSync(data.lastGitHubRepoCountSync ? new Date(data.lastGitHubRepoCountSync) : null);
 
-      if (sync) toast({ title: "Repositories Synced", description: `Fetched your most recently updated repositories from GitHub. Displaying page ${data.currentPage || 1} ${term ? `for search "${term}"` : ''}.` });
+
+      if (sync) toast({ title: "Repositories Synced", description: `Fetched your most recently updated repositories from GitHub. Displaying page ${data.currentPage || 1} ${term ? `for search "${term}"` : ''}. ${data.totalUserGitHubRepos !== undefined ? `You have ~${data.totalUserGitHubRepos} total repos on GitHub.` : ''}` });
       
     } catch (err: any) {
       setError(err.message);
       setRepositories([]);
       setCurrentPage(1);
       setTotalPages(1);
+      setTotalMatchingDbRepos(0);
+      // Don't clear lastKnownTotalGitHubRepos on error, keep stale data if available
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       if (sync) setIsSyncing(false);
@@ -79,40 +90,36 @@ export default function AnalyzePage() {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
     } else if (status === 'authenticated') {
-      // Fetch initially or when debouncedSearchTerm changes, resetting page to 1 for new search
       fetchRepositories(1, debouncedSearchTerm);
     }
   }, [status, router, debouncedSearchTerm, fetchRepositories]);
 
-  // Effect for page changes (but not for initial load or search term changes, handled above)
   useEffect(() => {
     if (status === 'authenticated' && !loading && !isSyncing && currentPage > 1) {
-       // Only fetch if it's not the initial load and page actually changed due to pagination click
-       // The check `debouncedSearchTerm` here ensures we don't re-fetch if page is 1 due to search term change
-       // This might need refinement if currentPage is reset to 1 by search AND then immediately another effect runs.
-       // The primary fetch is now driven by debouncedSearchTerm, or direct pagination.
-       if (currentPage !== 1 || !debouncedSearchTerm) { // Avoid double fetch if search term reset page to 1
+       if (currentPage !== 1 || !debouncedSearchTerm) { 
+         // This effect triggers pagination when currentPage is changed by user clicks.
+         // It does not run for initial load (handled by debouncedSearchTerm effect)
+         // or if search term reset page to 1 (also handled by debouncedSearchTerm effect).
          fetchRepositories(currentPage, debouncedSearchTerm);
        }
     }
-  }, [currentPage]); // Only re-run if currentPage changes manually
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]); // Only re-run if currentPage changes MANUALLY (not due to searchTerm change)
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    if (currentPage !== 1) setCurrentPage(1); // Reset to page 1 when search term changes
+    if (currentPage !== 1) setCurrentPage(1); 
   };
 
   const handleSync = () => {
-    // When syncing, always fetch with current debouncedSearchTerm, resetting page to 1
-    // The API will handle the sync and then filter by the term for the first page.
-    setCurrentPage(1);
+    setCurrentPage(1); // Sync always fetches from page 1 perspective
     fetchRepositories(1, debouncedSearchTerm, true);
   };
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage && !loading && !isSyncing) {
       setCurrentPage(newPage);
-      // fetchRepositories(newPage, debouncedSearchTerm); // Now handled by useEffect on currentPage
+      // fetchRepositories will be called by the useEffect hook watching `currentPage`
     }
   };
 
@@ -133,9 +140,16 @@ export default function AnalyzePage() {
                       <GitPullRequest className="h-7 w-7 sm:h-8 sm:w-8 text-primary mr-2" />
                       Analyze Repository Pull Requests
                     </CardTitle>
-                    <CardDescription>
-                      Select a synced repository to view its pull requests. Then, you can initiate AI-powered code analysis on individual PRs.
-                      Use "Sync Repositories" to update this list with your most recently active GitHub repositories.
+                     <CardDescription className="mt-1">
+                        Select a repository to view its pull requests. 
+                        {totalMatchingDbRepos > 0 && ` Showing ${totalMatchingDbRepos} synced ${totalMatchingDbRepos === 1 ? 'repository' : 'repositories'}${debouncedSearchTerm ? ` matching "${debouncedSearchTerm}"` : ''}.`}
+                        {lastKnownTotalGitHubRepos !== null && (
+                            <>
+                            {' '}You have approximately {lastKnownTotalGitHubRepos} total repositories on GitHub
+                            {lastGitHubRepoCountSync && ` (last checked: ${formatDistanceToNow(lastGitHubRepoCountSync, { addSuffix: true })}).`}
+                            </>
+                        )}
+                        {' '}Use "Sync Repositories" to update this list and fetch the latest count from GitHub.
                     </CardDescription>
                 </div>
                 <Button
@@ -192,49 +206,56 @@ export default function AnalyzePage() {
                 </Button>}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {repositories.map(repo => (
-                  <Card key={repo._id} className="hover:shadow-xl transition-all duration-300 ease-in-out flex flex-col bg-card">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <Github className="h-5 w-5 text-primary flex-shrink-0" />
-                            <CardTitle className="text-lg md:text-xl font-semibold truncate hover:text-primary transition-colors">
-                                <Link href={`/analyze/${repo.owner}/${repo.name}`} title={repo.fullName}>
-                                    {repo.fullName}
-                                </Link>
-                            </CardTitle>
+              <>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Showing {repositories.length > 0 ? `${((currentPage - 1) * ITEMS_PER_PAGE) + 1}-${Math.min(currentPage * ITEMS_PER_PAGE, totalMatchingDbRepos)} of ` : ''}
+                  {totalMatchingDbRepos} synced repositor{totalMatchingDbRepos === 1 ? 'y' : 'ies'}
+                  {debouncedSearchTerm && ` matching "${debouncedSearchTerm}"`}.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {repositories.map(repo => (
+                    <Card key={repo._id} className="hover:shadow-xl transition-all duration-300 ease-in-out flex flex-col bg-card">
+                        <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <Github className="h-5 w-5 text-primary flex-shrink-0" />
+                                <CardTitle className="text-lg md:text-xl font-semibold truncate hover:text-primary transition-colors">
+                                    <Link href={`/analyze/${repo.owner}/${repo.name}`} title={repo.fullName}>
+                                        {repo.fullName}
+                                    </Link>
+                                </CardTitle>
+                            </div>
+                            <Badge variant={repo.isPrivate ? "default" : "secondary"} className={`text-xs ${repo.isPrivate ? 'bg-foreground text-background' : ''}`}>
+                                {repo.isPrivate ? <Lock className="mr-1 h-3 w-3" /> : <Unlock className="mr-1 h-3 w-3" />}
+                                {repo.isPrivate ? 'Private' : 'Public'}
+                            </Badge>
                         </div>
-                        <Badge variant={repo.isPrivate ? "default" : "secondary"} className={`text-xs ${repo.isPrivate ? 'bg-foreground text-background' : ''}`}>
-                            {repo.isPrivate ? <Lock className="mr-1 h-3 w-3" /> : <Unlock className="mr-1 h-3 w-3" />}
-                            {repo.isPrivate ? 'Private' : 'Public'}
-                        </Badge>
-                      </div>
-                      <CardDescription className="text-xs text-muted-foreground">
-                        Last updated: {new Date(repo.updatedAt).toLocaleDateString()}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-sm text-muted-foreground flex-grow">
-                      {repo.language && (
+                        <CardDescription className="text-xs text-muted-foreground">
+                            Last updated: {new Date(repo.updatedAt).toLocaleDateString()}
+                        </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm text-muted-foreground flex-grow">
+                        {repo.language && (
+                            <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded-full bg-accent"></div> {/* Placeholder for language color dot */}
+                            <span>{repo.language}</span>
+                            </div>
+                        )}
                         <div className="flex items-center gap-1.5">
-                          <div className="w-3 h-3 rounded-full bg-accent"></div> {/* Placeholder for language color dot */}
-                          <span>{repo.language}</span>
+                            <Star className="h-4 w-4 text-yellow-500" /> <span>{repo.stars} Stars</span>
                         </div>
-                      )}
-                      <div className="flex items-center gap-1.5">
-                        <Star className="h-4 w-4 text-yellow-500" /> <span>{repo.stars} Stars</span>
-                      </div>
-                    </CardContent>
-                    <CardFooter className="pt-3 border-t">
-                      <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                        <Link href={`/analyze/${repo.owner}/${repo.name}`}>
-                          <Eye className="mr-2 h-4 w-4" /> View Pull Requests
-                        </Link>
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
+                        </CardContent>
+                        <CardFooter className="pt-3 border-t">
+                        <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                            <Link href={`/analyze/${repo.owner}/${repo.name}`}>
+                            <Eye className="mr-2 h-4 w-4" /> View Pull Requests
+                            </Link>
+                        </Button>
+                        </CardFooter>
+                    </Card>
+                    ))}
+                </div>
+              </>
             )}
             
             {totalPages > 1 && repositories.length > 0 && (
