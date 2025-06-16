@@ -110,16 +110,17 @@ export default function RepositoryAnalysisPage() {
         throw new Error(result.details || result.error || 'Failed to start analysis');
       }
       
-      toast({ title: "Analysis Complete", description: `Analysis for PR #${pullNumber} is complete. Redirecting...` });
+      toast({ title: "Analysis Complete", description: `Analysis for PR #${pullNumber} is complete. View details or redirecting...` });
       setPullRequests(prevPRs => 
         prevPRs.map(pr => pr.number === pullNumber ? { 
             ...pr, 
             analysisStatus: 'analyzed', 
-            analysisId: result.analysis._id, 
-            qualityScore: result.analysis.qualityScore 
+            analysisId: result.analysis?._id, 
+            qualityScore: result.analysis?.qualityScore 
         } : pr)
       );
-      router.push(`/analyze/${owner}/${repoName}/${pullNumber}/${result.analysis._id}`);
+      // Optional: Automatically redirect to the analysis page
+      // router.push(`/analyze/${owner}/${repoName}/${pullNumber}/${result.analysis._id}`);
     } catch (err: any) {
       setError(err.message); 
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });

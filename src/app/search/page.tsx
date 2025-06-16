@@ -113,7 +113,7 @@ export default function SemanticSearchPage() {
                 id="search-query-input"
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
-                placeholder="e.g., function to handle user authentication with JWT\n\nOr paste a code snippet..."
+                placeholder="e.g., 'How to securely handle file uploads in Node.js to prevent path traversal.'\nOr paste a code snippet:\n\nfunction example(arr) {\n  for (let i = 0; i <= arr.length; i++) { // off-by-one error\n    console.log(arr[i]);\n  }\n}"
                 rows={8}
                 className="font-mono text-sm bg-background shadow-inner focus:ring-primary/50"
               />

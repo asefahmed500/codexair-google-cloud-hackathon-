@@ -191,7 +191,6 @@ export async function POST(request: NextRequest) {
               });
               
               let extractedEmbedding: number[] | undefined = undefined;
-              // Handle case where response is an array with the embedding object inside
               if (Array.isArray(embedApiResponse) &&
                   embedApiResponse.length > 0 &&
                   embedApiResponse[0] &&
@@ -206,7 +205,6 @@ export async function POST(request: NextRequest) {
                       extractedEmbedding = potentialEmbedding;
                   }
               } 
-              // Handle case where response is the embedding object directly
               else if (embedApiResponse && typeof embedApiResponse === 'object' && Object.prototype.hasOwnProperty.call(embedApiResponse, 'embedding')) {
                   const potentialEmbedding = (embedApiResponse as any).embedding;
                   if (Array.isArray(potentialEmbedding) &&
@@ -287,7 +285,7 @@ export async function POST(request: NextRequest) {
     }
 
     const finalAnalysisData = {
-      pullRequestId: pullRequestIdForCatch, 
+      pullRequestId: new mongoose.Types.ObjectId(pullRequestIdForCatch), // Ensure this is an ObjectId
       qualityScore: aggregatedQualityScore,
       complexity: aggregatedComplexity,
       maintainability: aggregatedMaintainability,
@@ -344,12 +342,12 @@ export async function POST(request: NextRequest) {
         }
     }
     
-    console.log(`[API/ANALYZE] Final analysis data before saving Analysis doc (snippet):`, JSON.stringify(finalAnalysisData, (key, value) => key === 'vectorEmbedding' ? `[${value?.length || 0} numbers]` : value, 2).substring(0, 1000) + "...");
+    console.log(`[API/ANALYZE] Final analysis data before saving Analysis doc (summary: "${finalAnalysisData.aiInsights.substring(0,50)}..."):`, Object.keys(finalAnalysisData));
     const analysisDoc = new Analysis(finalAnalysisData);
     await analysisDoc.save();
     console.log(`[API/ANALYZE] SUCCESSFULLY Saved new Analysis document ID: ${analysisDoc._id} for PR ${savedPR._id}`);
 
-    savedPR.analysis = analysisDoc._id;
+    savedPR.analysis = analysisDoc._id; // This should be ObjectId
     savedPR.analysisStatus = 'analyzed';
     savedPR.qualityScore = aggregatedQualityScore;
     await savedPR.save();
@@ -365,7 +363,7 @@ export async function POST(request: NextRequest) {
       console.error('[API/ANALYZE] Full error object (non-Error instance):', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     }
 
-    if (pullRequestIdForCatch) { 
+    if (pullRequestIdForCatch && mongoose.Types.ObjectId.isValid(pullRequestIdForCatch)) { 
         try {
             await PullRequest.updateOne(
               { _id: new mongoose.Types.ObjectId(pullRequestIdForCatch) },
@@ -375,6 +373,8 @@ export async function POST(request: NextRequest) {
         } catch (dbError: any) {
             console.error(`[API/ANALYZE] Failed to update PR ${pullRequestIdForCatch} status to 'failed' in DB:`, dbError.message);
         }
+    } else {
+        console.warn(`[API/ANALYZE] pullRequestIdForCatch ('${pullRequestIdForCatch}') was not a valid ObjectId. Cannot update PR status to 'failed'.`);
     }
     
     let errorMessage = 'Internal server error during analysis';
