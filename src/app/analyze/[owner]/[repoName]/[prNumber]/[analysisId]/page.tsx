@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { CodeAnalysis, PullRequest as PRType, SecurityIssue, Suggestion, FileAnalysisItem, SimilarCodeResult } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, GitBranch, CalendarDays, User } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import Navbar from '@/components/layout/navbar'; 
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
 const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated for this pull request.";
@@ -415,19 +415,37 @@ export default function AnalysisDetailsPage() {
                     <Card key={idx} className="bg-muted/30">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-base">
-                            <Link 
-                                href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`} 
-                                className="text-primary hover:underline"
-                                target="_blank" rel="noopener noreferrer"
-                                title={`View Analysis: ${result.prTitle}`}
-                                >
-                                PR #{result.prNumber}: {result.prTitle}
-                            </Link>
+                            {result.searchResultType === 'pr_analysis' && result.prNumber && result.analysisId ? (
+                                <Link 
+                                    href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`} 
+                                    className="text-primary hover:underline"
+                                    target="_blank" rel="noopener noreferrer"
+                                    title={`View PR Analysis: ${result.prTitle || 'PR Analysis'}`}
+                                    >
+                                    PR #{result.prNumber}: {result.prTitle || 'Untitled PR'}
+                                </Link>
+                            ) : result.searchResultType === 'repo_scan' && result.analysisId ? (
+                                <Link 
+                                    href={`/analyze/${result.owner}/${result.repoName}/scan/${result.analysisId}`} 
+                                    className="text-primary hover:underline"
+                                    target="_blank" rel="noopener noreferrer"
+                                    title={`View Repository Scan: ${result.scanBranch || 'Repo Scan'}`}
+                                    >
+                                    Repo Scan: {result.repoName} ({result.scanBranch || 'default'})
+                                </Link>
+                            ) : (
+                                'Analysis Result'
+                            )}
                         </CardTitle>
                         <CardDescription className="text-xs">
                           Found in <code className="bg-background px-1 py-0.5 rounded text-xs">{result.filename}</code> (repo: {result.owner}/{result.repoName})
                           <br/>
-                          By: {result.prAuthorLogin || 'N/A'} on {result.prCreatedAt ? format(new Date(result.prCreatedAt), 'MMM d, yyyy') : 'N/A'}
+                           {result.searchResultType === 'pr_analysis' && result.prAuthorLogin && (
+                             <span>By: {result.prAuthorLogin} on {result.prCreatedAt ? format(new Date(result.prCreatedAt), 'MMM d, yyyy') : 'N/A'} (PR)</span>
+                           )}
+                           {result.searchResultType === 'repo_scan' && result.scanCreatedAt && (
+                             <span>Scanned on: {format(new Date(result.scanCreatedAt), 'MMM d, yyyy')} (Repo Scan)</span>
+                           )}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>

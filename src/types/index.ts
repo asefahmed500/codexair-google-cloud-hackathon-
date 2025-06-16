@@ -196,16 +196,22 @@ export interface DashboardData {
 }
 
 export interface SimilarCodeResult {
-  analysisId: string; 
+  analysisId: string; // Can be PR Analysis ID or Repo Scan ID
   owner: string; 
   repoName: string; 
-  prNumber: number; 
-  prTitle: string; 
-  prAuthorLogin: string; 
-  prCreatedAt: Date; 
   filename: string; 
   aiInsights: string; 
   score: number; 
+  searchResultType: 'pr_analysis' | 'repo_scan'; // Discriminator
+  // PR-specific fields (optional)
+  prNumber?: number; 
+  prTitle?: string; 
+  prAuthorLogin?: string; 
+  prCreatedAt?: Date; 
+  // Scan-specific fields (optional)
+  scanBranch?: string;
+  scanCommitSha?: string;
+  scanCreatedAt?: Date;
 }
 
 export interface AdminUserView {
@@ -252,3 +258,4 @@ export interface ContactMessage {
   isRead: boolean;
   createdAt: Date;
 }
+

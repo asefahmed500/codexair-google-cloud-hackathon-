@@ -71,19 +71,25 @@ export default function RepositoryScanDetailsPage() {
 
   // Semantic search handler (can be adapted from PR analysis page if needed, for now placeholder)
   const handleFindSimilarCode = async (queryFilename: string, contextTitle: string, type: 'security' | 'suggestion') => {
-    if (!scanId) return; 
-    toast({title: "Semantic Search Info", description: "Semantic search from full repository scans is contextually different and will be refined. Currently uses PR analysis context.", variant: "default"})
+    // For repository scans, the concept of `queryAnalysisId` needs careful handling if we want to exclude the current scan.
+    // The existing `/api/search/similar-code` expects a `queryAnalysisId` that corresponds to a PR analysis.
+    // We might need a new endpoint or adapt the existing one if we want to find items similar to a file from *this specific repo scan*.
+    // For now, this will use the generic text search functionality.
+    toast({title: "Contextual Search Hint", description: "Contextual similar code search from repository scans is best initiated by copying the relevant code/description to the main Semantic Search page.", variant: "default"})
 
     setIsSearchingSimilarCode(true);
     setSearchError(null);
     setSimilarCodeResults([]);
     setCurrentSearchContext({ type, title: contextTitle, filename: queryFilename});
 
+    // Construct a query based on the context.
+    const queryText = `Code similar to ${type === 'security' ? 'security issue' : 'suggestion'} "${contextTitle}" found in file ${queryFilename}`;
+
     try {
-      const response = await fetch('/api/search/similar-code', {
+      const response = await fetch('/api/search/semantic-text-search', { // Using general text search
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ queryAnalysisId: scanData?.repositoryId, queryFilename }), // Using repositoryId might be wrong
+        body: JSON.stringify({ queryText: queryText }),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -190,7 +196,7 @@ export default function RepositoryScanDetailsPage() {
                  <Alert variant="default" className="w-full border-primary/30 bg-primary/5">
                     <Info className="h-5 w-5 text-primary" />
                     <AlertBoxTitle className="text-md font-semibold text-primary">Full Repository Scan Information</AlertBoxTitle>
-                    <AlertBoxDescription className="text-sm text-primary-foreground/80">
+                    <AlertBoxDescription className="text-sm text-primary"> {/* Changed text color for better visibility */}
                         This is a full repository scan of the default branch (<code className="bg-primary/10 px-1 rounded text-xs">{scanData.branchAnalyzed}</code>).
                         For this version, AI analysis was performed on a limited number of source files (up to 5) to ensure timely results.
                         This analysis is not tied to a specific Pull Request.
@@ -254,8 +260,7 @@ export default function RepositoryScanDetailsPage() {
                                 <pre className="text-xs font-code whitespace-pre-wrap">{issue.suggestion}</pre>
                             </ScrollArea>
                             {issue.cwe && <p className="text-sm mt-2"><strong className="text-foreground">CWE:</strong> <Badge variant="outline">{issue.cwe}</Badge></p>}
-                            {/* Semantic Search from here might be less effective without `queryAnalysisId` specific to PR */}
-                            {/* <DialogTrigger asChild>
+                            <DialogTrigger asChild>
                               <Button variant="link" size="sm" className="p-0 h-auto text-xs mt-2 text-primary hover:underline"
                                 onClick={() => handleFindSimilarCode(issue.file, issue.title, 'security')}
                                 disabled={isSearchingSimilarCode && currentSearchContext?.filename === issue.file && currentSearchContext?.title === issue.title}
@@ -265,7 +270,7 @@ export default function RepositoryScanDetailsPage() {
                                   <><Search className="mr-1 h-3 w-3" />Find similar past issues</>
                                 }
                               </Button>
-                            </DialogTrigger> */}
+                            </DialogTrigger>
                           </AccordionContent>
                         </AccordionItem>
                       ))}
@@ -304,7 +309,17 @@ export default function RepositoryScanDetailsPage() {
                                 </ScrollArea>
                               </>
                             )}
-                            {/* Semantic Search trigger can be added here as well, with same caveat as above */}
+                            <DialogTrigger asChild>
+                              <Button variant="link" size="sm" className="p-0 h-auto text-xs mt-2 text-primary hover:underline"
+                                onClick={() => handleFindSimilarCode(suggestion.file, suggestion.title, 'suggestion')}
+                                disabled={isSearchingSimilarCode && currentSearchContext?.filename === suggestion.file && currentSearchContext?.title === suggestion.title}
+                              >
+                                {isSearchingSimilarCode && currentSearchContext?.filename === suggestion.file && currentSearchContext?.title === suggestion.title ? 
+                                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> : 
+                                  <><Search className="mr-1 h-3 w-3" />Find similar past patterns</>
+                                }
+                              </Button>
+                            </DialogTrigger>
                           </AccordionContent>
                         </AccordionItem>
                       ))}
@@ -386,8 +401,6 @@ export default function RepositoryScanDetailsPage() {
             </TabsContent>
           </Tabs>
           
-          {/* Semantic Search Dialog - can be enabled once backend is adapted for repo scans */}
-          {/* 
           <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Similar Code Found: <span className="text-primary">{currentSearchContext?.title || "Selected Issue"}</span> ({currentSearchContext?.filename})</DialogTitle>
@@ -395,26 +408,77 @@ export default function RepositoryScanDetailsPage() {
                 Showing code snippets from past analyses that are semantically similar to the context of <span className="font-semibold">"{currentSearchContext?.title || "the selected issue/suggestion"}"</span> from file <code className="bg-muted px-1 py-0.5 rounded text-xs">{currentSearchContext?.filename}</code>.
               </DialogDescription>
             </DialogHeader>
-             {isSearchingSimilarCode && <div className="flex items-center justify-center py-10"><RefreshCw className="h-6 w-6 animate-spin text-primary" /> <span className="ml-2">Searching...</span></div>}
+            {isSearchingSimilarCode && 
+                <div className="flex items-center justify-center py-10">
+                    <RefreshCw className="h-6 w-6 animate-spin text-primary" /> 
+                    <span className="ml-2">Searching for similar patterns...</span>
+                </div>
+            }
             {searchError && <p className="text-destructive text-center py-4">Error: {searchError}</p>}
             {!isSearchingSimilarCode && !searchError && similarCodeResults.length === 0 && (
-              <div className="text-center py-10 text-muted-foreground"><Info className="mx-auto h-8 w-8 mb-2" />No significantly similar code snippets found.</div>
+              <div className="text-center py-10 text-muted-foreground">
+                <Info className="mx-auto h-8 w-8 mb-2" />
+                No significantly similar code snippets found in recent analyses.
+              </div>
             )}
             {!isSearchingSimilarCode && !searchError && similarCodeResults.length > 0 && (
               <ScrollArea className="max-h-[60vh] mt-4 pr-2">
-                 <div className="space-y-4">
+                <div className="space-y-4">
                   {similarCodeResults.map((result, idx) => (
                     <Card key={idx} className="bg-muted/30">
-                      <CardHeader className="pb-2"><CardTitle className="text-base"><Link href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer" title={`View Analysis: ${result.prTitle}`}>PR #{result.prNumber}: {result.prTitle}</Link></CardTitle><CardDescription className="text-xs">Found in <code className="bg-background px-1 py-0.5 rounded text-xs">{result.filename}</code> (repo: {result.owner}/{result.repoName})<br/>By: {result.prAuthorLogin || 'N/A'} on {result.prCreatedAt ? format(new Date(result.prCreatedAt), 'MMM d, yyyy') : 'N/A'}</CardDescription></CardHeader>
-                      <CardContent><p className="text-xs text-muted-foreground mb-1">Similarity Score: <Badge variant="secondary">{(result.score * 100).toFixed(1)}%</Badge></p><p className="text-sm font-semibold text-foreground">AI Insights for this file (from past analysis):</p><ScrollArea className="max-h-28 w-full rounded-md border bg-background p-2 shadow-inner"><pre className="text-xs whitespace-pre-wrap text-muted-foreground font-mono">{result.aiInsights || "No specific AI insight for this file."}</pre></ScrollArea></CardContent>
+                      <CardHeader className="pb-2">
+                         <CardTitle className="text-base">
+                            {result.searchResultType === 'pr_analysis' && result.prNumber && result.analysisId ? (
+                                <Link 
+                                    href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`} 
+                                    className="text-primary hover:underline"
+                                    target="_blank" rel="noopener noreferrer"
+                                    title={`View PR Analysis: ${result.prTitle || 'PR Analysis'}`}
+                                    >
+                                    PR #{result.prNumber}: {result.prTitle || 'Untitled PR'}
+                                </Link>
+                            ) : result.searchResultType === 'repo_scan' && result.analysisId ? (
+                                <Link 
+                                    href={`/analyze/${result.owner}/${result.repoName}/scan/${result.analysisId}`} 
+                                    className="text-primary hover:underline"
+                                    target="_blank" rel="noopener noreferrer"
+                                    title={`View Repository Scan: ${result.scanBranch || 'Repo Scan'}`}
+                                    >
+                                    Repo Scan: {result.repoName} ({result.scanBranch || 'default'})
+                                </Link>
+                            ) : (
+                                'Analysis Result'
+                            )}
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          Found in <code className="bg-background px-1 py-0.5 rounded text-xs">{result.filename}</code> (repo: {result.owner}/{result.repoName})
+                          <br/>
+                           {result.searchResultType === 'pr_analysis' && result.prAuthorLogin && (
+                             <span>By: {result.prAuthorLogin} on {result.prCreatedAt ? format(new Date(result.prCreatedAt), 'MMM d, yyyy') : 'N/A'} (PR)</span>
+                           )}
+                           {result.searchResultType === 'repo_scan' && result.scanCreatedAt && (
+                             <span>Scanned on: {format(new Date(result.scanCreatedAt), 'MMM d, yyyy')} (Repo Scan)</span>
+                           )}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-xs text-muted-foreground mb-1">Similarity Score: <Badge variant="secondary">{(result.score * 100).toFixed(1)}%</Badge></p>
+                        <p className="text-sm font-semibold text-foreground">AI Insights for this file (from past analysis):</p>
+                        <ScrollArea className="max-h-28 w-full rounded-md border bg-background p-2 shadow-inner">
+                            <pre className="text-xs whitespace-pre-wrap text-muted-foreground font-mono">{result.aiInsights || "No specific AI insight for this file."}</pre>
+                        </ScrollArea>
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
               </ScrollArea>
             )}
-            <DialogFooter className="mt-4"><DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose></DialogFooter>
+            <DialogFooter className="mt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Close</Button>
+              </DialogClose>
+            </DialogFooter>
           </DialogContent>
-           */}
         </Dialog>
 
 
@@ -503,3 +567,4 @@ function ScanDetailsLoadingSkeleton({owner, repoName}: {owner: string, repoName:
     </div>
   );
 }
+

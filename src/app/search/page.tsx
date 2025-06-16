@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { SearchCode, RefreshCw, AlertTriangle, Brain, Lightbulb, Github, User, CalendarDays } from 'lucide-react';
+import { SearchCode, RefreshCw, AlertTriangle, Brain, Lightbulb, Github, User, CalendarDays, GitBranch } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import type { SimilarCodeResult } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -101,7 +101,7 @@ export default function SemanticSearchPage() {
               Semantic Code Search
             </CardTitle>
             <CardDescription>
-              Find similar code patterns or issues across your analyzed pull requests. Paste a code snippet or describe a problem.
+              Find similar code patterns or issues across your analyzed pull requests and repository scans. Paste a code snippet or describe a problem.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -150,11 +150,21 @@ export default function SemanticSearchPage() {
                 <Card key={`${result.analysisId}-${result.filename}`} className="bg-card shadow-md hover:shadow-lg transition-shadow">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg font-semibold truncate hover:text-primary transition-colors">
-                       <Link href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`}
-                             title={`View Analysis: ${result.prTitle}`}
-                             target="_blank" rel="noopener noreferrer">
-                         PR #{result.prNumber}: {result.prTitle}
-                       </Link>
+                       {result.searchResultType === 'pr_analysis' && result.prNumber && result.analysisId ? (
+                         <Link href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`}
+                               title={`View Analysis: ${result.prTitle || 'PR Analysis'}`}
+                               target="_blank" rel="noopener noreferrer">
+                           PR #{result.prNumber}: {result.prTitle || 'Untitled PR'}
+                         </Link>
+                       ) : result.searchResultType === 'repo_scan' && result.analysisId ? (
+                         <Link href={`/analyze/${result.owner}/${result.repoName}/scan/${result.analysisId}`}
+                               title={`View Repository Scan: ${result.scanBranch || 'Repo Scan'}`}
+                               target="_blank" rel="noopener noreferrer">
+                           Repo Scan: {result.repoName} ({result.scanBranch || 'default'})
+                         </Link>
+                       ) : (
+                         'Analysis Result'
+                       )}
                     </CardTitle>
                     <CardDescription className="text-xs text-muted-foreground">
                         In <code className="bg-muted px-1 py-0.5 rounded text-xs">{result.filename}</code>
@@ -162,12 +172,25 @@ export default function SemanticSearchPage() {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1" title={`Author: ${result.prAuthorLogin || 'N/A'}`}>
-                            <User className="h-3.5 w-3.5"/> {result.prAuthorLogin || 'N/A'}
-                        </span>
-                        <span className="flex items-center gap-1" title={`PR Created: ${result.prCreatedAt ? format(new Date(result.prCreatedAt), "PP") : 'N/A'}`}>
-                             <CalendarDays className="h-3.5 w-3.5"/> {result.prCreatedAt ? formatDistanceToNow(new Date(result.prCreatedAt), { addSuffix: true }) : 'N/A'}
-                        </span>
+                        {result.searchResultType === 'pr_analysis' ? (
+                            <>
+                                <span className="flex items-center gap-1" title={`Author: ${result.prAuthorLogin || 'N/A'}`}>
+                                    <User className="h-3.5 w-3.5"/> {result.prAuthorLogin || 'N/A'}
+                                </span>
+                                <span className="flex items-center gap-1" title={`PR Created: ${result.prCreatedAt ? format(new Date(result.prCreatedAt), "PP") : 'N/A'}`}>
+                                     <CalendarDays className="h-3.5 w-3.5"/> {result.prCreatedAt ? formatDistanceToNow(new Date(result.prCreatedAt), { addSuffix: true }) : 'N/A'}
+                                </span>
+                            </>
+                        ) : result.searchResultType === 'repo_scan' ? (
+                            <>
+                                <span className="flex items-center gap-1" title={`Branch: ${result.scanBranch}`}>
+                                    <GitBranch className="h-3.5 w-3.5"/> {result.scanBranch}
+                                </span>
+                                <span className="flex items-center gap-1" title={`Scan Date: ${result.scanCreatedAt ? format(new Date(result.scanCreatedAt), "PP") : 'N/A'}`}>
+                                     <CalendarDays className="h-3.5 w-3.5"/> {result.scanCreatedAt ? formatDistanceToNow(new Date(result.scanCreatedAt), { addSuffix: true }) : 'N/A'}
+                                </span>
+                            </>
+                        ) : null}
                     </div>
                     <div className="mt-2">
                         <p className="text-sm font-medium text-foreground mb-1">AI Insight for this file:</p>
@@ -179,9 +202,15 @@ export default function SemanticSearchPage() {
                   <CardFooter className="pt-3 border-t flex justify-between items-center">
                      <Badge variant="secondary">Similarity: {(result.score * 100).toFixed(1)}%</Badge>
                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`} target="_blank" rel="noopener noreferrer">
-                            <Lightbulb className="mr-1.5 h-4 w-4" /> View Full Analysis
-                        </Link>
+                        {result.searchResultType === 'pr_analysis' && result.prNumber && result.analysisId ? (
+                            <Link href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`} target="_blank" rel="noopener noreferrer">
+                                <Lightbulb className="mr-1.5 h-4 w-4" /> View PR Analysis
+                            </Link>
+                        ) : result.searchResultType === 'repo_scan' && result.analysisId ? (
+                             <Link href={`/analyze/${result.owner}/${result.repoName}/scan/${result.analysisId}`} target="_blank" rel="noopener noreferrer">
+                                <Lightbulb className="mr-1.5 h-4 w-4" /> View Repo Scan
+                            </Link>
+                        ) : (<span className="opacity-50">No Link</span>) }
                      </Button>
                   </CardFooter>
                 </Card>
@@ -195,9 +224,9 @@ export default function SemanticSearchPage() {
                     <SearchCode className="mx-auto h-12 w-12 text-muted-foreground mb-3" />
                     <p className="text-lg font-medium text-foreground">No Results Found</p>
                     <p className="text-sm text-muted-foreground">
-                        Your search for "<span className="italic">{queryText.substring(0,50)}{queryText.length > 50 ? '...' : ''}</span>" did not match any similar code patterns.
+                        Your search for "<span className="italic">{queryText.substring(0,50)}{queryText.length > 50 ? '...' : ''}</span>" did not match any similar code patterns from PRs or repository scans.
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">Try refining your query or using a different code snippet.</p>
+                    <p className="text-xs text-muted-foreground mt-2">Ensure analyses have been run and try refining your query.</p>
                 </CardContent>
             </Card>
         )}
@@ -210,3 +239,4 @@ export default function SemanticSearchPage() {
     </div>
   );
 }
+
