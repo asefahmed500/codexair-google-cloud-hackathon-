@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       console.error('[API/ANALYZE] Unauthorized: No session user ID.');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    currentSessionUser = session.user.id; // Set for context in catch block
+    currentSessionUser = session.user.id; 
     console.log(`[API/ANALYZE] Authenticated user: ${session.user.id}`);
 
     await connectMongoose();
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
                   const potentialEmbedding = (embedApiResponse[0] as any).embedding;
                   if (Array.isArray(potentialEmbedding) &&
                       potentialEmbedding.length > 0 && 
-                      potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
+                      potentialEmbedding.every((n: any) => typeof n === 'number' && isFinite(n))) {
                       extractedEmbedding = potentialEmbedding;
                   }
               } 
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
                   const potentialEmbedding = (embedApiResponse as any).embedding;
                   if (Array.isArray(potentialEmbedding) &&
                       potentialEmbedding.length > 0 &&
-                      potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
+                      potentialEmbedding.every((n: any) => typeof n === 'number' && isFinite(n))) {
                       extractedEmbedding = potentialEmbedding;
                   }
               }
@@ -285,7 +285,7 @@ export async function POST(request: NextRequest) {
     }
 
     const finalAnalysisData = {
-      pullRequestId: new mongoose.Types.ObjectId(pullRequestIdForCatch), // Ensure this is an ObjectId
+      pullRequestId: new mongoose.Types.ObjectId(pullRequestIdForCatch), 
       qualityScore: aggregatedQualityScore,
       complexity: aggregatedComplexity,
       maintainability: aggregatedMaintainability,
@@ -347,7 +347,7 @@ export async function POST(request: NextRequest) {
     await analysisDoc.save();
     console.log(`[API/ANALYZE] SUCCESSFULLY Saved new Analysis document ID: ${analysisDoc._id} for PR ${savedPR._id}`);
 
-    savedPR.analysis = analysisDoc._id; // This should be ObjectId
+    savedPR.analysis = analysisDoc._id; 
     savedPR.analysisStatus = 'analyzed';
     savedPR.qualityScore = aggregatedQualityScore;
     await savedPR.save();

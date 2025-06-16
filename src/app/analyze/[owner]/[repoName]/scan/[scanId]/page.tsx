@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import Navbar from '@/components/layout/navbar';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertTitle as AlertBoxTitle, AlertDescription as AlertBoxDescription } from "@/components/ui/alert";
 
@@ -69,7 +69,7 @@ export default function RepositoryScanDetailsPage() {
   }, [status, router, scanId]);
 
   const handleFindSimilarCode = async (queryFilename: string, contextTitle: string, type: 'security' | 'suggestion') => {
-    if (!scanId) return; // scanId is the analysisId for this scan
+    if (!scanId) return; 
     setIsSearchingSimilarCode(true);
     setSearchError(null);
     setSimilarCodeResults([]);
@@ -80,9 +80,9 @@ export default function RepositoryScanDetailsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          queryAnalysisId: scanId, // The ID of the current RepositoryScan document
+          queryAnalysisId: scanId, 
           queryFilename,
-          sourceType: 'repo_scan' // Specify that the source is a repository scan
+          sourceType: 'repo_scan' 
         }),
       });
       if (!response.ok) {
@@ -561,4 +561,3 @@ function ScanDetailsLoadingSkeleton({owner, repoName}: {owner: string, repoName:
     </div>
   );
 }
-

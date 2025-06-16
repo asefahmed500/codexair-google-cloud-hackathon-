@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid input', details: validationResult.error.flatten().fieldErrors }, { status: 400 });
     }
 
-    const { queryAnalysisId, queryFilename, sourceType = 'pr_analysis' } = validationResult.data; // Default to pr_analysis if not provided
+    const { queryAnalysisId, queryFilename, sourceType = 'pr_analysis' } = validationResult.data; 
 
     let sourceDocument: (CodeAnalysis | RepositoryScanResult) | null = null;
 
@@ -62,17 +62,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Vector embedding for ${queryFilename} has incorrect dimensions (${sourceFileAnalysis.vectorEmbedding.length} instead of 768).` }, { status: 400 });
     }
 
-    // Default similarity threshold for contextual searches is higher
     const SIMILARITY_THRESHOLD_CONTEXTUAL = 0.75;
     
     console.log(`[API/similar-code] Performing findSimilarCode. queryAnalysisId (for exclusion): ${queryAnalysisId}, queryFilename: ${queryFilename}, threshold: ${SIMILARITY_THRESHOLD_CONTEXTUAL}`);
 
     const similarCodeResults: SimilarCodeResult[] = await findSimilarCode(
       sourceFileAnalysis.vectorEmbedding,
-      5, // limit
-      SIMILARITY_THRESHOLD_CONTEXTUAL, // similarityThreshold
-      queryAnalysisId, // excludeAnalysisOrScanId (the ID of the document itself)
-      queryFilename    // excludeFilename
+      5, 
+      SIMILARITY_THRESHOLD_CONTEXTUAL, 
+      queryAnalysisId, 
+      queryFilename    
     );
     
     console.log(`[API/similar-code] Found ${similarCodeResults.length} similar code results.`);

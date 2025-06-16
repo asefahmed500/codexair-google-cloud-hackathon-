@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
 
 
         let fileEmbeddingVector: number[] | undefined = undefined;
-        if (contentToAnalyze && contentToAnalyze.trim() !== "") {
+        if (contentToAnalyze && contentToAnalyze.trim() !== "") { 
           try {
             console.log(`[API/RepoScan] Generating embedding for ${fileMeta.path!}...`);
             const embedApiResponse = await ai.embed({
@@ -172,7 +172,6 @@ export async function POST(request: NextRequest) {
             });
             
             let extractedEmbedding: number[] | undefined = undefined;
-            // Handle case where response is an array with the embedding object inside
             if (Array.isArray(embedApiResponse) &&
                 embedApiResponse.length > 0 &&
                 embedApiResponse[0] &&
@@ -183,16 +182,15 @@ export async function POST(request: NextRequest) {
                 const potentialEmbedding = (embedApiResponse[0] as any).embedding;
                 if (Array.isArray(potentialEmbedding) &&
                     potentialEmbedding.length > 0 && 
-                    potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
+                    potentialEmbedding.every((n: any) => typeof n === 'number' && isFinite(n))) {
                     extractedEmbedding = potentialEmbedding;
                 }
             } 
-            // Handle case where response is the embedding object directly
             else if (embedApiResponse && typeof embedApiResponse === 'object' && Object.prototype.hasOwnProperty.call(embedApiResponse, 'embedding')) {
                 const potentialEmbedding = (embedApiResponse as any).embedding;
                 if (Array.isArray(potentialEmbedding) &&
                     potentialEmbedding.length > 0 &&
-                    potentialEmbedding.every(n => typeof n === 'number' && isFinite(n))) {
+                    potentialEmbedding.every((n: any) => typeof n === 'number' && isFinite(n))) {
                     extractedEmbedding = potentialEmbedding;
                 }
             }
@@ -331,5 +329,4 @@ export async function POST(request: NextRequest) {
     }, { status: statusCode });
   }
 }
-
     

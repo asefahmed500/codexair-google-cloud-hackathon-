@@ -56,8 +56,8 @@ export async function findSimilarCode(
         index: "idx_file_embeddings",
         path: "fileAnalyses.vectorEmbedding", 
         queryVector: queryVector,
-        numCandidates: limit * 20, // Fetch more candidates to sort/filter later
-        limit: limit * 10, // Higher internal limit for vector search itself
+        numCandidates: limit * 20, 
+        limit: limit * 10, 
       }
     },
     { $addFields: { searchScore: { $meta: "vectorSearchScore" } } },
@@ -85,7 +85,7 @@ export async function findSimilarCode(
         as: "prDetails"
       }
     },
-    { $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false } }, // Ensure PR details exist
+    { $unwind: { path: "$prDetails", preserveNullAndEmptyArrays: false } }, 
     {
       $project: {
         _id: 0, 
@@ -99,7 +99,7 @@ export async function findSimilarCode(
         filename: "$fileAnalyses.filename",
         aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 250 ] }, 
         score: "$searchScore",
-        searchResultType: "pr_analysis" as const, // Type assertion
+        searchResultType: "pr_analysis" as const, 
         scanBranch: null, 
         scanCommitSha: null, 
         scanCreatedAt: null, 
@@ -144,7 +144,7 @@ export async function findSimilarCode(
         filename: "$fileAnalyses.filename",
         aiInsights: { $substrCP: [ "$fileAnalyses.aiInsights", 0, 250 ] },
         score: "$searchScore",
-        searchResultType: "repo_scan" as const, // Type assertion
+        searchResultType: "repo_scan" as const, 
         scanBranch: "$branchAnalyzed",
         scanCommitSha: "$commitShaAnalyzed",
         scanCreatedAt: "$createdAt",
@@ -172,7 +172,6 @@ export async function findSimilarCode(
       ...(scanResults as SimilarCodeResult[])
     ];
 
-    // Sort by score descending and then limit
     const sortedAndLimitedResults = combinedResults
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
@@ -184,9 +183,14 @@ export async function findSimilarCode(
     }
     return sortedAndLimitedResults;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("[findSimilarCode] Error during Atlas Vector Search aggregation (separate queries):", error);
-    console.warn("[findSimilarCode] Atlas Vector Search failed. Check indices 'idx_file_embeddings' on 'analyses' AND 'idx_repo_scan_file_embeddings' on 'repositoryscans'. Path: 'fileAnalyses.vectorEmbedding', 768 dims, cosine.");
+    // Do not log the BSON error as a generic "check indices" warning if it's specifically BSON.
+    if (error.name === 'MongoServerError' && error.code === 40600 && error.message?.includes('$vectorSearch is not allowed to be used within a $facet stage')) {
+        console.error("[findSimilarCode] CRITICAL: $vectorSearch within $facet is not allowed. This code should not be reachable if the $facet logic was removed.");
+    } else if (error.name !== 'BSONVersionError' && error.codeName !== 'Location40600' ) { // Avoid redundant BSON warning if already caught
+        console.warn("[findSimilarCode] Atlas Vector Search failed. Check indices 'idx_file_embeddings' on 'analyses' AND 'idx_repo_scan_file_embeddings' on 'repositoryscans'. Path: 'fileAnalyses.vectorEmbedding', 768 dims, cosine.");
+    }
     return [];
   }
 }
@@ -239,4 +243,3 @@ export async function findTextSearchResults(queryText: string, limit = 10): Prom
   console.warn("findTextSearchResults is a placeholder. To implement Atlas Full-Text Search, define a Search Index in Atlas.");
   return [];
 }
-

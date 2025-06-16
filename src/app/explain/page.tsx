@@ -38,7 +38,6 @@ export default function ExplainCodePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
@@ -68,7 +67,7 @@ export default function ExplainCodePage() {
       </div>
     );
   }
-  if (status === 'unauthenticated') return null; // Already handled by useEffect, but good for safety
+  if (status === 'unauthenticated') return null; 
 
   const handleSubmit = async () => {
     if (!code.trim()) {
