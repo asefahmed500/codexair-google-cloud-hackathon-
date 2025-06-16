@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import Navbar from '@/components/layout/navbar'; 
+import Navbar from '@/components/layout/navbar';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertTitle as AlertBoxTitle, AlertDescription as AlertBoxDescription } from "@/components/ui/alert";
@@ -37,7 +37,6 @@ export default function RepositoryScanDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // State for semantic search (similar to PR analysis page)
   const [similarCodeResults, setSimilarCodeResults] = useState<SimilarCodeResult[]>([]);
   const [isSearchingSimilarCode, setIsSearchingSimilarCode] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -69,27 +68,22 @@ export default function RepositoryScanDetailsPage() {
     }
   }, [status, router, scanId]);
 
-  // Semantic search handler (can be adapted from PR analysis page if needed, for now placeholder)
   const handleFindSimilarCode = async (queryFilename: string, contextTitle: string, type: 'security' | 'suggestion') => {
-    // For repository scans, the concept of `queryAnalysisId` needs careful handling if we want to exclude the current scan.
-    // The existing `/api/search/similar-code` expects a `queryAnalysisId` that corresponds to a PR analysis.
-    // We might need a new endpoint or adapt the existing one if we want to find items similar to a file from *this specific repo scan*.
-    // For now, this will use the generic text search functionality.
-    toast({title: "Contextual Search Hint", description: "Contextual similar code search from repository scans is best initiated by copying the relevant code/description to the main Semantic Search page.", variant: "default"})
-
+    if (!scanId) return; // scanId is the analysisId for this scan
     setIsSearchingSimilarCode(true);
     setSearchError(null);
     setSimilarCodeResults([]);
     setCurrentSearchContext({ type, title: contextTitle, filename: queryFilename});
 
-    // Construct a query based on the context.
-    const queryText = `Code similar to ${type === 'security' ? 'security issue' : 'suggestion'} "${contextTitle}" found in file ${queryFilename}`;
-
     try {
-      const response = await fetch('/api/search/semantic-text-search', { // Using general text search
+      const response = await fetch('/api/search/similar-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ queryText: queryText }),
+        body: JSON.stringify({
+          queryAnalysisId: scanId, // The ID of the current RepositoryScan document
+          queryFilename,
+          sourceType: 'repo_scan' // Specify that the source is a repository scan
+        }),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -131,7 +125,7 @@ export default function RepositoryScanDetailsPage() {
       </div>
     );
   }
-  
+
   const displayAiInsights = scanData.summaryAiInsights && scanData.summaryAiInsights !== FALLBACK_SUMMARY_MESSAGE && scanData.summaryAiInsights.trim() !== ""
                             ? scanData.summaryAiInsights
                             : "AI summary for this repository scan is not available or could not be generated.";
@@ -139,13 +133,13 @@ export default function RepositoryScanDetailsPage() {
   const getSeverityBadgeVariant = (severity: SecurityIssue['severity']) => {
     switch (severity) {
       case 'critical': return 'destructive';
-      case 'high': return 'destructive'; 
-      case 'medium': return 'default'; 
+      case 'high': return 'destructive';
+      case 'medium': return 'default';
       case 'low': return 'secondary';
       default: return 'outline';
     }
   };
-  
+
   const getPriorityBadgeVariant = (priority: Suggestion['priority']) => {
     switch (priority) {
       case 'high': return 'destructive';
@@ -159,8 +153,8 @@ export default function RepositoryScanDetailsPage() {
           case 'bug': case 'vulnerability': return 'destructive';
           case 'performance': case 'optimization': return 'default';
           case 'style': case 'code_smell': return 'secondary';
-          case 'feature': return 'outline'; 
-          case 'warning': case 'info': return 'secondary'; 
+          case 'feature': return 'outline';
+          case 'warning': case 'info': return 'secondary';
           default: return 'outline';
       }
   };
@@ -168,7 +162,7 @@ export default function RepositoryScanDetailsPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <Navbar /> 
+      <Navbar />
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex justify-between items-center">
              <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>Back to {owner}/{repoName}</Button>
@@ -196,7 +190,7 @@ export default function RepositoryScanDetailsPage() {
                  <Alert variant="default" className="w-full border-primary/30 bg-primary/5">
                     <Info className="h-5 w-5 text-primary" />
                     <AlertBoxTitle className="text-md font-semibold text-primary">Full Repository Scan Information</AlertBoxTitle>
-                    <AlertBoxDescription className="text-sm text-primary"> {/* Changed text color for better visibility */}
+                    <AlertBoxDescription className="text-sm text-primary">
                         This is a full repository scan of the default branch (<code className="bg-primary/10 px-1 rounded text-xs">{scanData.branchAnalyzed}</code>).
                         For this version, AI analysis was performed on a limited number of source files (up to 5) to ensure timely results.
                         This analysis is not tied to a specific Pull Request.
@@ -265,8 +259,8 @@ export default function RepositoryScanDetailsPage() {
                                 onClick={() => handleFindSimilarCode(issue.file, issue.title, 'security')}
                                 disabled={isSearchingSimilarCode && currentSearchContext?.filename === issue.file && currentSearchContext?.title === issue.title}
                               >
-                                {isSearchingSimilarCode && currentSearchContext?.filename === issue.file && currentSearchContext?.title === issue.title ? 
-                                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> : 
+                                {isSearchingSimilarCode && currentSearchContext?.filename === issue.file && currentSearchContext?.title === issue.title ?
+                                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> :
                                   <><Search className="mr-1 h-3 w-3" />Find similar past issues</>
                                 }
                               </Button>
@@ -314,8 +308,8 @@ export default function RepositoryScanDetailsPage() {
                                 onClick={() => handleFindSimilarCode(suggestion.file, suggestion.title, 'suggestion')}
                                 disabled={isSearchingSimilarCode && currentSearchContext?.filename === suggestion.file && currentSearchContext?.title === suggestion.title}
                               >
-                                {isSearchingSimilarCode && currentSearchContext?.filename === suggestion.file && currentSearchContext?.title === suggestion.title ? 
-                                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> : 
+                                {isSearchingSimilarCode && currentSearchContext?.filename === suggestion.file && currentSearchContext?.title === suggestion.title ?
+                                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" />Searching...</> :
                                   <><Search className="mr-1 h-3 w-3" />Find similar past patterns</>
                                 }
                               </Button>
@@ -343,7 +337,7 @@ export default function RepositoryScanDetailsPage() {
                                   <Code2 className="h-4 w-4 text-muted-foreground" />
                                   <span className="font-medium text-left">{file.filename}</span>
                                </div>
-                              <Badge variant={file.qualityScore >= 7 ? "default" : file.qualityScore >=4 ? "outline" : "destructive"} 
+                              <Badge variant={file.qualityScore >= 7 ? "default" : file.qualityScore >=4 ? "outline" : "destructive"}
                                      className={file.qualityScore >= 7 ? 'bg-green-100 text-green-700 border-green-300' : file.qualityScore >=4 ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-red-100 text-red-700 border-red-300'}>
                                   QS: {file.qualityScore.toFixed(1)}
                               </Badge>
@@ -400,7 +394,7 @@ export default function RepositoryScanDetailsPage() {
               </Card>
             </TabsContent>
           </Tabs>
-          
+
           <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Similar Code Found: <span className="text-primary">{currentSearchContext?.title || "Selected Issue"}</span> ({currentSearchContext?.filename})</DialogTitle>
@@ -408,9 +402,9 @@ export default function RepositoryScanDetailsPage() {
                 Showing code snippets from past analyses that are semantically similar to the context of <span className="font-semibold">"{currentSearchContext?.title || "the selected issue/suggestion"}"</span> from file <code className="bg-muted px-1 py-0.5 rounded text-xs">{currentSearchContext?.filename}</code>.
               </DialogDescription>
             </DialogHeader>
-            {isSearchingSimilarCode && 
+            {isSearchingSimilarCode &&
                 <div className="flex items-center justify-center py-10">
-                    <RefreshCw className="h-6 w-6 animate-spin text-primary" /> 
+                    <RefreshCw className="h-6 w-6 animate-spin text-primary" />
                     <span className="ml-2">Searching for similar patterns...</span>
                 </div>
             }
@@ -429,8 +423,8 @@ export default function RepositoryScanDetailsPage() {
                       <CardHeader className="pb-2">
                          <CardTitle className="text-base">
                             {result.searchResultType === 'pr_analysis' && result.prNumber && result.analysisId ? (
-                                <Link 
-                                    href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`} 
+                                <Link
+                                    href={`/analyze/${result.owner}/${result.repoName}/${result.prNumber}/${result.analysisId}`}
                                     className="text-primary hover:underline"
                                     target="_blank" rel="noopener noreferrer"
                                     title={`View PR Analysis: ${result.prTitle || 'PR Analysis'}`}
@@ -438,8 +432,8 @@ export default function RepositoryScanDetailsPage() {
                                     PR #{result.prNumber}: {result.prTitle || 'Untitled PR'}
                                 </Link>
                             ) : result.searchResultType === 'repo_scan' && result.analysisId ? (
-                                <Link 
-                                    href={`/analyze/${result.owner}/${result.repoName}/scan/${result.analysisId}`} 
+                                <Link
+                                    href={`/analyze/${result.owner}/${result.repoName}/scan/${result.analysisId}`}
                                     className="text-primary hover:underline"
                                     target="_blank" rel="noopener noreferrer"
                                     title={`View Repository Scan: ${result.scanBranch || 'Repo Scan'}`}
@@ -513,25 +507,25 @@ function MetricCard({ Icon, title, value, unit }: MetricCardProps) {
 function ScanDetailsLoadingSkeleton({owner, repoName}: {owner: string, repoName: string}) {
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
-      <Navbar /> 
+      <Navbar />
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex justify-between items-center">
-            <Skeleton className="h-10 w-48" /> 
+            <Skeleton className="h-10 w-48" />
         </div>
         <Card className="mb-6 shadow-lg">
             <CardHeader>
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
                     <div>
-                        <Skeleton className="h-9 w-3/4 mb-2" /> 
-                        <Skeleton className="h-5 w-1/2" /> 
+                        <Skeleton className="h-9 w-3/4 mb-2" />
+                        <Skeleton className="h-5 w-1/2" />
                     </div>
-                    <Skeleton className="h-10 w-32" /> 
+                    <Skeleton className="h-10 w-32" />
                 </div>
             </CardHeader>
             <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-muted/30">
                 <Skeleton className="h-16 w-full mb-2" /> {/* Alert box placeholder */}
-                <Skeleton className="h-6 w-1/4 mb-2" /> 
-                <Skeleton className="h-24 w-full rounded-md border p-4" /> 
+                <Skeleton className="h-6 w-1/4 mb-2" />
+                <Skeleton className="h-24 w-full rounded-md border p-4" />
             </CardFooter>
         </Card>
         <div className="w-full">
@@ -542,16 +536,16 @@ function ScanDetailsLoadingSkeleton({owner, repoName}: {owner: string, repoName:
               <Skeleton className="h-full w-full rounded-sm" />
             </div>
             <Card>
-                <CardHeader><Skeleton className="h-7 w-1/2" /></CardHeader> 
+                <CardHeader><Skeleton className="h-7 w-1/2" /></CardHeader>
                 <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[...Array(6)].map((_, i) => (
                         <Card key={i} className="shadow-sm">
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <Skeleton className="h-5 w-2/3" /> 
-                                <Skeleton className="h-5 w-5" /> 
+                                <Skeleton className="h-5 w-2/3" />
+                                <Skeleton className="h-5 w-5" />
                             </CardHeader>
                             <CardContent>
-                                <Skeleton className="h-8 w-1/2" /> 
+                                <Skeleton className="h-8 w-1/2" />
                             </CardContent>
                         </Card>
                     ))}
