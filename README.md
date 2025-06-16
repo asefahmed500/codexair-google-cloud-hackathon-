@@ -118,7 +118,7 @@ Follow these steps to run codexair locally:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone <repository-url>
+    git clone  https://github.com/asefahmed500/codexair-google-cloud-hackathon-.git
     cd codexair
     ```
 
