@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { RepositoryScanResult, SecurityIssue, Suggestion, FileAnalysisItem, SimilarCodeResult } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, ScanSearch } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, ScanSearch, GitBranch, CalendarDays } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -561,3 +561,4 @@ function ScanDetailsLoadingSkeleton({owner, repoName}: {owner: string, repoName:
     </div>
   );
 }
+

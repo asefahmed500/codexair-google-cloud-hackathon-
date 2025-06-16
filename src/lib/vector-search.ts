@@ -243,3 +243,4 @@ export async function findTextSearchResults(queryText: string, limit = 10): Prom
   console.warn("findTextSearchResults is a placeholder. To implement Atlas Full-Text Search, define a Search Index in Atlas.");
   return [];
 }
+

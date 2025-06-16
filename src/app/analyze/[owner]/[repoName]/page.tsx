@@ -111,6 +111,7 @@ export default function RepositoryAnalysisPage() {
       }
       
       toast({ title: "Analysis Complete", description: `Analysis for PR #${pullNumber} is complete. View details or redirecting...` });
+      // Explicitly update the PR in local state with analysis results
       setPullRequests(prevPRs => 
         prevPRs.map(pr => 
           pr.number === pullNumber ? { 
@@ -121,6 +122,8 @@ export default function RepositoryAnalysisPage() {
           } : pr
         )
       );
+      // Optionally, redirect to the analysis details page
+      // router.push(`/analyze/${owner}/${repoName}/${pullNumber}/${result.analysis._id}`);
     } catch (err: any) {
       setError(err.message); 
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
@@ -391,3 +394,4 @@ function SkeletonPRRow() {
     </div>
   )
 }
+
