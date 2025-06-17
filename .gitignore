@@ -1,76 +1,88 @@
 
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Dependencies
+# dependencies
 /node_modules
 /.pnp
 .pnp.js
+.yarn/install-state.gz
 
-# Testing
+# testing
 /coverage
 
-# Next.js build output
+# next.js
 /.next/
 /out/
 
-# Production build
+# production
 /build
 
-# Environment variables
-.env
-.env*.local
-.env.development.local
-.env.test.local
-.env.production.local
+# misc
+.DS_Store
+*.pem
 
-# API keys and secrets
-# Add any other files that may contain secrets, for example:
-# serviceAccountKey.json
-# *.pem
-
-# Log files
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-*.log
-logs
-*.log.*.[0-9].gz
 
-# Editor directories and files
-.idea
-.vscode/*
-!.vscode/settings.json
-!.vscode/extensions.json
-*.sublime-project
+# local env files
+.env
+.env*.local
+
+# IDX specific files
+/.idx/
+.firebase/
+
+# Editor-specific files
+.vscode/
+*.code-workspace
+.idea/
+*.project
 *.sublime-workspace
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
 
-# System files
-.DS_Store
-Thumbs.db
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Firebase emulators
+firebase-debug.log
+*.log
+database-debug.log
+firestore-debug.log
+pubsub-debug.log
+storage-debug.log
+ui-debug.log
 
 # Firebase
-.firebase
-firebase-debug.log
-firebase-debug.*.log
+*.firebase
+*.firebaserc
+firebase.json
 
-# Genkit
-.genkit/cache
+# Mac files
+.AppleDouble
+.LSOverride
 
-# Miscellaneous
-*.tsbuildinfo
-.eslintcache
-dist
-dist-ssr
-temp
-tmp
-*.zip
-*.tar.gz
-*.tgz
-*.rar
-*.patch
-patch-package.json.orig
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created by macOS Spotlight and/or other macOS processes
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk

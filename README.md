@@ -36,15 +36,15 @@
     *   *Dashboard updates after each PR or full repository analysis is completed and the user navigates to or refreshes the dashboard.*
 
 4.  **Repository Management & Sync (`/analyze`):**
-    *   List synced GitHub repositories with server-side pagination and search.
+    *   List synced GitHub repositories with server-side pagination and search. Displays total open PRs for each repository.
     *   Search synced repositories by name, full name, or primary language.
-    *   Sync repositories from GitHub (fetches most recently updated, up to ~300, and updates local DB). Displays total open PRs for a repository.
+    *   Sync repositories from GitHub (fetches most recently updated, up to ~300, and updates local DB).
 
 5.  **Semantic Code Search (AI-Powered) (`/search` & Contextual):**
     *   **AI-Powered Querying:** User's natural language query or code snippet is converted into a vector embedding by an AI model (`text-embedding-004`).
-    *   **AI-Powered Data Indexing:** During PR and full repository analysis, code files are also converted into vector embeddings.
+    *   **AI-Powered Data Indexing:** During PR and full repository analysis, code files are also converted into vector embeddings by the same AI model. These embeddings are stored.
     *   **Vector Search:** MongoDB Atlas Vector Search compares the query embedding against stored file embeddings to find semantically similar code.
-    *   **General Search Page (`/search`):** "**Search with AI**" for free-form semantic search across all indexed PR analyses and repository scans.
+    *   **General Search Page (`/search`):** "**Run Semantic Search**" for free-form semantic search across all indexed PR analyses and repository scans.
     *   **Contextual Search:** From PR analysis or repository scan pages, click "**Find similar past issues/patterns**" to find semantically similar occurrences related to a specific issue or suggestion.
 
 6.  **Pull Request Comparison Tool (`/analyze/[owner]/[repo]/compare/[pr1]/vs/[pr2]`):**
@@ -139,7 +139,7 @@ GEMINI_API_KEY=your_google_ai_api_key # Or GOOGLE_API_KEY
 
 1.  Clone the repository:
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/asefahmed500/codexair-google-cloud-hackathon-.git
     cd codexair
     ```
 2.  Install dependencies:
@@ -197,4 +197,3 @@ Contributions are welcome! Please follow standard Git workflow (fork, branch, PR
 ## 📄 License
 
 This project is licensed under the MIT License.
-```
