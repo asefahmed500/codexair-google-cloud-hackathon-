@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { RecentAnalysisItem } from "@/types";
-import { Eye, GitPullRequest, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { Eye, GitPullRequest, ShieldAlert, CheckCircle2, ScanSearch, GitBranch, Hash } from "lucide-react"; // Added ScanSearch, GitBranch
 import { formatDistanceToNow } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 
@@ -18,8 +18,8 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
   return (
     <Card className="shadow-lg h-full flex flex-col">
       <CardHeader>
-        <CardTitle className="text-2xl font-semibold font-headline">Recent Analyses</CardTitle>
-        <CardDescription>Quick overview of the latest code reviews performed.</CardDescription>
+        <CardTitle className="text-2xl font-semibold font-headline">Recent Activity</CardTitle>
+        <CardDescription>Quick overview of the latest code analyses (PRs & Repository Scans).</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow">
         {reviews.length === 0 ? (
@@ -34,39 +34,51 @@ export default function RecentReviews({ reviews }: RecentReviewsProps) {
           <ScrollArea className="h-[350px] pr-3">
             <div className="space-y-4">
               {reviews.map((review) => {
-                // review.id is analysisId
-                // review.owner is the repository owner login
-                // review.repo is the repository name (short name)
-                // review.prNumber is the pull request number
-                const canLink = review.owner && review.owner !== 'N/A' &&
-                                review.repo && review.repo !== 'N/A' &&
-                                review.prNumber && review.id;
+                const isPrAnalysis = review.type === 'pr';
+                let title: string;
+                let linkHref: string | null = null;
+                let repoContext: string;
 
-                const displayTitle = review.pullRequestTitle || `PR #${review.prNumber || 'N/A'}`;
-                const displayRepoName = review.repositoryName && review.repositoryName !== 'N/A'
-                                      ? `in ${review.repositoryName}`
-                                      : (review.prNumber ? `PR #${review.prNumber}` : 'N/A');
-
+                if (isPrAnalysis) {
+                  title = review.pullRequestTitle || `PR #${review.prNumber || 'N/A'}`;
+                  repoContext = review.repositoryName && review.repositoryName !== 'N/A'
+                                ? `in ${review.repositoryName}`
+                                : (review.prNumber ? `PR #${review.prNumber}` : 'N/A');
+                  if (review.owner && review.owner !== 'N/A' && review.repo && review.repo !== 'N/A' && review.prNumber && review.id) {
+                    linkHref = `/analyze/${review.owner}/${review.repo}/${review.prNumber}/${review.id}`;
+                  }
+                } else { // Repo Scan
+                  title = `Scan: ${review.repositoryName}`;
+                  repoContext = review.branchAnalyzed ? `Branch: ${review.branchAnalyzed}` : `Commit: ${review.commitShaAnalyzed || 'N/A'}`;
+                  if (review.owner && review.owner !== 'N/A' && review.repo && review.repo !== 'N/A' && review.id) {
+                    linkHref = `/analyze/${review.owner}/${review.repo}/scan/${review.id}`;
+                  }
+                }
+                
                 return (
                   <div key={review.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-semibold text-md text-foreground truncate max-w-[200px] sm:max-w-xs" title={displayTitle}>
-                          {canLink ? (
-                             <Link href={`/analyze/${review.owner}/${review.repo}/${review.prNumber}/${review.id}`} className="hover:underline">
-                               {displayTitle}
+                        <h3 className="font-semibold text-md text-foreground truncate max-w-[200px] sm:max-w-xs" title={title}>
+                          {linkHref ? (
+                             <Link href={linkHref} className="hover:underline flex items-center gap-1.5">
+                               {isPrAnalysis ? <GitPullRequest className="h-4 w-4 text-primary" /> : <ScanSearch className="h-4 w-4 text-primary" />}
+                               {title}
                              </Link>
                           ) : (
-                            displayTitle
+                            <span className="flex items-center gap-1.5">
+                              {isPrAnalysis ? <GitPullRequest className="h-4 w-4" /> : <ScanSearch className="h-4 w-4" />}
+                              {title}
+                            </span>
                           )}
                         </h3>
-                        <p className="text-xs text-muted-foreground">
-                          {displayRepoName}
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {repoContext}
                         </p>
                       </div>
-                      {canLink && (
+                      {linkHref && (
                         <Button asChild variant="ghost" size="sm">
-                          <Link href={`/analyze/${review.owner}/${review.repo}/${review.prNumber}/${review.id}`}>
+                          <Link href={linkHref}>
                             <Eye className="mr-1.5 h-4 w-4" /> View
                           </Link>
                         </Button>

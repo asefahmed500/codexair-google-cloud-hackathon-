@@ -2,8 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { Analysis, PullRequest, Repository, connectMongoose } from '@/lib/mongodb'; // Added Repository
-import type { DashboardData, RecentAnalysisItem, QualityTrendItem, DashboardOverview, TopIssueItem, SecurityIssue, Suggestion, SecurityHotspotItem, TeamMemberMetric, FileAnalysisItem, PullRequest as PRType, CodeAnalysis as AnalysisDocType, Repository as RepoType, ConnectedRepositoryItem } from '@/types';
+import { Analysis, PullRequest, Repository, RepositoryScan, connectMongoose } from '@/lib/mongodb'; 
+import type { DashboardData, RecentAnalysisItem, QualityTrendItem, DashboardOverview, TopIssueItem, SecurityIssue, Suggestion, SecurityHotspotItem, TeamMemberMetric, FileAnalysisItem, PullRequest as PRType, CodeAnalysis as AnalysisDocType, Repository as RepoType, ConnectedRepositoryItem, RepositoryScanResult } from '@/types';
 import mongoose from 'mongoose';
 
 
@@ -13,9 +13,28 @@ const MAX_TEAM_MEMBERS = 10;
 const MAX_CONNECTED_REPOS_ON_DASHBOARD = 5;
 const MAX_RECENT_ANALYSES = 5;
 
+interface GenericAnalyzedItem {
+    _id: mongoose.Types.ObjectId;
+    qualityScore?: number | null;
+    securityIssues?: SecurityIssue[];
+    suggestions?: Suggestion[];
+    fileAnalyses?: FileAnalysisItem[];
+    createdAt: Date;
+    // For PR Analysis
+    pullRequestId?: (PRType & {repositoryId: RepoType | string | null}) | null;
+    // For Repo Scan
+    owner?: string;
+    repoName?: string;
+    branchAnalyzed?: string;
+    commitShaAnalyzed?: string;
+    // Common discriminant
+    analysisType: 'pr' | 'repo_scan';
+}
+
+
 function getTopItems(
-  analyses: any[],
-  itemSelector: (analysis: any) => (SecurityIssue[] | Suggestion[]),
+  analyzedItems: GenericAnalyzedItem[],
+  itemSelector: (item: GenericAnalyzedItem) => (SecurityIssue[] | Suggestion[] | undefined),
   titleExtractor: (item: SecurityIssue | Suggestion) => string,
   severityExtractor?: (item: SecurityIssue) => SecurityIssue['severity'],
   priorityExtractor?: (item: Suggestion) => Suggestion['priority'],
@@ -23,15 +42,14 @@ function getTopItems(
 ): TopIssueItem[] {
   const itemCounts: Record<string, TopIssueItem> = {};
 
-  analyses.forEach(analysisDoc => { // Renamed analysis to analysisDoc for clarity
-    if (!analysisDoc) return;
-    const items = itemSelector(analysisDoc) || [];
+  analyzedItems.forEach(analyzedDoc => {
+    if (!analyzedDoc) return;
+    const items = itemSelector(analyzedDoc) || [];
     items.forEach((item: SecurityIssue | Suggestion) => {
       if (!item || !item.title) return;
       const title = titleExtractor(item);
       if (!itemCounts[title]) {
         itemCounts[title] = { title, count: 0 };
-        // Ensure correct type casting for accessing specific properties
         if (severityExtractor && 'severity' in item && (item as SecurityIssue).severity) {
             itemCounts[title].severity = severityExtractor(item as SecurityIssue);
         }
@@ -63,53 +81,51 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id;
     const isAdmin = session.user.role === 'admin';
 
-    let relevantAnalysesQuery: mongoose.FilterQuery<AnalysisDocType> = {};
-    if (isAdmin) {
-      // Admins see all analyses
-    } else {
-      // Users see analyses linked to their PRs
+    let allAnalyzedItems: GenericAnalyzedItem[] = [];
+
+    // Fetch PR Analyses (Analysis documents)
+    let prAnalysesQuery: mongoose.FilterQuery<AnalysisDocType> = {};
+    if (!isAdmin) {
       const userPullRequestObjects = await PullRequest.find({ userId }).select('_id').lean();
       const userPullRequestIds = userPullRequestObjects.map(pr => pr._id);
-      if (userPullRequestIds.length === 0 && !isAdmin) { // Handle no PRs for user early
-         const userRepos = await Repository.find({ userId })
-          .sort({ updatedAt: -1 })
-          .limit(MAX_CONNECTED_REPOS_ON_DASHBOARD)
-          .lean();
-        const connectedRepositories = userRepos.map(repo => ({
-          _id: repo._id.toString(),
-          fullName: repo.fullName,
-          language: repo.language,
-          owner: repo.owner,
-          name: repo.name,
-          updatedAt: repo.updatedAt,
-        }));
-        const emptyDashboardData: DashboardData = {
-            overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
-            recentAnalyses: [],
-            qualityTrends: [],
-            topSecurityIssues: [],
-            topSuggestions: [],
-            securityHotspots: [],
-            teamMetrics: [],
-            connectedRepositories,
-        };
-        return NextResponse.json(emptyDashboardData, {
-          headers: {
-            'Cache-Control': 'no-store, max-age=0, must-revalidate',
-          },
-        });
+      if (userPullRequestIds.length > 0) {
+        prAnalysesQuery = { pullRequestId: { $in: userPullRequestIds } };
+      } else {
+        prAnalysesQuery = { _id: new mongoose.Types.ObjectId() }; // Empty query if no PRs
       }
-      relevantAnalysesQuery = { pullRequestId: { $in: userPullRequestIds } };
     }
-
-    const relevantAnalyses = await Analysis.find(relevantAnalysesQuery)
+    const prAnalysisDocs = await Analysis.find(prAnalysesQuery)
       .populate<{ pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null }>({
         path: 'pullRequestId',
-        select: 'title repositoryId number author createdAt owner repoName state', // Added owner, repoName from PR doc
-        populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' } // Keep this for full repo details if available
+        select: 'title repositoryId number author createdAt owner repoName state',
+        populate: { path: 'repositoryId', model: 'Repository', select: 'name fullName owner' }
       })
-      .sort({ createdAt: -1 }) // Sort by analysis creation date, descending
+      .sort({ createdAt: -1 })
       .lean() as (AnalysisDocType & { pullRequestId: (PRType & {repositoryId: RepoType | string | null}) | null })[];
+
+    prAnalysisDocs.forEach(doc => {
+        if (doc.pullRequestId) { // Ensure PR exists for this analysis
+            allAnalyzedItems.push({ ...doc, analysisType: 'pr' });
+        }
+    });
+
+    // Fetch Repository Scans
+    let repoScansQuery: mongoose.FilterQuery<RepositoryScanResult> = {};
+    if (!isAdmin) {
+      repoScansQuery = { userId: userId };
+    }
+    const repoScanDocs = await RepositoryScan.find(repoScansQuery)
+      .populate<{ repositoryId: RepoType | null }>({ path: 'repositoryId', model: 'Repository', select: 'name fullName owner' })
+      .sort({ createdAt: -1 })
+      .lean() as (RepositoryScanResult & { repositoryId: RepoType | null })[];
+      
+    repoScanDocs.forEach(doc => {
+        allAnalyzedItems.push({ ...doc, analysisType: 'repo_scan' });
+    });
+    
+    // Sort all items together by creation date for consistent recent items and trends
+    allAnalyzedItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
 
     let connectedRepositories: ConnectedRepositoryItem[] = [];
     if (!isAdmin) {
@@ -127,8 +143,8 @@ export async function GET(request: NextRequest) {
       }));
     }
     
-    if (relevantAnalyses.length === 0 && !isAdmin) {
-        const emptyDashboardDataWithRepos: DashboardData = {
+    if (allAnalyzedItems.length === 0 && !isAdmin && connectedRepositories.length === 0) {
+        const emptyDashboardData: DashboardData = {
             overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
             recentAnalyses: [],
             qualityTrends: [],
@@ -138,74 +154,87 @@ export async function GET(request: NextRequest) {
             teamMetrics: [],
             connectedRepositories,
         };
-        return NextResponse.json(emptyDashboardDataWithRepos, {
-           headers: {
+        return NextResponse.json(emptyDashboardData, {
+          headers: {
             'Cache-Control': 'no-store, max-age=0, must-revalidate',
           },
         });
     }
 
-
-    const totalAnalyses = relevantAnalyses.length;
-
+    const totalAnalyses = allAnalyzedItems.length;
     const avgQualityScore = totalAnalyses > 0
-      ? relevantAnalyses.reduce((sum, a) => sum + (a?.qualityScore || 0), 0) / totalAnalyses
+      ? allAnalyzedItems.reduce((sum, a) => sum + (a?.qualityScore || 0), 0) / totalAnalyses
       : 0;
 
-    const securityIssuesCount = relevantAnalyses.reduce((sum, a) => {
-        if (!a) return sum;
-        const criticalHigh = (a.securityIssues || []).filter(si => si.severity === 'critical' || si.severity === 'high');
+    const securityIssuesCount = allAnalyzedItems.reduce((sum, a) => {
+        if (!a || !a.securityIssues) return sum;
+        const criticalHigh = (a.securityIssues).filter(si => si.severity === 'critical' || si.severity === 'high');
         return sum + criticalHigh.length;
     }, 0);
 
-    const recentAnalysesDocs = relevantAnalyses.slice(0, MAX_RECENT_ANALYSES);
+    const recentCombinedAnalysesDocs = allAnalyzedItems.slice(0, MAX_RECENT_ANALYSES);
+    const recentAnalyses: RecentAnalysisItem[] = recentCombinedAnalysesDocs.map((item) => {
+      if (item.analysisType === 'pr' && item.pullRequestId) {
+        const pr = item.pullRequestId;
+        let repoFullNameDisplay = 'N/A';
+        let ownerDisplay = 'N/A';
+        let actualRepoName = 'N/A';
 
-    const recentAnalyses: RecentAnalysisItem[] = recentAnalysesDocs.map((analysisDoc) => { // Renamed analysis to analysisDoc
-      if (!analysisDoc || !analysisDoc.pullRequestId) return null;
-
-      const pr = analysisDoc.pullRequestId;
-      let repoFullNameDisplay = 'N/A';
-      let ownerDisplay = 'N/A';
-      let actualRepoName = 'N/A';
-
-      if (pr.repositoryId && typeof pr.repositoryId === 'object' && pr.repositoryId.fullName) {
-        const repoObj = pr.repositoryId as RepoType;
-        repoFullNameDisplay = repoObj.fullName;
-        ownerDisplay = repoObj.owner || pr.owner || 'N/A'; // Fallback to PR's owner
-        actualRepoName = repoObj.name || pr.repoName || 'N/A'; // Fallback to PR's repoName
-      } else if (pr.owner && pr.repoName) { // Fallback if repositoryId not populated fully
-        repoFullNameDisplay = `${pr.owner}/${pr.repoName}`;
-        ownerDisplay = pr.owner;
-        actualRepoName = pr.repoName;
+        if (pr.repositoryId && typeof pr.repositoryId === 'object' && pr.repositoryId.fullName) {
+          const repoObj = pr.repositoryId as RepoType;
+          repoFullNameDisplay = repoObj.fullName;
+          ownerDisplay = repoObj.owner || pr.owner || 'N/A';
+          actualRepoName = repoObj.name || pr.repoName || 'N/A';
+        } else if (pr.owner && pr.repoName) {
+          repoFullNameDisplay = `${pr.owner}/${pr.repoName}`;
+          ownerDisplay = pr.owner;
+          actualRepoName = pr.repoName;
+        }
+        
+        return {
+          id: item._id.toString(),
+          type: 'pr',
+          pullRequestTitle: pr.title || 'N/A',
+          repositoryName: repoFullNameDisplay,
+          prNumber: pr.number,
+          owner: ownerDisplay,
+          repo: actualRepoName,
+          qualityScore: item.qualityScore || 0,
+          securityIssues: (item.securityIssues || []).filter(si => si.severity === 'critical' || si.severity === 'high').length,
+          createdAt: item.createdAt,
+        };
+      } else if (item.analysisType === 'repo_scan') {
+        const scanRepo = item.repositoryId as RepoType | null; // Populated from RepositoryScan query
+        return {
+          id: item._id.toString(),
+          type: 'repo_scan',
+          repositoryName: scanRepo?.fullName || `${item.owner}/${item.repoName}`,
+          owner: item.owner!,
+          repo: item.repoName!,
+          qualityScore: item.qualityScore || 0,
+          securityIssues: (item.securityIssues || []).filter(si => si.severity === 'critical' || si.severity === 'high').length,
+          createdAt: item.createdAt,
+          branchAnalyzed: item.branchAnalyzed,
+          commitShaAnalyzed: item.commitShaAnalyzed?.substring(0,7)
+        };
       }
-
-
-      return {
-        id: analysisDoc._id.toString(), // This is the analysisId
-        pullRequestTitle: pr.title || 'N/A',
-        repositoryName: repoFullNameDisplay, // Full name like "owner/repo" for display
-        prNumber: pr.number,
-        owner: ownerDisplay, 
-        repo: actualRepoName,  
-        qualityScore: analysisDoc.qualityScore || 0,
-        securityIssues: (analysisDoc.securityIssues || []).filter((si: SecurityIssue) => si.severity === 'critical' || si.severity === 'high').length,
-        createdAt: analysisDoc.createdAt, // Analysis creation date
-      };
+      return null;
     }).filter(Boolean) as RecentAnalysisItem[];
+
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const qualityTrendsData = relevantAnalyses.filter(a => a && new Date(a.createdAt) >= thirtyDaysAgo);
+    const qualityTrendsData = allAnalyzedItems.filter(a => a && new Date(a.createdAt) >= thirtyDaysAgo);
     const qualityTrendsAggMap: Record<string, { totalQuality: number, count: number }> = {};
 
-    qualityTrendsData.forEach((analysisDoc) => { // Renamed analysis to analysisDoc
-        if (!analysisDoc) return;
-        const dateStr = new Date(analysisDoc.createdAt).toISOString().split('T')[0];
+    qualityTrendsData.forEach((item) => {
+        if (!item) return;
+        const dateStr = new Date(item.createdAt).toISOString().split('T')[0];
         if (!qualityTrendsAggMap[dateStr]) {
             qualityTrendsAggMap[dateStr] = { totalQuality: 0, count: 0 };
         }
-        qualityTrendsAggMap[dateStr].totalQuality += (analysisDoc.qualityScore || 0);
+        qualityTrendsAggMap[dateStr].totalQuality += (item.qualityScore || 0);
         qualityTrendsAggMap[dateStr].count++;
     });
 
@@ -219,15 +248,14 @@ export async function GET(request: NextRequest) {
 
     let trendsUp = false;
     if (qualityTrends.length === 0) {
-        trendsUp = false; // No data for trend
+        trendsUp = false; 
     } else if (qualityTrends.length === 1) {
-        trendsUp = qualityTrends[0].quality >= 7.0; // Trend is "up" if the single score is good
+        trendsUp = qualityTrends[0].quality >= 7.0; 
     } else if (qualityTrends.length >= 2) {
         const lastScore = qualityTrends[qualityTrends.length -1].quality;
         const secondLastScore = qualityTrends[qualityTrends.length -2].quality;
         trendsUp = lastScore >= secondLastScore;
     }
-
 
     const overview: DashboardOverview = {
       totalAnalyses,
@@ -237,29 +265,29 @@ export async function GET(request: NextRequest) {
     };
 
     const topSecurityIssues = getTopItems(
-      relevantAnalyses,
-      a => a?.securityIssues,
-      item => item.title,
-      item => item.severity,
-      undefined, // no priorityExtractor for security issues
-      item => item.type // 'vulnerability', 'warning', 'info'
+      allAnalyzedItems,
+      item => item?.securityIssues,
+      secIssue => secIssue.title,
+      secIssue => secIssue.severity,
+      undefined, 
+      secIssue => secIssue.type
     );
 
     const topSuggestions = getTopItems(
-      relevantAnalyses,
-      a => a?.suggestions,
-      item => item.title,
-      undefined, // no severityExtractor for suggestions
-      item => item.priority,
-      item => item.type // 'performance', 'style', etc.
+      allAnalyzedItems,
+      item => item?.suggestions,
+      sug => sug.title,
+      undefined, 
+      sug => sug.priority,
+      sug => sug.type
     );
 
     const fileIssueCounts: Record<string, SecurityHotspotItem> = {};
-    relevantAnalyses.forEach((analysisDoc) => { // Renamed analysis to analysisDoc
-      if (!analysisDoc) return;
-      (analysisDoc.fileAnalyses || []).forEach((file: FileAnalysisItem) => {
+    allAnalyzedItems.forEach((item) => {
+      if (!item) return;
+      (item.fileAnalyses || []).forEach((file: FileAnalysisItem) => {
         if (!file.filename) return;
-        const fileKey = file.filename;
+        const fileKey = file.filename; // Assuming file.filename includes repo context if needed or is unique enough
 
         if (!fileIssueCounts[fileKey]) {
           fileIssueCounts[fileKey] = {
@@ -267,7 +295,7 @@ export async function GET(request: NextRequest) {
             criticalIssues: 0,
             highIssues: 0,
             totalIssuesInFile: 0,
-            relatedPrIds: [],
+            relatedPrIds: [], // Store analysis/scan IDs here
             lastOccurrence: new Date(0),
           };
         }
@@ -281,13 +309,13 @@ export async function GET(request: NextRequest) {
         fileIssueCounts[fileKey].highIssues += fileHigh;
         fileIssueCounts[fileKey].totalIssuesInFile += (file.securityIssues || []).length;
 
-        const currentAnalysisDate = new Date(analysisDoc.createdAt);
+        const currentAnalysisDate = new Date(item.createdAt);
         if (!fileIssueCounts[fileKey].lastOccurrence || currentAnalysisDate > fileIssueCounts[fileKey].lastOccurrence) {
             fileIssueCounts[fileKey].lastOccurrence = currentAnalysisDate;
         }
-
-        if (analysisDoc.pullRequestId?._id && !fileIssueCounts[fileKey].relatedPrIds.includes(analysisDoc.pullRequestId._id.toString())) {
-             fileIssueCounts[fileKey].relatedPrIds.push(analysisDoc.pullRequestId._id.toString());
+        // Add current analysis/scan ID to related IDs
+        if (item._id && !fileIssueCounts[fileKey].relatedPrIds.includes(item._id.toString())) {
+             fileIssueCounts[fileKey].relatedPrIds.push(item._id.toString());
         }
       });
     });
@@ -296,16 +324,18 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.criticalIssues - a.criticalIssues || b.highIssues - a.highIssues || b.totalIssuesInFile - a.totalIssuesInFile)
       .slice(0, MAX_HOTSPOTS);
 
+    // Team Metrics: Based on PR authors primarily. Repo scans are user-initiated, not author-specific in the same way.
+    // So, for now, teamMetrics will primarily reflect PR analysis authors.
     const memberMetrics: Record<string, TeamMemberMetric> = {};
-    relevantAnalyses.forEach((analysisDoc) => { // Renamed analysis to analysisDoc
+    prAnalysisDocs.forEach((analysisDoc) => {
         if (!analysisDoc || !analysisDoc.pullRequestId) return;
         const authorLogin = analysisDoc.pullRequestId.author?.login;
         if (!authorLogin) return;
 
         if (!memberMetrics[authorLogin]) {
             memberMetrics[authorLogin] = {
-                userId: authorLogin, // This is the GitHub login
-                userName: authorLogin, // Display name, could be enhanced if we fetch GitHub user's display name
+                userId: authorLogin,
+                userName: authorLogin,
                 userAvatar: analysisDoc.pullRequestId.author?.avatar,
                 totalAnalyses: 0,
                 avgQualityScore: 0,
@@ -355,5 +385,3 @@ export async function GET(request: NextRequest) {
     });
   }
 }
-    
-    

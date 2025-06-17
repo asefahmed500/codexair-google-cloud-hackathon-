@@ -35,6 +35,7 @@ export interface PullRequest {
   title: string;
   body: string | null;
   state: 'open' | 'closed' | 'merged';
+  branch?: string; 
   author: {
     login: string;
     avatar: string;
@@ -116,7 +117,7 @@ export interface RepositoryScanResult {
   securityIssues: SecurityIssue[];
   suggestions: Suggestion[];
   metrics: CodeAnalysisMetrics; // Aggregated metrics
-  summaryAiInsights: string; // Overall summary for the scan
+  summaryAiInsights: string; // Overall summary for the repository scan
   fileAnalyses: FileAnalysisItem[];
   createdAt: Date;
   updatedAt: Date;
@@ -139,15 +140,18 @@ export interface DashboardOverview {
 }
 
 export interface RecentAnalysisItem {
-  id: string; 
-  pullRequestTitle?: string;
-  repositoryName?: string; 
-  prNumber?: number;
-  owner?: string; 
-  repo?: string;  
+  id: string; // analysisId or scanId
+  type: 'pr' | 'repo_scan'; // New field to distinguish
+  pullRequestTitle?: string; // Only for PR
+  repositoryName: string; // Always present (owner/repo for PR, or just repo for scan)
+  prNumber?: number; // Only for PR
+  owner: string; 
+  repo: string;  // short repo name
   qualityScore: number;
-  securityIssues: number; 
+  securityIssues: number; // Critical/High count
   createdAt: Date; 
+  branchAnalyzed?: string; // Only for repo_scan
+  commitShaAnalyzed?: string; // Only for repo_scan
 }
 
 export interface QualityTrendItem {
@@ -161,7 +165,7 @@ export interface SecurityHotspotItem {
   criticalIssues: number;
   highIssues: number;
   totalIssuesInFile: number;
-  relatedPrIds: string[];
+  relatedPrIds: string[]; // PR analysis IDs or Repo Scan IDs
   lastOccurrence: Date;
 }
 
@@ -258,4 +262,3 @@ export interface ContactMessage {
   isRead: boolean;
   createdAt: Date;
 }
-
