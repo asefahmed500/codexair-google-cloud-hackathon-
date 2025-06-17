@@ -1,0 +1,200 @@
+
+# codexair: AI-Powered Code Review Intelligence Platform
+
+**codexair** is an advanced platform designed to revolutionize the code review process using generative AI. It helps developers and teams enhance code quality, identify security vulnerabilities, gain actionable insights from their codebase, and streamline development workflows.
+
+## ✨ Core Features
+
+### For Developers & Teams:
+
+1.  **AI-Powered Pull Request (PR) Analysis:**
+    *   Initiate in-depth AI analysis for any open PR by clicking "**Analyze with AI**".
+    *   **Generates:**
+        *   **Code Quality Score:** Overall assessment (1-10).
+        *   **Code Complexity Score:** Evaluation of structural complexity.
+        *   **Maintainability Evaluation:** Insights into ease of future modifications.
+        *   **Security Vulnerabilities:** Detailed issues with severity levels (e.g., Critical, High) and CWE identifiers.
+        *   **Improvement Suggestions:** Specific, actionable advice with file locations and code examples for performance, style, bugs, and code smells.
+        *   **Overall AI Summary:** Concise AI-generated overview of the PR analysis.
+    *   Results are clearly presented on a dedicated analysis page (`/analyze/[owner]/[repo]/[prNumber]/[analysisId]`).
+
+2.  **AI-Powered Full Repository Analysis:**
+    *   Analyze the current codebase of a repository's default branch via the "**Analyze Codebase with AI**" button on the repository's PR list page.
+    *   Provides the same comprehensive insights as PR analysis (quality, complexity, security, suggestions, AI summary).
+    *   *Note: The current version analyzes a limited number of source files (e.g., up to 5) from the default branch to ensure timely results. This is clearly communicated on the scan results page.*
+    *   Results viewable at `/analyze/[owner]/[repo]/scan/[scanId]`.
+
+3.  **User Dashboard (`/dashboard`):**
+    *   **Analytics Overview:** At-a-glance summary of total analyses, average code quality score, critical/high security issues found, and quality score trends.
+    *   **Recent Analyses:** Quick access to recently analyzed PRs.
+    *   **Quality Trends:** Line chart visualizing average code quality scores over the past 30 days.
+    *   **Top Security Issues & Improvement Suggestions:** Highlights common vulnerabilities and areas for enhancement.
+    *   **Security Hotspots:** Pinpoints files with recurring critical/high-severity security issues.
+    *   **Contributor Metrics:** Tracks analysis activity and quality scores by GitHub authors.
+    *   **Connected Repositories:** Shows a list of the user's most recently synced GitHub repositories.
+    *   **GitHub Connection Prompt:** Encourages users to link GitHub if not already done.
+    *   *Dashboard updates after each PR or full repository analysis is completed and the user navigates to or refreshes the dashboard.*
+
+4.  **Repository Management & Sync (`/analyze`):**
+    *   List synced GitHub repositories with server-side pagination and search.
+    *   Search synced repositories by name, full name, or primary language.
+    *   Sync repositories from GitHub (fetches most recently updated, up to ~300, and updates local DB). Displays total open PRs for a repository.
+
+5.  **Semantic Code Search (AI-Powered) (`/search` & Contextual):**
+    *   **AI-Powered Querying:** User's natural language query or code snippet is converted into a vector embedding by an AI model (`text-embedding-004`).
+    *   **AI-Powered Data Indexing:** During PR and full repository analysis, code files are also converted into vector embeddings.
+    *   **Vector Search:** MongoDB Atlas Vector Search compares the query embedding against stored file embeddings to find semantically similar code.
+    *   **General Search Page (`/search`):** "**Search with AI**" for free-form semantic search across all indexed PR analyses and repository scans.
+    *   **Contextual Search:** From PR analysis or repository scan pages, click "**Find similar past issues/patterns**" to find semantically similar occurrences related to a specific issue or suggestion.
+
+6.  **Pull Request Comparison Tool (`/analyze/[owner]/[repo]/compare/[pr1]/vs/[pr2]`):**
+    *   Side-by-side comparison of metadata and AI analysis summaries for two pull requests from the same repository.
+    *   Option to "**Analyze PR with AI**" for unanalyzed PRs directly from the comparison view.
+
+7.  **"Explain My Code" AI Tool (`/explain`):**
+    *   Paste any code snippet, optionally select language.
+    *   Ask predefined or custom questions (e.g., "What does this do?", "How can this be improved?").
+    *   AI provides explanations and improvement tips.
+
+8.  **Authentication & Profile:**
+    *   Secure OAuth sign-up/login (GitHub, Google). Automatic account creation.
+    *   First user promoted to 'admin'.
+    *   Profile page (`/profile`) to view user details.
+    *   Settings page (`/settings`) to update display name.
+
+9.  **About Page & Contact (`/about`):**
+    *   Information about codexair.
+    *   "Get In Touch" contact form (messages stored for admin review).
+
+### For Administrators:
+
+1.  **Admin Dashboard (`/admin`):**
+    *   Platform-wide overview: total users, total repositories synced, total PR analyses.
+    *   Quick navigation to User Management, Messages, Reports, and Audit Logs.
+
+2.  **User Management (on `/admin`):**
+    *   View all registered users.
+    *   Promote/demote users (admin/user).
+    *   Change user account status (active/suspended).
+
+3.  **Contact Messages (`/admin/messages`):**
+    *   View and manage messages submitted through the About page contact form.
+
+4.  **Analysis Summary Reports (`/admin/reports`):**
+    *   View system-wide report summarizing all pull request analyses.
+    *   "**Download Report (CSV)**" functionality.
+
+5.  **Audit Logs (`/admin/audit`):**
+    *   Track important administrative actions (user role/status changes, report fetching).
+
+## 🛠️ Core Technologies
+
+*   **Framework:** Next.js (App Router)
+*   **Language:** TypeScript
+*   **UI Library:** React
+*   **UI Components:** ShadCN UI
+*   **Styling:** Tailwind CSS
+*   **Generative AI:** Genkit (with Google AI - Gemini models, e.g., `gemini-1.5-flash-latest` for analysis, `text-embedding-004` for embeddings)
+*   **Database:** MongoDB (with Mongoose ODM)
+*   **Authentication:** NextAuth.js (GitHub & Google OAuth providers)
+*   **Vector Search:** MongoDB Atlas Vector Search
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+*   Node.js (v18+ recommended)
+*   npm or yarn
+*   MongoDB Atlas account (for database and vector search)
+*   GitHub OAuth App credentials
+*   Google OAuth App credentials
+*   Google AI API Key (for Gemini models via Genkit)
+
+### Environment Variables
+
+Create a `.env` file in the project root and populate it with the following:
+
+```env
+# MongoDB
+MONGODB_URI=your_mongodb_atlas_connection_string_with_db_name
+
+# NextAuth
+NEXTAUTH_URL=http://localhost:9002 # IMPORTANT: Use your deployed URL in production
+NEXTAUTH_SECRET=your_strong_random_nextauth_secret # Generate with: openssl rand -base64 32
+GITHUB_CLIENT_ID=your_github_oauth_client_id
+GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+
+# Google AI (Genkit)
+GEMINI_API_KEY=your_google_ai_api_key # Or GOOGLE_API_KEY
+
+# Optional: For resetting DB in non-production environments
+# ALLOW_PROD_DB_RESET=false
+```
+
+**Important:** `NEXTAUTH_URL` should be your application's FQDN in production (e.g., `https://codexair.example.com`). For local development, use `http://localhost:PORT` (default port is 9002 for this app).
+
+### Installation
+
+1.  Clone the repository:
+    ```bash
+    git clone <repository-url>
+    cd codexair
+    ```
+2.  Install dependencies:
+    ```bash
+    npm install
+    # or
+    yarn install
+    ```
+
+### Running Locally
+
+1.  **Setup MongoDB Atlas Vector Search Indexes (CRITICAL FOR SEMANTIC SEARCH):**
+    *   You **MUST** manually create **TWO** vector search indexes in your MongoDB Atlas dashboard:
+        1.  **On the `analyses` collection (for PR Analyses):**
+            *   **Index Name:** `idx_file_embeddings`
+            *   **Field Path:** `fileAnalyses.vectorEmbedding`
+            *   **Dimensions:** `768` (for `text-embedding-004`)
+            *   **Similarity:** `cosine`
+        2.  **On the `repositoryscans` collection (for Full Repository Scans):**
+            *   **Index Name:** `idx_repo_scan_file_embeddings`
+            *   **Field Path:** `fileAnalyses.vectorEmbedding`
+            *   **Dimensions:** `768`
+            *   **Similarity:** `cosine`
+    *   *Semantic search features will not work without these indexes.*
+
+2.  **Start the Genkit development server:**
+    *   This server hosts your Genkit flows (AI logic).
+    *   Open a terminal and run:
+        ```bash
+        npm run genkit:dev
+        # or for auto-reloading on changes:
+        # npm run genkit:watch
+        ```
+    *   Keep this terminal running. By default, it starts on port 3400.
+
+3.  **Start the Next.js application:**
+    *   Open another terminal and run:
+        ```bash
+        npm run dev
+        ```
+    *   The application will be available at `http://localhost:9002` (or the port specified in `NEXTAUTH_URL` if different).
+
+### Database Reset (Development/Testing Only)
+
+To completely reset your MongoDB database (collections and data):
+```bash
+npm run db:reset
+```
+You will be prompted to confirm the database name. **Use with extreme caution.**
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow standard Git workflow (fork, branch, PR).
+
+## 📄 License
+
+This project is licensed under the MIT License.
+```
