@@ -14,9 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { AdminUserView, AuditLogActionType } from '@/types';
 import type { AdminSummaryStats } from '@/app/api/admin/summary-stats/route';
+import type { BusFactorAlert } from '@/app/api/admin/bus-factor-alerts/route';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX, FileSliders, AlertTriangle, ShieldCheckIcon as ShieldCheckIconActive } from 'lucide-react';
+import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX, FileSliders, AlertTriangle, ShieldCheckIcon as ShieldCheckIconActive, UserFocus } from 'lucide-react';
 
 interface UserTableRowProps {
   user: AdminUserView;
@@ -116,6 +117,10 @@ export default function AdminPage() {
   const [loadingStats, setLoadingStats] = useState(true);
   const [errorStats, setErrorStats] = useState<string | null>(null);
 
+  const [busFactorAlerts, setBusFactorAlerts] = useState<BusFactorAlert[]>([]);
+  const [loadingBusFactorAlerts, setLoadingBusFactorAlerts] = useState(true);
+  const [errorBusFactorAlerts, setErrorBusFactorAlerts] = useState<string | null>(null);
+
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [alertAction, setAlertAction] = useState<{ userId: string; newRole?: 'user' | 'admin'; newStatus?: 'active' | 'suspended', actionType: 'role' | 'status' } | null>(null);
 
@@ -175,6 +180,24 @@ export default function AdminPage() {
         toast({ title: "Error Fetching Users", description: err.message, variant: "destructive"});
       } finally {
         setLoadingUsers(false);
+      }
+
+      setLoadingBusFactorAlerts(true);
+      setErrorBusFactorAlerts(null);
+      try {
+        const busFactorResponse = await fetch('/api/admin/bus-factor-alerts');
+        if (!busFactorResponse.ok) {
+          const errorData = await busFactorResponse.json();
+          throw new Error(errorData.error || 'Failed to fetch bus factor alerts');
+        }
+        const busFactorData = await busFactorResponse.json();
+        setBusFactorAlerts(busFactorData.alerts || []);
+      } catch (err: any) {
+        setErrorBusFactorAlerts(err.message);
+        setBusFactorAlerts([]);
+        toast({ title: "Error Fetching Bus Factor Alerts", description: err.message, variant: "destructive"});
+      } finally {
+        setLoadingBusFactorAlerts(false);
       }
     }
 
@@ -297,7 +320,7 @@ export default function AdminPage() {
   };
 
 
-  if (sessionStatus === 'loading' || (loadingUsers && !users.length && !errorUsers && loadingStats && !summaryStats && !errorStats )) {
+  if (sessionStatus === 'loading' || (loadingUsers && !users.length && !errorUsers && loadingStats && !summaryStats && !errorStats && loadingBusFactorAlerts )) {
     return (
       <div className="flex flex-col min-h-screen">
         <Navbar />
@@ -314,6 +337,7 @@ export default function AdminPage() {
                 <Skeleton className="h-24 w-full" />
               </div>
               <Skeleton className="h-32 w-full mb-6" /> {/* Emergency Policy Skeleton */}
+              <Skeleton className="h-32 w-full mb-6" /> {/* Bus Factor Skeleton */}
               <Skeleton className="h-10 w-full mb-2" />
               <Skeleton className="h-64 w-full" />
             </CardContent>
@@ -442,6 +466,53 @@ export default function AdminPage() {
                 Current Policy Status: {isEmergencyPolicyActive ? "ACTIVE (Simulated Blocking)" : "INACTIVE (Normal Operations)"}
               </Badge>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg mb-8">
+          <CardHeader>
+            <h2 className="text-xl font-semibold text-foreground flex items-center">
+              <UserFocus className="h-6 w-6 mr-2 text-accent" />
+              Knowledge Concentration Risks
+            </h2>
+            <CardDescription>
+              Repositories where a single author is associated with a high percentage of analyzed PRs (over 70% for repos with at least 3 analyses).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingBusFactorAlerts && <Skeleton className="h-32 w-full" />}
+            {errorBusFactorAlerts && <p className="text-destructive">Error loading knowledge concentration risks: {errorBusFactorAlerts}</p>}
+            {!loadingBusFactorAlerts && busFactorAlerts.length === 0 && !errorBusFactorAlerts && (
+              <p className="text-muted-foreground">No significant knowledge concentration risks detected based on current analysis data.</p>
+            )}
+            {!loadingBusFactorAlerts && busFactorAlerts.length > 0 && (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Repository</TableHead>
+                      <TableHead>Dominant Author</TableHead>
+                      <TableHead className="text-center">Author's PRs</TableHead>
+                      <TableHead className="text-center">Total Repo PRs</TableHead>
+                      <TableHead className="text-center">Concentration</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {busFactorAlerts.map((alert, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{alert.repoFullName}</TableCell>
+                        <TableCell>{alert.dominantAuthor}</TableCell>
+                        <TableCell className="text-center">{alert.authorAnalysesCount}</TableCell>
+                        <TableCell className="text-center">{alert.totalRepoAnalyses}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="destructive">{alert.percentage.toFixed(1)}%</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
