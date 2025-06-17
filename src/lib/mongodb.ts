@@ -121,6 +121,7 @@ const securityIssueSubSchema = new mongoose.Schema({
   line: Number,
   suggestion: String, 
   cwe: String,
+  resolved: { type: Boolean, default: false }, // Added for "Mark as Resolved"
 }, { _id: false });
 
 const suggestionSubSchema = new mongoose.Schema({
@@ -131,6 +132,7 @@ const suggestionSubSchema = new mongoose.Schema({
   file: String,
   line: Number,
   codeExample: String,
+  resolved: { type: Boolean, default: false }, // Added for "Mark as Resolved"
 }, { _id: false });
 
 const codeAnalysisMetricsSubSchema = new mongoose.Schema({

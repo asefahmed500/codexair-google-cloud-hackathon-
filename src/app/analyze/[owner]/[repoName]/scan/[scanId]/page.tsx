@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { RepositoryScanResult, SecurityIssue, Suggestion, FileAnalysisItem, SimilarCodeResult } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, ScanSearch, GitBranch, CalendarDays, ClipboardCopy, FileSliders } from 'lucide-react'; // Added FileSliders
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, ScanSearch, GitBranch, CalendarDays, ClipboardCopy, FileSliders, CheckSquare, Square } from 'lucide-react'; // Added FileSliders, CheckSquare, Square
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -20,8 +20,8 @@ import Navbar from '@/components/layout/navbar';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertTitle as AlertBoxTitle, AlertDescription as AlertBoxDescription } from "@/components/ui/alert";
-import { Switch } from '@/components/ui/switch'; // Import Switch
-import { Label } from '@/components/ui/label'; // Import Label
+import { Switch } from '@/components/ui/switch'; 
+import { Label } from '@/components/ui/label'; 
 
 
 const FALLBACK_SUMMARY_MESSAGE = "Overall repository scan summary could not be generated.";
@@ -44,7 +44,6 @@ export default function RepositoryScanDetailsPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [currentSearchContext, setCurrentSearchContext] = useState<{type: 'security' | 'suggestion', title: string, filename: string} | null>(null);
 
-  // State for TL;DR summary
   const [showTldrSummary, setShowTldrSummary] = useState(false);
   const [tldrSummaryText, setTldrSummaryText] = useState<string | null>(null);
   const [isFetchingTldr, setIsFetchingTldr] = useState(false);
@@ -56,7 +55,7 @@ export default function RepositoryScanDetailsPage() {
       router.push('/auth/signin');
     } else if (status === 'authenticated' && scanId) {
       setLoading(true);
-      setShowTldrSummary(false); // Reset TLDR toggle on new scan load
+      setShowTldrSummary(false); 
       setTldrSummaryText(null);
       setTldrError(null);
       fetch(`/api/repository-scan/${scanId}`)
@@ -149,6 +148,77 @@ export default function RepositoryScanDetailsPage() {
         toast({ title: "Copy Failed", description: "Could not copy to clipboard. Please try again or copy manually.", variant: "destructive" });
         console.error('Failed to copy: ', err);
       });
+  };
+
+  const handleToggleResolved = async (
+    itemType: 'security' | 'suggestion',
+    itemIndex: number,
+    currentResolvedStatus: boolean
+  ) => {
+    if (!scanData) return;
+
+    const itemToUpdate = itemType === 'security' 
+      ? scanData.securityIssues[itemIndex]
+      : scanData.suggestions[itemIndex];
+
+    if (!itemToUpdate) return;
+
+    // Optimistic UI update
+    setScanData(prevData => {
+      if (!prevData) return null;
+      const newScanData = { ...prevData };
+      if (itemType === 'security') {
+        newScanData.securityIssues = newScanData.securityIssues.map((issue, idx) => 
+          idx === itemIndex ? { ...issue, resolved: !currentResolvedStatus } : issue
+        );
+      } else {
+        newScanData.suggestions = newScanData.suggestions.map((sug, idx) =>
+          idx === itemIndex ? { ...sug, resolved: !currentResolvedStatus } : sug
+        );
+      }
+      return newScanData;
+    });
+    
+    try {
+      const response = await fetch(`/api/analysis-items/${scanId}/resolve-item`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceType: 'repo_scan',
+          itemType,
+          itemIdentifier: {
+            title: itemToUpdate.title,
+            file: itemToUpdate.file,
+            line: itemToUpdate.line,
+            description: itemToUpdate.description, // Crucial for matching
+          },
+          resolved: !currentResolvedStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || `Failed to update ${itemType} status`);
+      }
+      toast({ title: "Status Updated", description: `${itemType === 'security' ? 'Security issue' : 'Suggestion'} marked as ${!currentResolvedStatus ? 'resolved' : 'unresolved'}.`});
+    } catch (err: any) {
+      // Revert optimistic update on error
+      setScanData(prevData => {
+        if (!prevData) return null;
+        const newScanData = { ...prevData };
+        if (itemType === 'security') {
+          newScanData.securityIssues = newScanData.securityIssues.map((issue, idx) => 
+            idx === itemIndex ? { ...issue, resolved: currentResolvedStatus } : issue
+          );
+        } else {
+          newScanData.suggestions = newScanData.suggestions.map((sug, idx) =>
+            idx === itemIndex ? { ...sug, resolved: currentResolvedStatus } : sug
+          );
+        }
+        return newScanData;
+      });
+      toast({ title: "Update Failed", description: err.message, variant: "destructive" });
+    }
   };
 
 
@@ -309,10 +379,10 @@ export default function RepositoryScanDetailsPage() {
                   {scanData.securityIssues?.length > 0 ? (
                     <Accordion type="single" collapsible className="w-full">
                       {scanData.securityIssues.map((issue, index) => (
-                        <AccordionItem value={`issue-${index}`} key={index}>
+                        <AccordionItem value={`issue-${index}`} key={index} className={`${issue.resolved ? 'opacity-60' : ''}`}>
                           <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md text-sm sm:text-base">
                             <div className="flex items-center justify-between w-full">
-                              <span className="font-medium text-left">{issue.title}</span>
+                              <span className={`font-medium text-left ${issue.resolved ? 'line-through' : ''}`}>{issue.title}</span>
                               <div className="flex items-center gap-2">
                                  <Badge variant={getSeverityBadgeVariant(issue.severity)} className="capitalize">{issue.severity}</Badge>
                                   <span className="text-xs text-muted-foreground">{issue.file}:{issue.line || 'N/A'}</span>
@@ -320,6 +390,17 @@ export default function RepositoryScanDetailsPage() {
                             </div>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 bg-secondary/30 rounded-b-md space-y-3">
+                            <div className="flex justify-between items-center mb-2">
+                                <p className="text-xs text-muted-foreground">
+                                    {issue.resolved ? 'Marked as Resolved' : 'Mark as Resolved'}
+                                </p>
+                                <Switch
+                                    id={`resolve-security-${index}`}
+                                    checked={!!issue.resolved}
+                                    onCheckedChange={() => handleToggleResolved('security', index, !!issue.resolved)}
+                                    aria-label={issue.resolved ? 'Mark as unresolved' : 'Mark as resolved'}
+                                />
+                            </div>
                             <p className="text-sm"><strong className="text-foreground">Description:</strong> {issue.description}</p>
                             <p className="text-sm"><strong className="text-foreground">File:</strong> {issue.file} {issue.line && `(Line: ${issue.line})`}</p>
                             <p className="text-sm font-medium text-foreground mb-1">Suggested Fix / Code:</p>
@@ -364,10 +445,10 @@ export default function RepositoryScanDetailsPage() {
                   {scanData.suggestions?.length > 0 ? (
                     <Accordion type="single" collapsible className="w-full">
                       {scanData.suggestions.map((suggestion, index) => (
-                        <AccordionItem value={`suggestion-${index}`} key={index}>
+                        <AccordionItem value={`suggestion-${index}`} key={index} className={`${suggestion.resolved ? 'opacity-60' : ''}`}>
                           <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md text-sm sm:text-base">
                            <div className="flex items-center justify-between w-full">
-                              <span className="font-medium text-left">{suggestion.title}</span>
+                              <span className={`font-medium text-left ${suggestion.resolved ? 'line-through' : ''}`}>{suggestion.title}</span>
                                <div className="flex items-center gap-2">
                                   <Badge variant={getIssueTypeBadgeVariant(suggestion.type)} className="capitalize">{suggestion.type.replace(/_/g, ' ')}</Badge>
                                   <Badge variant={getPriorityBadgeVariant(suggestion.priority)} className="capitalize">{suggestion.priority}</Badge>
@@ -376,6 +457,17 @@ export default function RepositoryScanDetailsPage() {
                             </div>
                           </AccordionTrigger>
                           <AccordionContent className="p-4 bg-secondary/30 rounded-b-md space-y-3">
+                            <div className="flex justify-between items-center mb-2">
+                                <p className="text-xs text-muted-foreground">
+                                    {suggestion.resolved ? 'Marked as Resolved' : 'Mark as Resolved'}
+                                </p>
+                                <Switch
+                                    id={`resolve-suggestion-${index}`}
+                                    checked={!!suggestion.resolved}
+                                    onCheckedChange={() => handleToggleResolved('suggestion', index, !!suggestion.resolved)}
+                                    aria-label={suggestion.resolved ? 'Mark as unresolved' : 'Mark as resolved'}
+                                />
+                            </div>
                             <p className="text-sm"><strong className="text-foreground">Description:</strong> {suggestion.description}</p>
                             <p className="text-sm"><strong className="text-foreground">File:</strong> {suggestion.file} {suggestion.line && `(Line: ${suggestion.line})`}</p>
                             {suggestion.codeExample && (
@@ -447,7 +539,7 @@ export default function RepositoryScanDetailsPage() {
                               {file.securityIssues.length > 0 ? (
                                   <ul className="list-disc pl-5 space-y-1 text-xs">
                                   {file.securityIssues.map((si, i) => (
-                                      <li key={`sec-${i}`}>
+                                      <li key={`sec-${i}`} className={`${si.resolved ? 'text-muted-foreground line-through' : ''}`}>
                                         {si.title} (<Badge variant={getSeverityBadgeVariant(si.severity)} className="capitalize text-[10px] px-1 py-0">{si.severity}</Badge>)
                                         {si.cwe && <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0">{si.cwe}</Badge>}
                                       </li>
@@ -460,7 +552,7 @@ export default function RepositoryScanDetailsPage() {
                                {file.suggestions.length > 0 ? (
                                   <ul className="list-disc pl-5 space-y-1 text-xs">
                                   {file.suggestions.map((s, i) => (
-                                    <li key={`sug-${i}`}>
+                                    <li key={`sug-${i}`} className={`${s.resolved ? 'text-muted-foreground line-through' : ''}`}>
                                         {s.title} (<Badge variant={getPriorityBadgeVariant(s.priority)} className="capitalize text-[10px] px-1 py-0">{s.priority}</Badge>
                                         <Badge variant={getIssueTypeBadgeVariant(s.type)} className="ml-1 capitalize text-[10px] px-1 py-0">{s.type.replace(/_/g, ' ')}</Badge>)
                                     </li>
@@ -655,4 +747,3 @@ function ScanDetailsLoadingSkeleton({owner, repoName}: {owner: string, repoName:
     </div>
   );
 }
-

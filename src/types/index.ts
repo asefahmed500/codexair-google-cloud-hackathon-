@@ -58,6 +58,7 @@ export interface SecurityIssue {
   line?: number;
   suggestion: string; 
   cwe?: string;
+  resolved?: boolean; // Added for "Mark as Resolved"
 }
 
 export interface Suggestion {
@@ -68,6 +69,7 @@ export interface Suggestion {
   file: string;
   line?: number;
   codeExample?: string;
+  resolved?: boolean; // Added for "Mark as Resolved"
 }
 
 export interface CodeAnalysisMetrics {
@@ -141,17 +143,17 @@ export interface DashboardOverview {
 
 export interface RecentAnalysisItem {
   id: string; // analysisId or scanId
-  type: 'pr' | 'repo_scan'; // New field to distinguish
-  pullRequestTitle?: string; // Only for PR
-  repositoryName: string; // Always present (owner/repo for PR, or just repo for scan)
-  prNumber?: number; // Only for PR
+  type: 'pr' | 'repo_scan'; 
+  pullRequestTitle?: string; 
+  repositoryName: string; 
+  prNumber?: number; 
   owner: string; 
-  repo: string;  // short repo name
+  repo: string;  
   qualityScore: number;
-  securityIssues: number; // Critical/High count
+  securityIssues: number; 
   createdAt: Date; 
-  branchAnalyzed?: string; // Only for repo_scan
-  commitShaAnalyzed?: string; // Only for repo_scan
+  branchAnalyzed?: string; 
+  commitShaAnalyzed?: string; 
 }
 
 export interface QualityTrendItem {
@@ -165,7 +167,7 @@ export interface SecurityHotspotItem {
   criticalIssues: number;
   highIssues: number;
   totalIssuesInFile: number;
-  relatedPrIds: string[]; // PR analysis IDs or Repo Scan IDs
+  relatedPrIds: string[]; 
   lastOccurrence: Date;
 }
 
@@ -200,19 +202,17 @@ export interface DashboardData {
 }
 
 export interface SimilarCodeResult {
-  analysisId: string; // Can be PR Analysis ID or Repo Scan ID
+  analysisId: string; 
   owner: string; 
   repoName: string; 
   filename: string; 
   aiInsights: string; 
   score: number; 
-  searchResultType: 'pr_analysis' | 'repo_scan'; // Discriminator
-  // PR-specific fields (optional)
+  searchResultType: 'pr_analysis' | 'repo_scan'; 
   prNumber?: number; 
   prTitle?: string; 
   prAuthorLogin?: string; 
   prCreatedAt?: Date; 
-  // Scan-specific fields (optional)
   scanBranch?: string;
   scanCommitSha?: string;
   scanCreatedAt?: Date;
