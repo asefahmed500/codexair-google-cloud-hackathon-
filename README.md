@@ -15,20 +15,24 @@ codexair offers a comprehensive suite of tools designed to augment the capabilit
         *   **Overall Code Quality Score:** An assessment (1-10) of the code's health.
         *   **Code Complexity Score:** Evaluation of structural intricacy.
         *   **Maintainability Evaluation:** Insights into the ease of future modifications.
-        *   **Security Vulnerabilities:** Detailed list of issues, including severity levels (e.g., Critical, High) and CWE identifiers where applicable.
-        *   **Improvement Suggestions:** Specific, actionable advice with file locations and code examples, covering performance, style, potential bugs, and code smells.
-        *   **Overall AI Summary:** A concise, AI-generated overview of the PR analysis highlights.
+        *   **Security Vulnerabilities:** Detailed list of issues, including severity levels (e.g., Critical, High) and CWE identifiers where applicable. Users can mark issues as "Resolved" and filter their visibility.
+        *   **Improvement Suggestions:** Specific, actionable advice with file locations and code examples. Includes a "**Copy Fix**" button for suggestions with code examples, and users can mark suggestions as "Resolved" and filter their visibility.
+        *   **Overall AI Summary:** A concise, AI-generated overview of the PR analysis highlights, with a toggle for a "**TL;DR**" bullet-point summary.
     *   Results are clearly presented on a dedicated analysis page (`/analyze/[owner]/[repo]/[prNumber]/[analysisId]`).
+    *   If the admin-controlled "Emergency Policy" is active and a PR contains critical security issues, a warning banner will be displayed on the analysis page.
 
 2.  **AI-Powered Full Repository Analysis:**
     *   Analyze the current codebase of a repository's default branch via the "**Analyze Codebase with AI**" button on the repository's PR list page.
-    *   Delivers the same comprehensive insights as PR analysis (quality, complexity, security, suggestions, AI summary) for the selected source files.
+    *   Delivers comprehensive insights (quality, complexity, security, suggestions, AI summary) for the selected source files.
+        *   Security issues and suggestions can be marked as "Resolved" with visibility filters.
+        *   Suggestions with code examples have a "**Copy Fix**" button.
+        *   The overall AI summary offers a "**TL;DR**" toggle.
     *   *Note: The current version analyzes a limited number of source files (e.g., up to 5) from the default branch to ensure timely results. This is clearly communicated on the scan results page.*
     *   Results are viewable at `/analyze/[owner]/[repo]/scan/[scanId]`.
 
 3.  **User Dashboard (`/dashboard`):**
     *   **Analytics Overview:** At-a-glance summary of total analyses, average code quality score, critical/high security issues found, and quality score trends.
-    *   **Recent Analyses:** Quick access to recently analyzed PRs.
+    *   **Recent Analyses:** Quick access to recently analyzed PRs and repository scans.
     *   **Quality Trends:** Line chart visualizing average code quality scores over the past 30 days.
     *   **Top Security Issues & Improvement Suggestions:** Highlights common vulnerabilities and areas for enhancement.
     *   **Security Hotspots:** Pinpoints files with recurring critical/high-severity security issues.
@@ -41,6 +45,7 @@ codexair offers a comprehensive suite of tools designed to augment the capabilit
     *   List synced GitHub repositories with server-side pagination and search. Displays total open PRs for each repository.
     *   Search synced repositories by name, full name, or primary language.
     *   Sync repositories from GitHub (fetches most recently updated, up to ~300, and updates local DB).
+    *   If the admin-controlled "Emergency Policy" is active, a warning banner will be displayed on this page.
 
 5.  **Semantic Code Search (AI-Powered) (`/search` & Contextual):**
     *   **Intelligent Querying:** User's natural language query or code snippet is transformed into a vector embedding by an AI model (`text-embedding-004`).
@@ -71,7 +76,9 @@ codexair offers a comprehensive suite of tools designed to augment the capabilit
 ### For Administrators:
 
 1.  **Admin Dashboard (`/admin`):**
-    *   Platform-wide overview: total users, total repositories synced, total PR analyses.
+    *   **Platform-wide Overview:** Total users, total repositories synced, total PR analyses, and **Top Time-Waster** (most impactful issue type based on AI suggestions).
+    *   **Emergency Policy Toggle:** Control a platform-wide (simulated) policy to block PRs with critical vulnerabilities. Changes are audited.
+    *   **Knowledge Concentration Risks (Bus Factor Alert):** Highlights repositories where a single author has a high percentage of analyzed PRs.
     *   Quick navigation to User Management, Messages, Reports, and Audit Logs.
 
 2.  **User Management (on `/admin`):**
@@ -87,7 +94,7 @@ codexair offers a comprehensive suite of tools designed to augment the capabilit
     *   "**Download Report (CSV)**" functionality.
 
 5.  **Audit Logs (`/admin/audit`):**
-    *   Track important administrative actions (user role/status changes, report fetching).
+    *   Track important administrative actions (user role/status changes, report fetching, emergency policy changes).
 
 ## 🛠️ Core Technologies
 
@@ -99,7 +106,7 @@ The platform is built with a modern, robust technology stack:
 *   **UI Components:** ShadCN UI
 *   **Styling:** Tailwind CSS
 *   **Generative AI:** Genkit (with Google AI - Gemini models, e.g., `gemini-1.5-flash-latest` for analysis, `text-embedding-004` for embeddings)
-*   **Database:** MongoDB (with Mongoose ODM)
+*   **Database:** MongoDB (with Mongoose ODM, includes `GlobalSettings` collection for features like Emergency Policy)
 *   **Authentication:** NextAuth.js (GitHub & Google OAuth providers)
 *   **Vector Search:** MongoDB Atlas Vector Search
 
@@ -202,3 +209,4 @@ Contributions are welcome! Please follow standard Git workflow (fork, branch, PR
 
 This project is licensed under the MIT License.
 
+    

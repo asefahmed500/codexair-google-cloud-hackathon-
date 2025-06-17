@@ -13,7 +13,7 @@ codexair is an AI-powered Code Review Intelligence Platform, meticulously engine
 - **UI Components:** ShadCN UI
 - **Styling:** Tailwind CSS
 - **Generative AI:** Genkit (with Google AI - Gemini models, e.g., `gemini-1.5-flash-latest`, `text-embedding-004`)
-- **Database:** MongoDB (with Mongoose ODM)
+- **Database:** MongoDB (with Mongoose ODM, includes `GlobalSettings` collection)
 - **Authentication:** NextAuth.js (GitHub & Google OAuth providers)
 - **Vector Search:** MongoDB Atlas Vector Search
 
@@ -27,7 +27,7 @@ codexair is an AI-powered Code Review Intelligence Platform, meticulously engine
 ### 3.2. Dashboard (`/dashboard`)
 Provides a comprehensive overview of the user's (or platform's for admin) code analysis activities.
 - **Analytics Overview:** At-a-glance summary of total analyses, average quality score, critical/high security issues found, and quality score trends.
-- **Recent Analyses:** A list of recently analyzed pull requests for quick access.
+- **Recent Analyses:** A list of recently analyzed pull requests and repository scans for quick access.
 - **Quality Trends:** A line chart visualizing the average code quality scores over the past 30 days.
 - **Top Security Issues:** Lists the most frequently identified security vulnerabilities across analyses.
 - **Top Improvement Suggestions:** Highlights common areas for code enhancement.
@@ -40,16 +40,18 @@ Provides a comprehensive overview of the user's (or platform's for admin) code a
 - **List Synced Repositories:** Displays repositories the user has connected from GitHub, with server-side pagination and search. Also shows the total open PR count for each repository.
 - **Server-Side Search:** Users can search their synced repositories by name, full name, or primary language. The search is performed on the server.
 - **Comprehensive Sync:** Allows users to fetch and update their list of repositories from GitHub. This process attempts to retrieve up to 10 pages (approx. 300 repos) of the user's most recently updated repositories from GitHub, stores/updates their metadata in the local database, and also fetches the user's total repository count from GitHub.
+- **Emergency Policy Banner:** If the admin-controlled "Emergency Policy" is active, a warning banner is displayed on this page.
 
 ### 3.4. Pull Request (PR) Analysis (`/analyze/[owner]/[repoName]`)
 - **PR Listing:** View all open and recently closed pull requests for a selected repository, along with their current analysis status (e.g., Not Analyzed, Pending, Analyzed, Failed).
 - **AI-Powered PR Analysis Initiation:** Users can initiate an in-depth analysis for any open pull request by clicking "**Analyze with AI**". This process generates vector embeddings for changed/added files, which are stored in the `Analyses` collection for semantic search.
 - **Detailed Analysis View (`/analyze/[owner]/[repoName]/[prNumber]/[analysisId]`):**
-    - **AI Review Summary (Overall PR):** A concise, AI-generated summary of the key findings for the entire pull request.
+    - **AI Review Summary (Overall PR):** A concise, AI-generated summary of the key findings for the entire pull request. Includes a "**TL;DR Summary**" toggle for a bullet-point overview.
     - **Overall Metrics:** Displays aggregated quality score, complexity, and maintainability scores for the PR.
-    - **Security Issues Tab:** Lists all identified security vulnerabilities, filterable by severity, with details including file and line numbers.
-    - **Suggestions Tab:** Lists all improvement suggestions, filterable by priority, with details including file and line numbers.
+    - **Security Issues Tab:** Lists all identified security vulnerabilities, filterable by severity. Users can mark issues as "**Resolved**" and toggle visibility of resolved items using a "Show Resolved" switch.
+    - **Suggestions Tab:** Lists all improvement suggestions, filterable by priority. Users can mark suggestions as "**Resolved**" and toggle visibility of resolved items. Suggestions with code examples feature a "**Copy Fix**" button.
     - **File Details Tab:** An accordion view breaking down the analysis file-by-file, showing individual scores, issues/suggestions, and a file-level AI insight.
+    - **Emergency Policy Banner:** If the admin-controlled "Emergency Policy" is active and the PR contains critical security issues, a prominent warning banner is displayed.
 
 ### 3.5. Full Repository Codebase Analysis
 - **Initiation:** From the repository's PR listing page (`/analyze/[owner]/[repoName]`), users can click "**Analyze Codebase with AI**".
@@ -57,8 +59,11 @@ Provides a comprehensive overview of the user's (or platform's for admin) code a
     - **Note:** The current version analyzes a limited number of source files (e.g., up to 5) from the default branch to ensure timely results in a synchronous operation. This is clearly communicated to the user on the scan results page.
     - Vector embeddings are generated for analyzed files and stored in the `RepositoryScans` collection for semantic search.
 - **Analysis Output (`/analyze/[owner]/[repoName]/scan/[scanId]`):**
-    - Provides overall quality, complexity, maintainability scores, lists of security issues and suggestions, and file-by-file breakdowns for the analyzed files.
-    - Includes an AI-generated summary for the entire repository scan (based on the analyzed files).
+    - Provides overall quality, complexity, maintainability scores.
+    - **Security Issues Tab:** Lists vulnerabilities; users can mark as "**Resolved**" and filter visibility.
+    - **Suggestions Tab:** Lists suggestions; users can mark as "**Resolved**", filter visibility, and use "**Copy Fix**" for code examples.
+    - File-by-file breakdowns.
+    - Includes an AI-generated summary for the entire repository scan (based on the analyzed files), with a "**TL;DR Summary**" toggle.
     - Clearly indicates that it's a full repository scan, not tied to a specific PR, and mentions the file analysis limitation.
 
 ### 3.6. Semantic Code Search (AI-Powered)
@@ -83,8 +88,8 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
 
 ### 3.8. "Explain My Code" AI Tool (`/explain`)
 - **Input:** Users can paste any code snippet and optionally select the programming language.
-- **Interaction:** Choose from predefined questions or ask a custom question.
-- **Output:** Provides an AI-generated explanation.
+- **Interaction:** Choose from predefined questions or ask a custom question (e.g., "How can this function be refactored for better performance?").
+- **Output:** Provides an AI-generated explanation and improvement tips.
 
 ### 3.9. About Page (`/about`)
 - Provides information about codexair's mission and vision.
@@ -93,7 +98,9 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
 ## 4. Admin Features
 
 ### 4.1. Admin Dashboard (`/admin`)
-- **Platform-wide Overview:** Displays statistics like total users, total repositories synced, and total PR analyses.
+- **Platform-wide Overview:** Displays statistics like total users, total repositories synced, total PR analyses, and the "**Top Time-Waster**" (most impactful issue type across all analyses based on estimated time to fix suggestions).
+- **Emergency Controls:** Admins can activate/deactivate a platform-wide "Emergency Policy." When active, this (simulated) policy blocks PRs with critical security issues and notifies team leads. The policy's status is persistent and its activation/deactivation is audited.
+- **Knowledge Concentration Risks:** Highlights repositories where a single author is associated with a high percentage (e.g., >70%) of analyzed PRs (Bus Factor Alert).
 - **Navigation Cards:** Provides quick navigation to User Management (integrated), Contact Messages, Analysis Reports, and Audit Logs.
 - **User Management Section:** Integrated into the main admin page.
 
@@ -113,14 +120,14 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
 - **CSV Download:** Allows admins to "**Download Report (CSV)**".
 
 ### 4.5. Audit Logs (`/admin/audit`)
-- **Track Admin Actions:** Logs important administrative actions such as user role changes, user status updates, and when admin reports are fetched.
+- **Track Admin Actions:** Logs important administrative actions such as user role changes, user status updates, when admin reports are fetched, and Emergency Policy activations/deactivations.
 - **Details:** Provides timestamp, admin user, action performed, target user (if applicable), and details.
 
 ## 5. Technical Architecture Overview
 
 ### 5.1. Frontend
 - **Next.js (App Router), React, ShadCN UI, Tailwind CSS.**
-- **Client-Side State Management:** React hooks, `react-hook-form`.
+- **Client-Side State Management:** React hooks (`useState`, `useEffect`), `react-hook-form`. Handles toggles for "TL;DR Summary" and "Show Resolved" issues.
 
 ### 5.2. Backend (Next.js API Routes)
 - Located in `src/app/api/`.
@@ -129,9 +136,12 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
     - GitHub interactions (`/api/repositories`, `/api/github/repos/...`).
     - Triggering AI analyses (`/api/analyze` for PRs, `/api/repository-scan` for full repo).
     - Fetching analysis results (`/api/analysis-results/[analysisId]`, `/api/repository-scan/[scanId]`).
+    - On-demand TL;DR summaries (`/api/analysis-results/[analysisId]/tldr-summary`, `/api/repository-scan/[scanId]/tldr-summary`).
+    - Marking analysis items as resolved (`/api/analysis-items/[analysisOrScanId]/resolve-item`).
     - Semantic search operations (`/api/search/semantic-text-search`, `/api/search/similar-code`).
     - Contact form submissions (`/api/contact`).
-    - Admin operations (`/api/admin/...`, including `/api/admin/messages`, `/api/admin/messages/[messageId]`).
+    - Admin operations (`/api/admin/...`, including `/api/admin/messages`, `/api/admin/messages/[messageId]`, `/api/admin/summary-stats`, `/api/admin/bus-factor-alerts`, `/api/admin/settings/emergency-policy`, `/api/admin/audit-action`).
+    - Global settings access (`/api/settings/emergency-policy`).
 - The `/api/repositories` route now supports server-side search via a `searchTerm` parameter and displays total open PR counts for repositories.
 
 ### 5.3. Database (MongoDB with Mongoose)
@@ -139,11 +149,12 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
 - **Key Collections (Models defined in `src/lib/mongodb.ts`):**
     - `Users`, `Accounts`, `Sessions`, `VerificationTokens`. (User model includes `lastKnownTotalGitHubRepos` and `lastGitHubRepoCountSync`).
     - `Repositories`: Stores metadata for GitHub repositories synced by users.
-    - `PullRequests`: Stores details of GitHub pull requests, linking to `Analyses`.
-    - `Analyses`: Stores results of PR analyses, including file-level breakdowns and `fileAnalyses.vectorEmbedding`.
-    - `RepositoryScans`: Stores results of full repository codebase scans, including `fileAnalyses.vectorEmbedding`.
-    - `AuditLogs`: Records administrative actions.
+    - `PullRequests`: Stores details of GitHub pull requests, linking to `Analyses`. Includes `analysisStatus` and `qualityScore`.
+    - `Analyses`: Stores results of PR analyses, including file-level breakdowns, `fileAnalyses.vectorEmbedding`, and `resolved` status for issues/suggestions.
+    - `RepositoryScans`: Stores results of full repository codebase scans, including `fileAnalyses.vectorEmbedding`, and `resolved` status for issues/suggestions.
+    - `AuditLogs`: Records administrative actions, including Emergency Policy changes.
     - `ContactMessages`: Stores messages submitted via the contact form.
+    - `GlobalSettings`: Stores platform-wide settings like the Emergency Policy status.
 - **Vector Embeddings:** Generated by `text-embedding-004` and stored in `Analyses.fileAnalyses.vectorEmbedding` and `RepositoryScans.fileAnalyses.vectorEmbedding` for semantic search.
 
 ### 5.4. Authentication (NextAuth.js)
@@ -152,7 +163,7 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
 - Explicit cookie configuration for improved reliability.
 
 ### 5.5. GitHub Integration (Octokit.js)
-- Centralized in `src/lib/github.ts`. Fetches repos, PRs, file content, user's total repo count.
+- Centralized in `src/lib/github.ts`. Fetches repos, PRs, file content, user's total repo count, default branch, commit SHAs, and file trees.
 
 ## 6. Generative AI Integration (Genkit & Models)
 
@@ -163,8 +174,8 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
 
 ### 6.2. Google AI Models
 - **`googleai/gemini-1.5-flash-latest` (or similar LLM):**
-    - Code Analysis (`code-quality-analysis.ts`).
-    - PR/Repository Scan Summarization (`summarize-pr-analysis-flow.ts`): This flow is used to generate summaries for both individual PRs and full repository scans based on aggregated data.
+    - Code Analysis (`code-quality-analysis.ts`). Outputs `codeExample` for suggestions.
+    - PR/Repository Scan Summarization (`summarize-pr-analysis-flow.ts`): This flow is used to generate summaries for both individual PRs and full repository scans based on aggregated data. Now accepts a `tldrMode` parameter to generate concise bullet-point summaries.
     - Code Explanation (`explain-code-flow.ts`).
 - **`googleai/text-embedding-004`:**
     - **Embedding Generation:** Generates 768-dimension vector embeddings.
@@ -175,9 +186,9 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
     - Embeddings are stored in `fileAnalyses.vectorEmbedding` within both `Analyses` and `RepositoryScans` documents.
 
 ### 6.3. AI Flows Overview
-- **`code-quality-analysis.ts`:** Core flow for analyzing single code files.
-- **`summarize-pr-analysis-flow.ts`:** Generates narrative summaries for PRs and full repository scans.
-- **`explain-code-flow.ts`:** Explains code snippets.
+- **`code-quality-analysis.ts`:** Core flow for analyzing single code files. Produces `codeExample` for suggestions.
+- **`summarize-pr-analysis-flow.ts`:** Generates narrative summaries for PRs and full repository scans. Now supports `tldrMode` for concise summaries.
+- **`explain-code-flow.ts`:** Explains code snippets based on user questions (predefined or custom).
 - **`embed-text-flow.ts`:** Embeds text for semantic search queries.
 
 ### 6.4. Genkit Tools
@@ -189,19 +200,19 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
 - User initiates analysis via "**Analyze with AI**".
 - Backend (`/api/analyze/route.ts`): Fetches PR details, files from GitHub. Filters files (e.g., up to `MAX_FILES_TO_ANALYZE`). For each selected file:
     - Fetches content (diff or full, truncates if needed for analysis, uses full for embedding).
-    - Calls `analyzeCode` Genkit flow for quality, security, suggestions.
+    - Calls `analyzeCode` Genkit flow for quality, security, suggestions (including `codeExample`).
     - Generates vector embedding for file content via `ai.embed()` using `text-embedding-004`.
-- Aggregates results, calls `summarizePrAnalysis` flow for overall PR summary.
-- Saves analysis results to `Analyses` collection (including `fileAnalyses.vectorEmbedding`). Updates `PullRequests` document.
+- Aggregates results, calls `summarizePrAnalysis` flow for overall PR summary (default detailed summary).
+- Saves analysis results to `Analyses` collection (including `fileAnalyses.vectorEmbedding` and default `resolved: false` for issues/suggestions). Updates `PullRequests` document with analysis ID, status, and quality score.
 
 ### 7.2. Full Repository Codebase Scan
 - User initiates scan via "**Analyze Codebase with AI**".
 - Backend (`/api/repository-scan/route.ts`): Determines default branch, fetches file tree. Filters and selects a limited number of source files (up to `MAX_FILES_TO_SCAN`). For each file:
     - Fetches full content (truncates if needed for analysis, uses full for embedding).
-    - Calls `analyzeCode` flow.
+    - Calls `analyzeCode` flow (including `codeExample`).
     - Generates vector embedding for file content via `ai.embed()` using `text-embedding-004`.
-- Aggregates results and generates an overall summary by calling `summarizePrAnalysis` flow.
-- Saves results to `RepositoryScans` collection (including `fileAnalyses.vectorEmbedding`).
+- Aggregates results and generates an overall summary by calling `summarizePrAnalysis` flow (default detailed summary).
+- Saves results to `RepositoryScans` collection (including `fileAnalyses.vectorEmbedding` and default `resolved: false`).
 
 ### 7.3. Semantic Search (General Query via `/search` page)
 - User submits query on `/search` page.
@@ -220,12 +231,24 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
     - Calls `findSimilarCode`, passing this embedding, `queryAnalysisId` (for exclusion), and `queryFilename`.
 - Returns list of `SimilarCodeResult` objects.
 
+### 7.5. Marking an Issue/Suggestion as Resolved
+- User toggles the "Resolved" switch on an analysis detail page.
+- Frontend calls `PATCH /api/analysis-items/[analysisOrScanId]/resolve-item`.
+- Backend: Validates input, finds the parent `Analysis` or `RepositoryScan` document, locates the specific item using title, file, line, and description, updates its `resolved` status, and saves the document.
+
+### 7.6. Toggling Emergency Policy (Admin)
+- Admin clicks the "Activate/Deactivate Emergency Policy" button on `/admin`.
+- Frontend calls `PATCH /api/admin/settings/emergency-policy` with `{ enabled: true/false }`.
+- Backend: Updates the `emergencyPolicy` document in `GlobalSettings` and creates an audit log entry.
+- Other frontend pages (e.g., PR list, PR detail) call `GET /api/settings/emergency-policy` to fetch the current status and display relevant warning banners.
+
 ## 8. Security Considerations
 - Authentication & Authorization by NextAuth.js.
-- Input Validation with Zod schemas.
-- GitHub API Access via user-specific tokens.
+- Input Validation with Zod schemas in API routes and Genkit flows.
+- GitHub API Access via user-specific tokens (scoped appropriately).
 - Database Security with env-managed URI, Mongoose schemas.
 - AI Model Safety (Genkit/Google AI built-in filters).
+- Admin-controlled Emergency Policy (simulated blocking) for critical vulnerabilities.
 
 ## 9. Local Setup & Vector Search
 - **Environment Variables:** Critical variables must be configured in `.env`.
@@ -243,7 +266,7 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
 - **Development Servers:** Next.js app (`npm run dev`) and Genkit dev server (`npm run genkit:dev`) must be running.
 
 ## 10. Future Enhancements (from README.md)
-- CI/CD Integration.
+- CI/CD Integration (e.g., *actually* blocking PRs based on Emergency Policy).
 - Asynchronous Full Repository Scans (and analysis of more files).
 - Enhanced Semantic Search (more sophisticated queries, filtering).
 - Customizable Analysis Rules.
@@ -251,3 +274,4 @@ codexair's Semantic Code Search transcends traditional keyword-based searching b
 - IDE Integration.
 - Expanded Language Support.
 
+    
