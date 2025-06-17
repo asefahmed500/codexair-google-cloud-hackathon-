@@ -48,6 +48,9 @@ export default function AnalysisDetailsPage() {
   const [isFetchingTldr, setIsFetchingTldr] = useState(false);
   const [tldrError, setTldrError] = useState<string | null>(null);
 
+  const [showResolvedSecurityIssues, setShowResolvedSecurityIssues] = useState(true);
+  const [showResolvedSuggestions, setShowResolvedSuggestions] = useState(true);
+
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -279,6 +282,9 @@ export default function AnalysisDetailsPage() {
       }
   };
 
+  const filteredSecurityIssues = analysis.securityIssues?.filter(issue => showResolvedSecurityIssues || !issue.resolved);
+  const filteredSuggestions = analysis.suggestions?.filter(suggestion => showResolvedSuggestions || !suggestion.resolved);
+
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
@@ -365,11 +371,23 @@ export default function AnalysisDetailsPage() {
 
             <TabsContent value="security">
               <Card>
-                <CardHeader><CardTitle className="text-xl md:text-2xl">Security Issues</CardTitle></CardHeader>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <CardTitle className="text-xl md:text-2xl">Security Issues</CardTitle>
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                id="show-resolved-security"
+                                checked={showResolvedSecurityIssues}
+                                onCheckedChange={setShowResolvedSecurityIssues}
+                            />
+                            <Label htmlFor="show-resolved-security" className="text-sm">Show Resolved</Label>
+                        </div>
+                    </div>
+                </CardHeader>
                 <CardContent>
-                  {analysis.securityIssues?.length > 0 ? (
+                  {filteredSecurityIssues?.length > 0 ? (
                     <Accordion type="single" collapsible className="w-full">
-                      {analysis.securityIssues.map((issue, index) => (
+                      {filteredSecurityIssues.map((issue, index) => (
                         <AccordionItem value={`issue-${index}`} key={index} className={`${issue.resolved ? 'opacity-60' : ''}`}>
                           <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md text-sm sm:text-base">
                             <div className="flex items-center justify-between w-full">
@@ -388,7 +406,14 @@ export default function AnalysisDetailsPage() {
                                 <Switch
                                     id={`resolve-security-${index}`}
                                     checked={!!issue.resolved}
-                                    onCheckedChange={() => handleToggleResolved('security', index, !!issue.resolved)}
+                                    onCheckedChange={() => {
+                                        const originalIndex = analysis.securityIssues.findIndex(
+                                            origIssue => origIssue.title === issue.title && origIssue.file === issue.file && origIssue.line === issue.line && origIssue.description === issue.description
+                                        );
+                                        if (originalIndex !== -1) {
+                                          handleToggleResolved('security', originalIndex, !!issue.resolved);
+                                        }
+                                    }}
                                     aria-label={issue.resolved ? 'Mark as unresolved' : 'Mark as resolved'}
                                 />
                             </div>
@@ -427,18 +452,30 @@ export default function AnalysisDetailsPage() {
                         </AccordionItem>
                       ))}
                     </Accordion>
-                  ) : <p className="text-muted-foreground">No security issues found.</p>}
+                  ) : <p className="text-muted-foreground">{!showResolvedSecurityIssues && analysis.securityIssues?.some(i => i.resolved) ? "All resolved issues are hidden." : "No security issues found."}</p>}
                 </CardContent>
               </Card>
             </TabsContent>
 
             <TabsContent value="suggestions">
                <Card>
-                <CardHeader><CardTitle className="text-xl md:text-2xl">Improvement Suggestions</CardTitle></CardHeader>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <CardTitle className="text-xl md:text-2xl">Improvement Suggestions</CardTitle>
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                id="show-resolved-suggestions"
+                                checked={showResolvedSuggestions}
+                                onCheckedChange={setShowResolvedSuggestions}
+                            />
+                            <Label htmlFor="show-resolved-suggestions" className="text-sm">Show Resolved</Label>
+                        </div>
+                    </div>
+                </CardHeader>
                 <CardContent>
-                  {analysis.suggestions?.length > 0 ? (
+                  {filteredSuggestions?.length > 0 ? (
                     <Accordion type="single" collapsible className="w-full">
-                      {analysis.suggestions.map((suggestion, index) => (
+                      {filteredSuggestions.map((suggestion, index) => (
                         <AccordionItem value={`suggestion-${index}`} key={index} className={`${suggestion.resolved ? 'opacity-60' : ''}`}>
                           <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md text-sm sm:text-base">
                            <div className="flex items-center justify-between w-full">
@@ -458,7 +495,14 @@ export default function AnalysisDetailsPage() {
                                 <Switch
                                     id={`resolve-suggestion-${index}`}
                                     checked={!!suggestion.resolved}
-                                    onCheckedChange={() => handleToggleResolved('suggestion', index, !!suggestion.resolved)}
+                                    onCheckedChange={() => {
+                                        const originalIndex = analysis.suggestions.findIndex(
+                                            origSug => origSug.title === suggestion.title && origSug.file === suggestion.file && origSug.line === suggestion.line && origSug.description === suggestion.description
+                                        );
+                                        if (originalIndex !== -1) {
+                                            handleToggleResolved('suggestion', originalIndex, !!suggestion.resolved);
+                                        }
+                                    }}
                                     aria-label={suggestion.resolved ? 'Mark as unresolved' : 'Mark as resolved'}
                                 />
                             </div>
@@ -498,7 +542,7 @@ export default function AnalysisDetailsPage() {
                         </AccordionItem>
                       ))}
                     </Accordion>
-                  ) : <p className="text-muted-foreground">No specific suggestions available.</p>}
+                  ) : <p className="text-muted-foreground">{!showResolvedSuggestions && analysis.suggestions?.some(s => s.resolved) ? "All resolved suggestions are hidden." : "No specific suggestions available."}</p>}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -725,9 +769,14 @@ function AnalysisDetailsLoadingSkeleton() {
             
             {/* Tab Content Skeleton (Showing Overview as example) */}
             <Card>
-                <CardHeader><Skeleton className="h-7 w-1/2" /></CardHeader> {/* Tab Card Title */}
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <Skeleton className="h-7 w-1/2" /> {/* Tab Card Title */}
+                        <Skeleton className="h-8 w-32" /> {/* Show Resolved Toggle Skeleton */}
+                    </div>
+                </CardHeader>
                 <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[...Array(6)].map((_, i) => (
+                    {[...Array(6)].map((_, i) => ( // Example for overview metrics
                         <Card key={i} className="shadow-sm">
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <Skeleton className="h-5 w-2/3" /> {/* Metric Title */}

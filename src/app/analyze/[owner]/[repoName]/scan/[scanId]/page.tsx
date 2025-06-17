@@ -49,6 +49,9 @@ export default function RepositoryScanDetailsPage() {
   const [isFetchingTldr, setIsFetchingTldr] = useState(false);
   const [tldrError, setTldrError] = useState<string | null>(null);
 
+  const [showResolvedSecurityIssues, setShowResolvedSecurityIssues] = useState(true);
+  const [showResolvedSuggestions, setShowResolvedSuggestions] = useState(true);
+
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -278,6 +281,9 @@ export default function RepositoryScanDetailsPage() {
       }
   };
 
+  const filteredSecurityIssues = scanData.securityIssues?.filter(issue => showResolvedSecurityIssues || !issue.resolved);
+  const filteredSuggestions = scanData.suggestions?.filter(suggestion => showResolvedSuggestions || !suggestion.resolved);
+
 
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
@@ -374,11 +380,23 @@ export default function RepositoryScanDetailsPage() {
 
             <TabsContent value="security">
               <Card>
-                <CardHeader><CardTitle className="text-xl md:text-2xl">Security Issues</CardTitle></CardHeader>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <CardTitle className="text-xl md:text-2xl">Security Issues</CardTitle>
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                id="show-resolved-security-scan"
+                                checked={showResolvedSecurityIssues}
+                                onCheckedChange={setShowResolvedSecurityIssues}
+                            />
+                            <Label htmlFor="show-resolved-security-scan" className="text-sm">Show Resolved</Label>
+                        </div>
+                    </div>
+                </CardHeader>
                 <CardContent>
-                  {scanData.securityIssues?.length > 0 ? (
+                  {filteredSecurityIssues?.length > 0 ? (
                     <Accordion type="single" collapsible className="w-full">
-                      {scanData.securityIssues.map((issue, index) => (
+                      {filteredSecurityIssues.map((issue, index) => (
                         <AccordionItem value={`issue-${index}`} key={index} className={`${issue.resolved ? 'opacity-60' : ''}`}>
                           <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md text-sm sm:text-base">
                             <div className="flex items-center justify-between w-full">
@@ -395,9 +413,16 @@ export default function RepositoryScanDetailsPage() {
                                     {issue.resolved ? 'Marked as Resolved' : 'Mark as Resolved'}
                                 </p>
                                 <Switch
-                                    id={`resolve-security-${index}`}
+                                    id={`resolve-security-scan-${index}`}
                                     checked={!!issue.resolved}
-                                    onCheckedChange={() => handleToggleResolved('security', index, !!issue.resolved)}
+                                    onCheckedChange={() => {
+                                        const originalIndex = scanData.securityIssues.findIndex(
+                                            origIssue => origIssue.title === issue.title && origIssue.file === issue.file && origIssue.line === issue.line && origIssue.description === issue.description
+                                        );
+                                        if (originalIndex !== -1) {
+                                            handleToggleResolved('security', originalIndex, !!issue.resolved);
+                                        }
+                                    }}
                                     aria-label={issue.resolved ? 'Mark as unresolved' : 'Mark as resolved'}
                                 />
                             </div>
@@ -433,18 +458,30 @@ export default function RepositoryScanDetailsPage() {
                         </AccordionItem>
                       ))}
                     </Accordion>
-                  ) : <p className="text-muted-foreground">No security issues found in this scan.</p>}
+                  ) : <p className="text-muted-foreground">{!showResolvedSecurityIssues && scanData.securityIssues?.some(i => i.resolved) ? "All resolved issues are hidden." : "No security issues found in this scan."}</p>}
                 </CardContent>
               </Card>
             </TabsContent>
 
             <TabsContent value="suggestions">
                <Card>
-                <CardHeader><CardTitle className="text-xl md:text-2xl">Improvement Suggestions</CardTitle></CardHeader>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <CardTitle className="text-xl md:text-2xl">Improvement Suggestions</CardTitle>
+                        <div className="flex items-center space-x-2">
+                            <Switch
+                                id="show-resolved-suggestions-scan"
+                                checked={showResolvedSuggestions}
+                                onCheckedChange={setShowResolvedSuggestions}
+                            />
+                            <Label htmlFor="show-resolved-suggestions-scan" className="text-sm">Show Resolved</Label>
+                        </div>
+                    </div>
+                </CardHeader>
                 <CardContent>
-                  {scanData.suggestions?.length > 0 ? (
+                  {filteredSuggestions?.length > 0 ? (
                     <Accordion type="single" collapsible className="w-full">
-                      {scanData.suggestions.map((suggestion, index) => (
+                      {filteredSuggestions.map((suggestion, index) => (
                         <AccordionItem value={`suggestion-${index}`} key={index} className={`${suggestion.resolved ? 'opacity-60' : ''}`}>
                           <AccordionTrigger className="hover:bg-muted/50 px-2 rounded-md text-sm sm:text-base">
                            <div className="flex items-center justify-between w-full">
@@ -462,9 +499,17 @@ export default function RepositoryScanDetailsPage() {
                                     {suggestion.resolved ? 'Marked as Resolved' : 'Mark as Resolved'}
                                 </p>
                                 <Switch
-                                    id={`resolve-suggestion-${index}`}
+                                    id={`resolve-suggestion-scan-${index}`}
                                     checked={!!suggestion.resolved}
-                                    onCheckedChange={() => handleToggleResolved('suggestion', index, !!suggestion.resolved)}
+                                    onCheckedChange={() => {
+                                        const originalIndex = scanData.suggestions.findIndex(
+                                          origSug => origSug.title === suggestion.title && origSug.file === suggestion.file && origSug.line === suggestion.line && origSug.description === suggestion.description
+                                        );
+                                        if (originalIndex !== -1) {
+                                          handleToggleResolved('suggestion', originalIndex, !!suggestion.resolved);
+                                        }
+                                      }
+                                    }
                                     aria-label={suggestion.resolved ? 'Mark as unresolved' : 'Mark as resolved'}
                                 />
                             </div>
@@ -501,7 +546,7 @@ export default function RepositoryScanDetailsPage() {
                         </AccordionItem>
                       ))}
                     </Accordion>
-                  ) : <p className="text-muted-foreground">No specific improvement suggestions available from this scan.</p>}
+                  ) : <p className="text-muted-foreground">{!showResolvedSuggestions && scanData.suggestions?.some(s => s.resolved) ? "All resolved suggestions are hidden." : "No specific improvement suggestions available from this scan."}</p>}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -722,7 +767,12 @@ function ScanDetailsLoadingSkeleton({owner, repoName}: {owner: string, repoName:
               <Skeleton className="h-full w-full rounded-sm" />
             </div>
             <Card>
-                <CardHeader><Skeleton className="h-7 w-1/2" /></CardHeader>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <Skeleton className="h-7 w-1/2" /> {/* Tab Card Title */}
+                        <Skeleton className="h-8 w-32" /> {/* Show Resolved Toggle Skeleton */}
+                    </div>
+                </CardHeader>
                 <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[...Array(6)].map((_, i) => (
                         <Card key={i} className="shadow-sm">
