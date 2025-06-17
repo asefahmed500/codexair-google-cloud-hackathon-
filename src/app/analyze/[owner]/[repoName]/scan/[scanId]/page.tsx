@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { RepositoryScanResult, SecurityIssue, Suggestion, FileAnalysisItem, SimilarCodeResult } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, ScanSearch, GitBranch, CalendarDays, ClipboardCopy } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, ScanSearch, GitBranch, CalendarDays, ClipboardCopy, FileSliders } from 'lucide-react'; // Added FileSliders
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,8 @@ import Navbar from '@/components/layout/navbar';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertTitle as AlertBoxTitle, AlertDescription as AlertBoxDescription } from "@/components/ui/alert";
+import { Switch } from '@/components/ui/switch'; // Import Switch
+import { Label } from '@/components/ui/label'; // Import Label
 
 
 const FALLBACK_SUMMARY_MESSAGE = "Overall repository scan summary could not be generated.";
@@ -42,12 +44,21 @@ export default function RepositoryScanDetailsPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [currentSearchContext, setCurrentSearchContext] = useState<{type: 'security' | 'suggestion', title: string, filename: string} | null>(null);
 
+  // State for TL;DR summary
+  const [showTldrSummary, setShowTldrSummary] = useState(false);
+  const [tldrSummaryText, setTldrSummaryText] = useState<string | null>(null);
+  const [isFetchingTldr, setIsFetchingTldr] = useState(false);
+  const [tldrError, setTldrError] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
     } else if (status === 'authenticated' && scanId) {
       setLoading(true);
+      setShowTldrSummary(false); // Reset TLDR toggle on new scan load
+      setTldrSummaryText(null);
+      setTldrError(null);
       fetch(`/api/repository-scan/${scanId}`)
         .then(res => {
           if (!res.ok) {
@@ -68,6 +79,29 @@ export default function RepositoryScanDetailsPage() {
     }
   }, [status, router, scanId]);
 
+  const handleTldrToggleScan = async (checked: boolean) => {
+    setShowTldrSummary(checked);
+    if (checked && !tldrSummaryText && scanId && !isFetchingTldr) {
+      setIsFetchingTldr(true);
+      setTldrError(null);
+      try {
+        const response = await fetch(`/api/repository-scan/${scanId}/tldr-summary`);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.details || errorData.error || 'Failed to fetch TL;DR summary for scan');
+        }
+        const data = await response.json();
+        setTldrSummaryText(data.tldrSummary || "Could not generate TL;DR summary for scan.");
+      } catch (err: any) {
+        setTldrError(err.message);
+        setTldrSummaryText("Error loading TL;DR summary for scan.");
+        toast({ title: "Scan TL;DR Error", description: err.message, variant: "destructive" });
+      } finally {
+        setIsFetchingTldr(false);
+      }
+    }
+  };
+
   const handleFindSimilarCode = async (queryFilename: string, contextTitle: string, type: 'security' | 'suggestion') => {
     if (!scanId) return; 
     setIsSearchingSimilarCode(true);
@@ -82,7 +116,7 @@ export default function RepositoryScanDetailsPage() {
         body: JSON.stringify({
           queryAnalysisId: scanId, 
           queryFilename,
-          sourceType: 'repo_scan' // Critical: specify the source type
+          sourceType: 'repo_scan' 
         }),
       });
       if (!response.ok) {
@@ -212,12 +246,36 @@ export default function RepositoryScanDetailsPage() {
                     </AlertBoxDescription>
                 </Alert>
 
-                <h3 className="font-semibold text-lg flex items-center gap-2 mt-3"><Lightbulb className="h-5 w-5 text-accent" />AI Summary (Overall Repository):</h3>
-                <ScrollArea className="h-auto max-h-48 w-full rounded-md border p-4 bg-background shadow">
-                    <pre className={`text-sm whitespace-pre-wrap font-mono ${scanData.summaryAiInsights === FALLBACK_SUMMARY_MESSAGE || !scanData.summaryAiInsights || scanData.summaryAiInsights.trim() === "" ? 'text-muted-foreground italic' : 'text-foreground'}`}>
-                        {displayAiInsights}
-                    </pre>
-                </ScrollArea>
+                <div className="flex justify-between items-center w-full mt-3">
+                  <h3 className="font-semibold text-lg flex items-center gap-2"><Lightbulb className="h-5 w-5 text-accent" />AI Summary (Overall Repository):</h3>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="tldr-toggle-scan"
+                      checked={showTldrSummary}
+                      onCheckedChange={handleTldrToggleScan}
+                      aria-label="Toggle TL;DR Summary"
+                    />
+                    <Label htmlFor="tldr-toggle-scan" className="text-sm font-medium">TL;DR</Label>
+                  </div>
+                </div>
+                 {isFetchingTldr && (
+                  <div className="w-full flex items-center justify-center p-4">
+                    <RefreshCw className="h-5 w-5 animate-spin mr-2" /> Fetching TL;DR summary...
+                  </div>
+                )}
+                {!isFetchingTldr && tldrError && (
+                  <p className="text-destructive text-sm">Error: {tldrError}</p>
+                )}
+                {!isFetchingTldr && !tldrError && (
+                  <ScrollArea className="h-auto max-h-48 w-full rounded-md border p-4 bg-background shadow">
+                      <pre className={`text-sm whitespace-pre-wrap font-mono ${
+                         (showTldrSummary && (!tldrSummaryText || tldrSummaryText === FALLBACK_SUMMARY_MESSAGE)) || 
+                         (!showTldrSummary && (displayAiInsights === FALLBACK_SUMMARY_MESSAGE || !scanData.summaryAiInsights || scanData.summaryAiInsights.trim() === "")) 
+                         ? 'text-muted-foreground italic' : 'text-foreground'}`}>
+                          {showTldrSummary ? (tldrSummaryText || "Generating TL;DR summary...") : displayAiInsights}
+                      </pre>
+                  </ScrollArea>
+                )}
             </CardFooter>
         </Card>
 
@@ -557,7 +615,10 @@ function ScanDetailsLoadingSkeleton({owner, repoName}: {owner: string, repoName:
             </CardHeader>
             <CardFooter className="flex-col items-start gap-2 pt-4 border-t bg-muted/30">
                 <Skeleton className="h-16 w-full mb-2" /> {/* Alert box placeholder */}
-                <Skeleton className="h-6 w-1/4 mb-2" />
+                <div className="flex justify-between items-center w-full mt-3">
+                    <Skeleton className="h-6 w-1/3 mb-1" /> {/* AI Review Summary Title */}
+                    <Skeleton className="h-8 w-20" /> {/* TLDR Toggle Skeleton */}
+                </div>
                 <Skeleton className="h-24 w-full rounded-md border p-4" />
             </CardFooter>
         </Card>
