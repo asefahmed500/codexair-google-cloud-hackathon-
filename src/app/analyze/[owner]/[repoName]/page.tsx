@@ -14,7 +14,7 @@ import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import Navbar from '@/components/layout/navbar'; 
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle as AlertBoxTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle as AlertBoxTitle } from "@/components/ui/alert";
 
 
 interface DisplayablePullRequest {

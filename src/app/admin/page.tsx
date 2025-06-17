@@ -17,7 +17,7 @@ import type { AdminSummaryStats } from '@/app/api/admin/summary-stats/route';
 import type { BusFactorAlert } from '@/app/api/admin/bus-factor-alerts/route';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX, FileSliders, AlertTriangle, ShieldCheckIcon as ShieldCheckIconActive, UserFocus, Settings as SettingsIcon } from 'lucide-react';
+import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX, FileSliders, AlertTriangle, ShieldCheckIcon as ShieldCheckIconActive, UserFocus, Settings as SettingsIcon, RefreshCw } from 'lucide-react';
 
 interface UserTableRowProps {
   user: AdminUserView;
@@ -450,7 +450,7 @@ export default function AdminPage() {
         <Card className="shadow-lg mb-8">
           <CardHeader>
             <h2 className="text-xl font-semibold text-foreground flex items-center">
-              <SettingsIcon className="h-6 w-6 mr-2 text-primary" /> {/* Changed Icon */}
+              <SettingsIcon className="h-6 w-6 mr-2 text-primary" /> 
               Emergency Controls
             </h2>
           </CardHeader>
