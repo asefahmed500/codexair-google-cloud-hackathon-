@@ -16,7 +16,7 @@ import type { AdminUserView } from '@/types';
 import type { AdminSummaryStats } from '@/app/api/admin/summary-stats/route';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX } from 'lucide-react';
+import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX, FileSliders } from 'lucide-react';
 
 interface UserTableRowProps {
   user: AdminUserView;
@@ -344,13 +344,28 @@ export default function AdminPage() {
           </CardHeader>
           <CardContent>
             <h2 className="text-xl font-semibold mb-4 text-foreground">Platform Overview</h2>
-            {loadingStats && <div className="grid md:grid-cols-3 gap-4 mb-6"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>}
+            {loadingStats && <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <Skeleton className="h-28 w-full" />
+                <Skeleton className="h-28 w-full" />
+                <Skeleton className="h-28 w-full" />
+                <Skeleton className="h-28 w-full" />
+              </div>}
             {errorStats && <p className="text-destructive mb-4">Error loading platform stats: {errorStats}</p>}
             {summaryStats && !loadingStats && (
-              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8">
+              <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
                 <StatCard Icon={Users} title="Total Users" value={summaryStats.totalUsers} />
                 <StatCard Icon={FolderGit2} title="Total Repositories Synced" value={summaryStats.totalRepositories} description="Across all users" />
-                <StatCard Icon={FileScan} title="Total PR Analyses" value={summaryStats.totalAnalyses} />
+                <StatCard Icon={FileScan} title="Total Analyses" value={summaryStats.totalAnalyses} description="PRs & Full Scans" />
+                {summaryStats.topTimeWaster ? (
+                  <StatCard 
+                    Icon={FileSliders} 
+                    title="Top Improvement Area" 
+                    value={summaryStats.topTimeWaster.type} 
+                    description={`Est. ${summaryStats.topTimeWaster.estimatedHours} total hrs across ${summaryStats.topTimeWaster.occurrences} occurrences`} 
+                  />
+                ) : (
+                  <StatCard Icon={FileSliders} title="Top Improvement Area" value="N/A" description="No suggestion data yet" />
+                )}
               </div>
             )}
           </CardContent>
