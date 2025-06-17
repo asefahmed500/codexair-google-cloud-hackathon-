@@ -1,23 +1,23 @@
 
 'use client';
-import { useEffect, useState } from 'react';
-import { useSession, signIn } from 'next-auth/react'; // Added signIn
+import { useEffect, useState, useCallback } from 'react';
+import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import AnalyticsOverview from '@/components/dashboard/analytics-overview';
 import RecentReviews from '@/components/dashboard/recent-reviews';
 import QualityTrends from '@/components/dashboard/quality-trends';
 import TopIssues from '@/components/dashboard/top-issues';
-import SecurityHotspots from '@/components/dashboard/security-hotspots'; 
-import TeamMetrics from '@/components/dashboard/team-metrics'; 
+import SecurityHotspots from '@/components/dashboard/security-hotspots';
+import TeamMetrics from '@/components/dashboard/team-metrics';
 import ConnectedRepositories from '@/components/dashboard/connected-repositories';
 import { DashboardData } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import Link from 'next/link';
 import Navbar from '@/components/layout/navbar';
-import DashboardLoading from './loading'; 
-import { BarChartBig, Shield, GitFork, Github, AlertTriangle } from 'lucide-react'; // Added Github, AlertTriangle
-import { Alert, AlertDescription, AlertTitle as AlertBoxTitle } from "@/components/ui/alert"; // Renamed AlertTitle to avoid conflict
+import DashboardLoading from './loading';
+import { BarChartBig, Shield, GitFork, Github, AlertTriangle, RefreshCw, Info } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle as AlertBoxTitle } from "@/components/ui/alert";
 import { toast } from '@/hooks/use-toast';
 
 interface LinkedAccountProviders {
@@ -31,27 +31,19 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [linkedProviders, setLinkedProviders] = useState<LinkedAccountProviders | null>(null);
   const [loadingLinkedProviders, setLoadingLinkedProviders] = useState(true);
 
-  useEffect(() => {
-    if (status === 'loading') return; 
-
-    if (status === 'unauthenticated') {
-      router.push('/auth/signin');
-    } else if (status === 'authenticated') {
-      if (session?.user?.role === 'admin') {
-        router.replace('/admin'); 
-        return; 
-      }
-      fetchDashboardData();
-      fetchLinkedAccounts();
+  const fetchDashboardData = useCallback(async (showRefreshToast = false) => {
+    if (showRefreshToast) {
+      setIsRefreshing(true);
+      toast({ title: "Refreshing Dashboard...", description: "Fetching latest analytics." });
+    } else if (!dashboardData) { // Only set global loading if no data yet
+      setLoading(true);
     }
-  }, [status, session, router]);
-
-  async function fetchDashboardData() {
-    setLoading(true);
     setError(null);
+
     try {
       const response = await fetch('/api/dashboard');
       if (!response.ok) {
@@ -72,15 +64,18 @@ export default function DashboardPage() {
       }
       const data: DashboardData = await response.json();
       setDashboardData(data);
+      if (showRefreshToast) toast({ title: "Dashboard Refreshed", description: "Analytics are up to date." });
     } catch (err: any) {
       console.error("Error in fetchDashboardData:", err);
       setError(err.message || "An unknown error occurred while fetching data.");
+      if (showRefreshToast) toast({ title: "Refresh Error", description: err.message, variant: "destructive" });
     } finally {
-      setLoading(false);
+      if (showRefreshToast) setIsRefreshing(false);
+      else setLoading(false);
     }
-  }
+  }, [dashboardData]); // Include dashboardData to avoid stale closures if showRefreshToast logic depends on it
 
-  async function fetchLinkedAccounts() {
+  const fetchLinkedAccounts = useCallback(async () => {
     setLoadingLinkedProviders(true);
     try {
       const response = await fetch('/api/user/linked-accounts');
@@ -92,13 +87,46 @@ export default function DashboardPage() {
       setLinkedProviders(data);
     } catch (err: any) {
       console.error("Error fetching linked accounts:", err);
-      // Don't set a global error for this, as dashboard can still load
       toast({ title: "Info", description: "Could not verify GitHub account linkage status.", variant: "default" });
     } finally {
       setLoadingLinkedProviders(false);
     }
-  }
-  
+  }, []);
+
+  useEffect(() => {
+    if (status === 'loading') return;
+
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin');
+    } else if (status === 'authenticated') {
+      if (session?.user?.role === 'admin') {
+        router.replace('/admin');
+        return;
+      }
+      fetchDashboardData();
+      fetchLinkedAccounts();
+    }
+  }, [status, session, router, fetchDashboardData, fetchLinkedAccounts]);
+
+  // Effect for re-fetching data on window focus or tab visibility change
+  useEffect(() => {
+    const handleActivity = () => {
+      // Only fetch if the document is visible and user is authenticated
+      if (document.visibilityState === 'visible' && status === 'authenticated' && session?.user?.role !== 'admin') {
+        console.log("Dashboard tab became visible or window focused, re-fetching data...");
+        fetchDashboardData(false); // Fetch without showing the "refreshing" toast
+      }
+    };
+
+    window.addEventListener('focus', handleActivity);
+    document.addEventListener('visibilitychange', handleActivity);
+
+    return () => {
+      window.removeEventListener('focus', handleActivity);
+      document.removeEventListener('visibilitychange', handleActivity);
+    };
+  }, [fetchDashboardData, status, session]); // Depend on fetchDashboardData, status, and session
+
   const GitHubConnectPrompt = () => (
     <Alert variant="default" className="mb-6 border-primary/50 bg-primary/5">
         <Github className="h-5 w-5 text-primary" />
@@ -119,7 +147,7 @@ export default function DashboardPage() {
   );
 
   if (session?.user?.role === 'admin' && status === 'authenticated') {
-    return <DashboardLoading />; 
+    return <DashboardLoading />;
   }
 
   if (status === 'loading' || (loading && !dashboardData && !error) || (loadingLinkedProviders && !linkedProviders && status === 'authenticated')) {
@@ -137,7 +165,9 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="text-center">
               <p className="text-muted-foreground">{error}</p>
-              <Button onClick={fetchDashboardData} className="mt-4">Try Again</Button>
+              <Button onClick={() => fetchDashboardData(true)} className="mt-4">
+                <RefreshCw className="mr-2 h-4 w-4" /> Try Again
+              </Button>
             </CardContent>
           </Card>
         </main>
@@ -150,10 +180,9 @@ export default function DashboardPage() {
     );
   }
 
-  if (!session) return null; 
+  if (!session) return null;
 
   if (!loading && !error && (!dashboardData || (dashboardData.overview.totalAnalyses === 0 && dashboardData.connectedRepositories.length === 0) ) ) {
-    // This is the "Welcome / Get Started" screen
     return (
       <div className="flex flex-col min-h-screen bg-secondary/50">
         <Navbar />
@@ -168,7 +197,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-6">
                {!loadingLinkedProviders && linkedProviders && !linkedProviders.github && (
-                <div className="text-left px-2"> {/* Added padding for Alert within CardContent */}
+                <div className="text-left px-2">
                     <GitHubConnectPrompt />
                 </div>
               )}
@@ -196,20 +225,23 @@ export default function DashboardPage() {
     );
   }
 
-  // Main dashboard display
   return (
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar />
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground font-headline">codexair Dashboard</h1>
+            <Button onClick={() => fetchDashboardData(true)} variant="outline" disabled={isRefreshing || loading}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+            </Button>
         </div>
         
         {!loadingLinkedProviders && linkedProviders && !linkedProviders.github && (
            <GitHubConnectPrompt />
         )}
         
-        {dashboardData && ( 
+        {dashboardData && (
           <div className="grid gap-6">
             <AnalyticsOverview overview={dashboardData.overview} />
             <div className="grid md:grid-cols-2 gap-6">
