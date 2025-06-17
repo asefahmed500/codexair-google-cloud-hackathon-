@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { PullRequest, Analysis, connectMongoose, Repository, AuditLog, type AuditLogActionType } from '@/lib/mongodb';
+import { PullRequest, Analysis, Repository, connectMongoose, AuditLog, type AuditLogActionType } from '@/lib/mongodb';
 import type { AnalysisReportItem, SecurityIssue, PullRequest as PRType, CodeAnalysis as AnalysisDocType, Repository as RepoType } from '@/types';
 import mongoose from 'mongoose';
 
@@ -10,7 +10,8 @@ import mongoose from 'mongoose';
 interface PopulatedPR extends Omit<PRType, 'analysis' | 'repositoryId'> {
   _id: mongoose.Types.ObjectId; 
   analysis: AnalysisDocType | null;
-  repositoryId: RepoType | null; 
+  // repositoryId is a string in the PR schema, so it won't be a populated RepoType object here
+  // We will fetch Repository details separately if needed, or rely on pr.owner/pr.repoName
 }
 
 
@@ -23,14 +24,18 @@ export async function GET(request: NextRequest) {
 
     await connectMongoose();
 
+    // Fetch PullRequests and populate their 'analysis' field.
+    // repositoryId is a string in PullRequest schema, so direct population is not effective here.
+    // We will rely on pr.owner and pr.repoName stored on the PR document.
     const pullRequestsWithAnalyses = await PullRequest.find({ analysis: { $exists: true, $ne: null } })
-      .populate<{ analysis: AnalysisDocType | null }>('analysis')
-      .populate<{ repositoryId: RepoType | null }>({ path: 'repositoryId', model: 'Repository', select: 'fullName owner name' })
+      .populate<{ analysis: AnalysisDocType | null }>('analysis') 
       .sort({ createdAt: -1 })
-      .lean() as PopulatedPR[];
+      .lean();
 
-    const reportItems: AnalysisReportItem[] = pullRequestsWithAnalyses.map((pr) => {
-      const analysis = pr.analysis;
+    const reportItems: AnalysisReportItem[] = [];
+
+    for (const pr of pullRequestsWithAnalyses as any[]) { // Using 'as any[]' for simplicity in loop, pr structure matches PRType
+      const analysis = pr.analysis as AnalysisDocType | null;
       
       let criticalIssuesCount = 0;
       let highIssuesCount = 0;
@@ -42,23 +47,26 @@ export async function GET(request: NextRequest) {
         });
       }
       
-      let repoFullName = "N/A";
-      let ownerName = pr.owner || "N/A"; 
-      let actualRepoName = pr.repoName || "N/A"; 
+      // Use owner and repoName directly from the PullRequest document.
+      // These are set when the analysis is triggered (see /api/analyze).
+      const ownerName = pr.owner || "N/A"; 
+      const actualRepoName = pr.repoName || "N/A"; 
+      const repoFullName = (ownerName !== "N/A" && actualRepoName !== "N/A") ? `${ownerName}/${actualRepoName}` : "N/A";
 
-      if (pr.repositoryId && pr.repositoryId.fullName) {
-          repoFullName = pr.repositoryId.fullName;
-          if (pr.repositoryId.owner) ownerName = pr.repositoryId.owner;
-          if (pr.repositoryId.name) actualRepoName = pr.repositoryId.name;
-      } else if (pr.owner && pr.repoName) { 
-          repoFullName = `${pr.owner}/${pr.repoName}`;
-      }
+      // Optional: If a more canonical fullName is desired from the Repository collection,
+      // and pr.repositoryId (string of ObjectId) is reliable:
+      // let finalRepoFullName = repoFullName;
+      // if (pr.repositoryId && mongoose.Types.ObjectId.isValid(pr.repositoryId)) {
+      //   const relatedRepo = await Repository.findById(pr.repositoryId).select('fullName').lean();
+      //   if (relatedRepo && relatedRepo.fullName) {
+      //     finalRepoFullName = relatedRepo.fullName;
+      //   }
+      // }
 
-
-      return {
+      reportItems.push({
         prId: pr._id.toString(),
         prNumber: pr.number,
-        prTitle: pr.title,
+        prTitle: pr.title || 'N/A',
         repositoryFullName: repoFullName, 
         owner: ownerName, 
         repoName: actualRepoName, 
@@ -68,8 +76,8 @@ export async function GET(request: NextRequest) {
         criticalIssuesCount,
         highIssuesCount,
         analysisId: analysis?._id?.toString(),
-      };
-    });
+      });
+    }
 
     // Create audit log entry for fetching the report
     await new AuditLog({
@@ -91,3 +99,4 @@ export async function GET(request: NextRequest) {
     
 
     
+
