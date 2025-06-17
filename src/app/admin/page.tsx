@@ -12,11 +12,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import type { AdminUserView } from '@/types';
+import type { AdminUserView, AuditLogActionType } from '@/types';
 import type { AdminSummaryStats } from '@/app/api/admin/summary-stats/route';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX, FileSliders } from 'lucide-react';
+import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX, FileSliders, AlertTriangle, ShieldCheckIcon as ShieldCheckIconActive } from 'lucide-react';
 
 interface UserTableRowProps {
   user: AdminUserView;
@@ -39,19 +39,17 @@ const UserTableRow = React.memo(function UserTableRow({
 }: UserTableRowProps) {
   const isCurrentUser = currentSessionUserId === user._id;
   
-  // Is this the last admin account overall?
   const isLastAdmin = user.role === 'admin' && adminCount <= 1;
-  // Is this the last *active* admin account?
   const isLastActiveAdmin = user.role === 'admin' && user.status === 'active' && activeAdminCount <= 1;
 
   const disableRoleChange = 
     updatingUserId === user._id || 
-    (isCurrentUser && isLastAdmin); // Cannot demote self if last admin
+    (isCurrentUser && isLastAdmin); 
   const roleChangeTitle = (isCurrentUser && isLastAdmin) ? "Cannot change your own role as the last admin." : "";
 
   const disableStatusChange = 
     updatingUserId === user._id || 
-    (isCurrentUser && isLastActiveAdmin && user.status === 'active'); // Cannot suspend self if last active admin
+    (isCurrentUser && isLastActiveAdmin && user.status === 'active'); 
   const statusChangeTitle = (isCurrentUser && isLastActiveAdmin && user.status === 'active') 
     ? "Cannot suspend your own account as the last active admin." 
     : (user.status === 'active' ? `Suspend user ${user.email}` : `Activate user ${user.email}`);
@@ -71,7 +69,7 @@ const UserTableRow = React.memo(function UserTableRow({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="user">User</SelectItem>
-            <SelectItem value="admin" disabled={isLastAdmin && user.role === 'admin' && !isCurrentUser /* Can't make someone else non-admin if they're the last one */}>
+            <SelectItem value="admin" disabled={isLastAdmin && user.role === 'admin' && !isCurrentUser}>
               Admin {isLastAdmin && <ShieldAlert className="inline ml-1.5 h-3.5 w-3.5 text-destructive" title="Last admin account"/>}
             </SelectItem>
           </SelectContent>
@@ -123,6 +121,9 @@ export default function AdminPage() {
 
   const [adminCount, setAdminCount] = useState(0);
   const [activeAdminCount, setActiveAdminCount] = useState(0);
+
+  const [isEmergencyPolicyActive, setIsEmergencyPolicyActive] = useState(false);
+  const [togglingPolicy, setTogglingPolicy] = useState(false);
 
   const updateAdminCounts = useCallback((currentUsers: AdminUserView[]) => {
     setAdminCount(currentUsers.filter(u => u.role === 'admin').length);
@@ -191,7 +192,6 @@ export default function AdminPage() {
         return;
     }
     
-    // Client-side pre-check for demoting self as last admin (backend also checks this)
     if (session?.user?.id === userId && userToUpdate.role === 'admin' && newRole === 'user' && adminCount <= 1) {
         toast({ title: "Action Prohibited", description: "You cannot change your own role as the last admin. The system requires at least one admin.", variant: "destructive"});
         return;
@@ -210,7 +210,6 @@ export default function AdminPage() {
         return;
     }
 
-    // Client-side pre-check for suspending self as last active admin (backend also checks this)
     if (session?.user?.id === userId && userToUpdate.role === 'admin' && userToUpdate.status === 'active' && newStatus === 'suspended' && activeAdminCount <= 1) {
         toast({ title: "Action Prohibited", description: "You cannot suspend your own account as the last active admin. The system requires at least one active admin.", variant: "destructive"});
         return;
@@ -260,6 +259,43 @@ export default function AdminPage() {
     }
   };
 
+  const handleToggleEmergencyPolicy = async () => {
+    setTogglingPolicy(true);
+    const newPolicyState = !isEmergencyPolicyActive;
+    const actionType: AuditLogActionType = newPolicyState ? 'EMERGENCY_POLICY_ACTIVATED' : 'EMERGENCY_POLICY_DEACTIVATED';
+    
+    try {
+      const response = await fetch('/api/admin/audit-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          auditActionType: actionType,
+          details: { policyState: newPolicyState ? 'ACTIVE' : 'INACTIVE' }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to log emergency policy change');
+      }
+      
+      setIsEmergencyPolicyActive(newPolicyState);
+      toast({
+        title: `Emergency Policy ${newPolicyState ? 'Activated' : 'Deactivated'}`,
+        description: newPolicyState
+          ? "SIMULATED: Merging of PRs with Critical security issues is now BLOCKED. Team leads would be notified."
+          : "SIMULATED: Emergency policy is INACTIVE. Standard PR merging rules apply.",
+        variant: newPolicyState ? "destructive" : "default",
+        duration: 7000,
+      });
+
+    } catch (err: any) {
+      toast({ title: "Policy Change Error", description: `Failed to update policy status: ${err.message}`, variant: "destructive" });
+    } finally {
+      setTogglingPolicy(false);
+    }
+  };
+
 
   if (sessionStatus === 'loading' || (loadingUsers && !users.length && !errorUsers && loadingStats && !summaryStats && !errorStats )) {
     return (
@@ -277,6 +313,7 @@ export default function AdminPage() {
                 <Skeleton className="h-24 w-full" />
                 <Skeleton className="h-24 w-full" />
               </div>
+              <Skeleton className="h-32 w-full mb-6" /> {/* Emergency Policy Skeleton */}
               <Skeleton className="h-10 w-full mb-2" />
               <Skeleton className="h-64 w-full" />
             </CardContent>
@@ -314,7 +351,7 @@ export default function AdminPage() {
       description = `Are you sure you want to change ${userToUpdate.email}'s role to ${newRole}?`;
       if (newRole === 'user' && userToUpdate.role === 'admin') {
         if (adminCount <= 1) {
-          description += `\n\n?? WARNING: This is the last admin account. Demoting this user will result in NO ADMINS on the system. This action is extremely dangerous and may require database intervention to fix if you proceed. The system will attempt to prevent this.`;
+          description += `\n\n⚠️ WARNING: This is the last admin account. Demoting this user will result in NO ADMINS on the system. This action is extremely dangerous and may require database intervention to fix if you proceed. The system will attempt to prevent this.`;
         } else if (session?.user?.id === userId) {
           description += `\n\nWarning: You are about to change your own role. You will lose admin privileges.`;
         }
@@ -323,7 +360,7 @@ export default function AdminPage() {
       description = `Are you sure you want to change ${userToUpdate.email}'s status to ${newStatus}?`;
       if (newStatus === 'suspended' && userToUpdate.role === 'admin' && userToUpdate.status === 'active') {
         if (activeAdminCount <= 1) {
-         description += `\n\n?? WARNING: This is the last active admin account. Suspending this user may lock out all admin functionality if no other admin can re-activate accounts. The system will attempt to prevent this.`;
+         description += `\n\n⚠️ WARNING: This is the last active admin account. Suspending this user may lock out all admin functionality if no other admin can re-activate accounts. The system will attempt to prevent this.`;
         } else if (session?.user?.id === userId) {
           description += `\n\nWarning: You are about to suspend your own account. You will be logged out and lose admin access.`;
         }
@@ -340,7 +377,7 @@ export default function AdminPage() {
         <Card className="shadow-lg mb-8">
           <CardHeader>
             <CardTitle className="text-2xl sm:text-3xl font-bold font-headline">Admin Dashboard</CardTitle>
-            <CardDescription>Manage users, roles, status, and view platform statistics.</CardDescription>
+            <CardDescription>Manage users, roles, status, view platform statistics, and control emergency policies.</CardDescription>
           </CardHeader>
           <CardContent>
             <h2 className="text-xl font-semibold mb-4 text-foreground">Platform Overview</h2>
@@ -368,6 +405,43 @@ export default function AdminPage() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg mb-8">
+          <CardHeader>
+            <h2 className="text-xl font-semibold text-foreground flex items-center">
+              <AlertTriangle className="h-6 w-6 mr-2 text-destructive" />
+              Emergency Controls
+            </h2>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              Activate the emergency policy to SIMULATE blocking merges of Pull Requests with critical security vulnerabilities and SIMULATE notifying team leads. 
+              This is a conceptual feature for demonstration.
+            </p>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <Button
+                onClick={handleToggleEmergencyPolicy}
+                variant={isEmergencyPolicyActive ? "destructive" : "default"}
+                disabled={togglingPolicy}
+                className="w-full sm:w-auto"
+              >
+                {togglingPolicy ? (
+                  <UserX className="mr-2 h-4 w-4 animate-spin" /> 
+                ) : isEmergencyPolicyActive ? (
+                  <ShieldCheckIconActive className="mr-2 h-4 w-4" />
+                ) : (
+                  <ShieldAlert className="mr-2 h-4 w-4" />
+                )}
+                {togglingPolicy 
+                    ? (isEmergencyPolicyActive ? "Deactivating..." : "Activating...") 
+                    : (isEmergencyPolicyActive ? "Deactivate Emergency Policy" : "Activate Emergency Policy")}
+              </Button>
+              <Badge variant={isEmergencyPolicyActive ? "destructive" : "secondary"} className="text-sm py-1.5 px-3">
+                Current Policy Status: {isEmergencyPolicyActive ? "ACTIVE (Simulated Blocking)" : "INACTIVE (Normal Operations)"}
+              </Badge>
+            </div>
           </CardContent>
         </Card>
 
@@ -471,6 +545,4 @@ function StatCard({ Icon, title, value, description }: StatCardProps) {
     </Card>
   );
 }
-
-
     

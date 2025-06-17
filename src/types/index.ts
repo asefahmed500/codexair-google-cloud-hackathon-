@@ -1,5 +1,8 @@
 
-import type { AuditLogActionType } from '@/lib/mongodb';
+import type { AuditLogActionType as MongoAuditLogActionType } from '@/lib/mongodb'; // Import the specific type
+
+// Re-export or use MongoAuditLogActionType directly
+export type AuditLogActionType = MongoAuditLogActionType;
 
 export interface Repository {
   _id: string;
@@ -58,7 +61,7 @@ export interface SecurityIssue {
   line?: number;
   suggestion: string; 
   cwe?: string;
-  resolved?: boolean; // Added for "Mark as Resolved"
+  resolved?: boolean;
 }
 
 export interface Suggestion {
@@ -69,7 +72,7 @@ export interface Suggestion {
   file: string;
   line?: number;
   codeExample?: string;
-  resolved?: boolean; // Added for "Mark as Resolved"
+  resolved?: boolean;
 }
 
 export interface CodeAnalysisMetrics {
@@ -118,8 +121,8 @@ export interface RepositoryScanResult {
   maintainability: number;
   securityIssues: SecurityIssue[];
   suggestions: Suggestion[];
-  metrics: CodeAnalysisMetrics; // Aggregated metrics
-  summaryAiInsights: string; // Overall summary for the repository scan
+  metrics: CodeAnalysisMetrics; 
+  summaryAiInsights: string; 
   fileAnalyses: FileAnalysisItem[];
   createdAt: Date;
   updatedAt: Date;
@@ -142,7 +145,7 @@ export interface DashboardOverview {
 }
 
 export interface RecentAnalysisItem {
-  id: string; // analysisId or scanId
+  id: string; 
   type: 'pr' | 'repo_scan'; 
   pullRequestTitle?: string; 
   repositoryName: string; 
@@ -262,3 +265,15 @@ export interface ContactMessage {
   isRead: boolean;
   createdAt: Date;
 }
+
+// Ensure AuditLogActionType is specifically the one from mongodb.ts to avoid circular dependencies
+// No, it's better to define it once in types and import in mongodb.ts if needed.
+// For now, the above re-export from mongodb.ts is fine.
+
+// The following types are implicitly defined by their usage and Zod schemas
+// in AI flows, but including them here can be good for central reference if needed.
+// - ExplainCodeInput, ExplainCodeOutput
+// - EmbedTextInput, EmbedTextOutput
+// - CodeAnalysisInput, CodeAnalysisOutput (from code-quality-analysis.ts)
+// - SummarizePrAnalysisInput, SummarizePrAnalysisOutput
+// etc.

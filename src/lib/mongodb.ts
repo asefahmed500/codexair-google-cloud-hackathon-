@@ -55,7 +55,6 @@ const userSchema = new mongoose.Schema({
   status: { type: String, enum: ['active', 'suspended'], default: 'active', required: true },
   accounts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Account' }],
   sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Session' }],
-  // New fields for GitHub repository count
   lastKnownTotalGitHubRepos: Number,
   lastGitHubRepoCountSync: Date,
 }, { timestamps: true });
@@ -121,7 +120,7 @@ const securityIssueSubSchema = new mongoose.Schema({
   line: Number,
   suggestion: String, 
   cwe: String,
-  resolved: { type: Boolean, default: false }, // Added for "Mark as Resolved"
+  resolved: { type: Boolean, default: false },
 }, { _id: false });
 
 const suggestionSubSchema = new mongoose.Schema({
@@ -132,7 +131,7 @@ const suggestionSubSchema = new mongoose.Schema({
   file: String,
   line: Number,
   codeExample: String,
-  resolved: { type: Boolean, default: false }, // Added for "Mark as Resolved"
+  resolved: { type: Boolean, default: false },
 }, { _id: false });
 
 const codeAnalysisMetricsSubSchema = new mongoose.Schema({
@@ -178,7 +177,7 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   title: String,
   body: String,
   state: { type: String, enum: ['open', 'closed', 'merged'] },
-  branch: String, // Added branch field
+  branch: String,
   author: {
     login: String,
     avatar: String,
@@ -206,9 +205,9 @@ const repositoryScanSchema = new mongoose.Schema<RepositoryScanResult>({
   maintainability: Number,
   securityIssues: [securityIssueSubSchema],
   suggestions: [suggestionSubSchema],
-  metrics: codeAnalysisMetricsSubSchema, // Aggregated metrics for the scan
-  summaryAiInsights: String, // Overall summary for the repository scan
-  fileAnalyses: [fileAnalysisItemSchema], // Analysis for each file scanned
+  metrics: codeAnalysisMetricsSubSchema,
+  summaryAiInsights: String,
+  fileAnalyses: [fileAnalysisItemSchema],
 }, { timestamps: true });
 repositoryScanSchema.index({ repositoryId: 1, createdAt: -1 });
 
@@ -218,6 +217,8 @@ const AUDIT_LOG_ACTIONS = [
   'USER_STATUS_CHANGED_ACTIVE',
   'USER_STATUS_CHANGED_SUSPENDED',
   'ADMIN_ANALYSIS_SUMMARY_REPORT_FETCHED',
+  'EMERGENCY_POLICY_ACTIVATED',
+  'EMERGENCY_POLICY_DEACTIVATED',
 ] as const;
 export type AuditLogActionType = typeof AUDIT_LOG_ACTIONS[number];
 
@@ -262,11 +263,9 @@ export const ContactMessage = mongoose.models.ContactMessage || mongoose.model<C
 
 export const connectMongoose = async () => {
   if (global._mongooseConnection) {
-    // console.log('[MongoDB Setup] Using cached Mongoose connection promise.');
     return global._mongooseConnection;
   }
   if (mongoose.connections[0].readyState) {
-    // console.log('[MongoDB Setup] Mongoose connection already established.');
     global._mongooseConnection = Promise.resolve(mongoose);
     return global._mongooseConnection;
   }
@@ -277,18 +276,14 @@ export const connectMongoose = async () => {
     return m;
   }).catch(err => {
     console.error('[MongoDB Setup] Mongoose connection error during mongoose.connect():', err);
-    global._mongooseConnection = null; // Clear the promise on error
-    throw err; // Re-throw to indicate connection failure
+    global._mongooseConnection = null; 
+    throw err; 
   });
   return global._mongooseConnection;
 };
 
-// Attempt to connect Mongoose on module load to catch issues early if not already handled by clientPromise.
-// This also helps ensure models are registered.
 connectMongoose().catch(err => {
     console.error("[MongoDB Setup] Initial Mongoose connection attempt on module load failed:", err.message);
-    // Depending on the error, you might want to exit or handle differently.
-    // For now, just logging. The app will likely fail later if DB isn't up.
 });
     
     
