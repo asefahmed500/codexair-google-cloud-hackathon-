@@ -17,7 +17,7 @@ import type { AdminSummaryStats } from '@/app/api/admin/summary-stats/route';
 import type { BusFactorAlert } from '@/app/api/admin/bus-factor-alerts/route';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX, FileSliders, AlertTriangle, ShieldCheckIcon as ShieldCheckIconActive, UserFocus } from 'lucide-react';
+import { ShieldAlert, Users, FolderGit2, FileScan, UserCheck, UserX, FileSliders, AlertTriangle, ShieldCheckIcon as ShieldCheckIconActive, UserFocus, Settings as SettingsIcon } from 'lucide-react';
 
 interface UserTableRowProps {
   user: AdminUserView;
@@ -128,12 +128,29 @@ export default function AdminPage() {
   const [activeAdminCount, setActiveAdminCount] = useState(0);
 
   const [isEmergencyPolicyActive, setIsEmergencyPolicyActive] = useState(false);
+  const [loadingPolicy, setLoadingPolicy] = useState(true);
   const [togglingPolicy, setTogglingPolicy] = useState(false);
 
   const updateAdminCounts = useCallback((currentUsers: AdminUserView[]) => {
     setAdminCount(currentUsers.filter(u => u.role === 'admin').length);
     setActiveAdminCount(currentUsers.filter(u => u.role === 'admin' && u.status === 'active').length);
   }, []);
+
+  const fetchEmergencyPolicyStatus = useCallback(async () => {
+    setLoadingPolicy(true);
+    try {
+        const response = await fetch('/api/settings/emergency-policy');
+        if (!response.ok) throw new Error('Failed to fetch emergency policy status');
+        const data = await response.json();
+        setIsEmergencyPolicyActive(data.enabled);
+    } catch (err: any) {
+        toast({ title: "Policy Status Error", description: `Could not load emergency policy status: ${err.message}`, variant: "destructive" });
+        setIsEmergencyPolicyActive(false); // Default to false on error
+    } finally {
+        setLoadingPolicy(false);
+    }
+  }, []);
+
 
   useEffect(() => {
     if (sessionStatus === 'loading') return;
@@ -199,12 +216,14 @@ export default function AdminPage() {
       } finally {
         setLoadingBusFactorAlerts(false);
       }
+      
+      fetchEmergencyPolicyStatus();
     }
 
     if (session && session.user.role === 'admin') {
       fetchAdminData();
     }
-  }, [session, sessionStatus, router, updateAdminCounts]);
+  }, [session, sessionStatus, router, updateAdminCounts, fetchEmergencyPolicyStatus]);
 
   const confirmRoleChange = (userId: string, newRole: 'user' | 'admin') => {
     const userToUpdate = users.find(u => u._id === userId);
@@ -284,31 +303,27 @@ export default function AdminPage() {
 
   const handleToggleEmergencyPolicy = async () => {
     setTogglingPolicy(true);
-    const newPolicyState = !isEmergencyPolicyActive;
-    const actionType: AuditLogActionType = newPolicyState ? 'EMERGENCY_POLICY_ACTIVATED' : 'EMERGENCY_POLICY_DEACTIVATED';
+    const newPolicyEnabledState = !isEmergencyPolicyActive;
     
     try {
-      const response = await fetch('/api/admin/audit-action', {
-        method: 'POST',
+      const response = await fetch('/api/admin/settings/emergency-policy', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          auditActionType: actionType,
-          details: { policyState: newPolicyState ? 'ACTIVE' : 'INACTIVE' }
-        }),
+        body: JSON.stringify({ enabled: newPolicyEnabledState }),
       });
 
+      const result = await response.json();
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to log emergency policy change');
+        throw new Error(result.error || 'Failed to update emergency policy');
       }
       
-      setIsEmergencyPolicyActive(newPolicyState);
+      setIsEmergencyPolicyActive(result.newStatus);
       toast({
-        title: `Emergency Policy ${newPolicyState ? 'Activated' : 'Deactivated'}`,
-        description: newPolicyState
+        title: `Emergency Policy ${result.newStatus ? 'Activated' : 'Deactivated'}`,
+        description: result.newStatus
           ? "SIMULATED: Merging of PRs with Critical security issues is now BLOCKED. Team leads would be notified."
           : "SIMULATED: Emergency policy is INACTIVE. Standard PR merging rules apply.",
-        variant: newPolicyState ? "destructive" : "default",
+        variant: result.newStatus ? "destructive" : "default",
         duration: 7000,
       });
 
@@ -320,7 +335,7 @@ export default function AdminPage() {
   };
 
 
-  if (sessionStatus === 'loading' || (loadingUsers && !users.length && !errorUsers && loadingStats && !summaryStats && !errorStats && loadingBusFactorAlerts )) {
+  if (sessionStatus === 'loading' || (loadingUsers && !users.length && !errorUsers && loadingStats && !summaryStats && !errorStats && loadingBusFactorAlerts && loadingPolicy )) {
     return (
       <div className="flex flex-col min-h-screen">
         <Navbar />
@@ -435,37 +450,39 @@ export default function AdminPage() {
         <Card className="shadow-lg mb-8">
           <CardHeader>
             <h2 className="text-xl font-semibold text-foreground flex items-center">
-              <AlertTriangle className="h-6 w-6 mr-2 text-destructive" />
+              <SettingsIcon className="h-6 w-6 mr-2 text-primary" /> {/* Changed Icon */}
               Emergency Controls
             </h2>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-3">
               Activate the emergency policy to SIMULATE blocking merges of Pull Requests with critical security vulnerabilities and SIMULATE notifying team leads. 
-              This is a conceptual feature for demonstration.
+              This state is now persistent across the platform.
             </p>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <Button
-                onClick={handleToggleEmergencyPolicy}
-                variant={isEmergencyPolicyActive ? "destructive" : "default"}
-                disabled={togglingPolicy}
-                className="w-full sm:w-auto"
-              >
-                {togglingPolicy ? (
-                  <UserX className="mr-2 h-4 w-4 animate-spin" /> 
-                ) : isEmergencyPolicyActive ? (
-                  <ShieldCheckIconActive className="mr-2 h-4 w-4" />
-                ) : (
-                  <ShieldAlert className="mr-2 h-4 w-4" />
-                )}
-                {togglingPolicy 
-                    ? (isEmergencyPolicyActive ? "Deactivating..." : "Activating...") 
-                    : (isEmergencyPolicyActive ? "Deactivate Emergency Policy" : "Activate Emergency Policy")}
-              </Button>
-              <Badge variant={isEmergencyPolicyActive ? "destructive" : "secondary"} className="text-sm py-1.5 px-3">
-                Current Policy Status: {isEmergencyPolicyActive ? "ACTIVE (Simulated Blocking)" : "INACTIVE (Normal Operations)"}
-              </Badge>
-            </div>
+             {loadingPolicy ? <Skeleton className="h-10 w-64" /> : (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <Button
+                    onClick={handleToggleEmergencyPolicy}
+                    variant={isEmergencyPolicyActive ? "destructive" : "default"}
+                    disabled={togglingPolicy}
+                    className="w-full sm:w-auto"
+                >
+                    {togglingPolicy ? (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> 
+                    ) : isEmergencyPolicyActive ? (
+                    <ShieldCheckIconActive className="mr-2 h-4 w-4" />
+                    ) : (
+                    <ShieldAlert className="mr-2 h-4 w-4" />
+                    )}
+                    {togglingPolicy 
+                        ? (isEmergencyPolicyActive ? "Deactivating..." : "Activating...") 
+                        : (isEmergencyPolicyActive ? "Deactivate Emergency Policy" : "Activate Emergency Policy")}
+                </Button>
+                <Badge variant={isEmergencyPolicyActive ? "destructive" : "secondary"} className="text-sm py-1.5 px-3">
+                    Current Policy Status: {isEmergencyPolicyActive ? "ACTIVE (Simulated Blocking)" : "INACTIVE (Normal Operations)"}
+                </Badge>
+                </div>
+            )}
           </CardContent>
         </Card>
 

@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User, ExternalLink, GitCompareArrows, ScanSearch, Info, Brain, GitMergeIcon } from 'lucide-react'; // Added Brain, GitMergeIcon
+import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User, ExternalLink, GitCompareArrows, ScanSearch, Info, Brain, GitMergeIcon, ShieldAlert as EmergencyPolicyIcon } from 'lucide-react'; // Added Brain, GitMergeIcon, EmergencyPolicyIcon
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +50,9 @@ export default function RepositoryAnalysisPage() {
   const [selectedPRsForCompare, setSelectedPRsForCompare] = useState<number[]>([]);
   const [isScanningRepo, setIsScanningRepo] = useState(false);
 
+  const [isEmergencyPolicyActive, setIsEmergencyPolicyActive] = useState(false);
+  const [loadingPolicy, setLoadingPolicy] = useState(true);
+
 
   const fetchPullRequestsData = useCallback(async (showRefreshToast = false) => {
     if (showRefreshToast) setIsRefreshing(true);
@@ -79,8 +82,18 @@ export default function RepositoryAnalysisPage() {
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
-    } else if (status === 'authenticated' && owner && repoName) {
-      fetchPullRequestsData();
+    } else if (status === 'authenticated') {
+      if (owner && repoName) {
+        fetchPullRequestsData();
+      }
+      setLoadingPolicy(true);
+      fetch('/api/settings/emergency-policy')
+        .then(res => res.json())
+        .then(data => {
+          setIsEmergencyPolicyActive(data.enabled);
+        })
+        .catch(err => console.error("Failed to fetch emergency policy status:", err))
+        .finally(() => setLoadingPolicy(false));
     }
   }, [status, router, owner, repoName, fetchPullRequestsData]);
 
@@ -239,7 +252,7 @@ export default function RepositoryAnalysisPage() {
   };
 
 
-  if (status === 'loading') {
+  if (status === 'loading' || loadingPolicy) {
      return <div className="flex flex-col min-h-screen"><Navbar /><div className="flex-1 flex items-center justify-center">Loading session...</div></div>;
   }
   if (!session) return null;
@@ -248,6 +261,17 @@ export default function RepositoryAnalysisPage() {
     <div className="flex flex-col min-h-screen bg-secondary/50">
       <Navbar /> 
       <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {isEmergencyPolicyActive && (
+          <Alert variant="destructive" className="mb-6">
+            <EmergencyPolicyIcon className="h-5 w-5" />
+            <AlertBoxTitle>Emergency Policy Active</AlertBoxTitle>
+            <AlertDescription>
+              The platform-wide Emergency Policy is currently active. Merging of Pull Requests containing critical security issues may be blocked.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Card className="shadow-lg">
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { CodeAnalysis, PullRequest as PRType, SecurityIssue, Suggestion, FileAnalysisItem, SimilarCodeResult } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, GitBranch, CalendarDays, User, ClipboardCopy, FileSliders, CheckSquare, Square } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, GitBranch, CalendarDays, User, ClipboardCopy, FileSliders, CheckSquare, Square, ShieldAlert as EmergencyPolicyIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,8 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch'; 
 import { Label } from '@/components/ui/label'; 
+import { Alert, AlertTitle as AlertBoxTitle, AlertDescription as AlertBoxDescription } from "@/components/ui/alert";
+
 
 const FALLBACK_SUMMARY_MESSAGE = "Overall analysis summary could not be generated for this pull request.";
 
@@ -51,33 +53,47 @@ export default function AnalysisDetailsPage() {
   const [showResolvedSecurityIssues, setShowResolvedSecurityIssues] = useState(true);
   const [showResolvedSuggestions, setShowResolvedSuggestions] = useState(true);
 
+  const [isEmergencyPolicyActive, setIsEmergencyPolicyActive] = useState(false);
+  const [loadingPolicy, setLoadingPolicy] = useState(true);
+
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
-    } else if (status === 'authenticated' && analysisId) {
-      setLoading(true);
-      setShowTldrSummary(false); 
-      setTldrSummaryText(null);
-      setTldrError(null);
-      fetch(`/api/analysis-results/${analysisId}`)
-        .then(res => {
-          if (!res.ok) {
-            const errorData = res.json();
-            return errorData.then(err => { throw new Error(err.details || err.error || 'Failed to fetch analysis details')});
-          }
-          return res.json();
-        })
+    } else if (status === 'authenticated') {
+      if (analysisId) {
+        setLoading(true);
+        setShowTldrSummary(false); 
+        setTldrSummaryText(null);
+        setTldrError(null);
+        fetch(`/api/analysis-results/${analysisId}`)
+          .then(res => {
+            if (!res.ok) {
+              const errorData = res.json();
+              return errorData.then(err => { throw new Error(err.details || err.error || 'Failed to fetch analysis details')});
+            }
+            return res.json();
+          })
+          .then(data => {
+            setAnalysisData(data);
+            setLoading(false);
+          })
+          .catch(err => {
+            console.error(err);
+            setError(err.message);
+            setLoading(false);
+            toast({ title: "Error", description: err.message, variant: "destructive" });
+          });
+      }
+      
+      setLoadingPolicy(true);
+      fetch('/api/settings/emergency-policy')
+        .then(res => res.json())
         .then(data => {
-          setAnalysisData(data);
-          setLoading(false);
+          setIsEmergencyPolicyActive(data.enabled);
         })
-        .catch(err => {
-          console.error(err);
-          setError(err.message);
-          setLoading(false);
-          toast({ title: "Error", description: err.message, variant: "destructive" });
-        });
+        .catch(err => console.error("Failed to fetch emergency policy status:", err))
+        .finally(() => setLoadingPolicy(false));
     }
   }, [status, router, analysisId]);
 
@@ -225,7 +241,7 @@ export default function AnalysisDetailsPage() {
   };
 
 
-  if (status === 'loading' || (loading && !analysisData && !error)) {
+  if (status === 'loading' || (loading && !analysisData && !error) || loadingPolicy) {
     return <AnalysisDetailsLoadingSkeleton />;
   }
 
@@ -284,6 +300,7 @@ export default function AnalysisDetailsPage() {
 
   const filteredSecurityIssues = analysis.securityIssues?.filter(issue => showResolvedSecurityIssues || !issue.resolved);
   const filteredSuggestions = analysis.suggestions?.filter(suggestion => showResolvedSuggestions || !suggestion.resolved);
+  const hasCriticalIssues = analysis.securityIssues?.some(issue => issue.severity === 'critical');
 
 
   return (
@@ -293,6 +310,16 @@ export default function AnalysisDetailsPage() {
         <div className="mb-6 flex justify-between items-center">
              <Button variant="outline" onClick={() => router.push(`/analyze/${owner}/${repoName}`)}>Back to PRs for {owner}/{repoName}</Button>
         </div>
+
+        {isEmergencyPolicyActive && hasCriticalIssues && (
+          <Alert variant="destructive" className="mb-6">
+            <EmergencyPolicyIcon className="h-5 w-5" />
+            <AlertBoxTitle>Emergency Policy Active</AlertBoxTitle>
+            <AlertBoxDescription>
+              The platform-wide Emergency Policy is currently active. This Pull Request contains critical security issues and would typically be blocked from merging under this policy.
+            </AlertBoxDescription>
+          </Alert>
+        )}
 
         <Card className="mb-6 shadow-lg">
           <CardHeader>

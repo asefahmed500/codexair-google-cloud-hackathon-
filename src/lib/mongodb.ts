@@ -247,6 +247,12 @@ const contactMessageSchema = new mongoose.Schema<ContactMessageType>({
 contactMessageSchema.index({ createdAt: -1 });
 contactMessageSchema.index({ isRead: 1, createdAt: -1 });
 
+const globalSettingSchema = new mongoose.Schema({
+  settingName: { type: String, unique: true, required: true, index: true },
+  value: mongoose.Schema.Types.Mixed,
+  updatedAt: { type: Date, default: Date.now },
+});
+
 
 export const User = mongoose.models.User || mongoose.model('User', userSchema);
 export const Account = mongoose.models.Account || mongoose.model('Account', accountSchema);
@@ -259,6 +265,7 @@ export const Analysis = mongoose.models.Analysis || mongoose.model<AnalysisType>
 export const RepositoryScan = mongoose.models.RepositoryScan || mongoose.model<RepositoryScanResult>('RepositoryScan', repositoryScanSchema);
 export const AuditLog = mongoose.models.AuditLog || mongoose.model<AuditLogType>('AuditLog', auditLogSchema);
 export const ContactMessage = mongoose.models.ContactMessage || mongoose.model<ContactMessageType>('ContactMessage', contactMessageSchema);
+export const GlobalSetting = mongoose.models.GlobalSetting || mongoose.model('GlobalSetting', globalSettingSchema);
 
 
 export const connectMongoose = async () => {
