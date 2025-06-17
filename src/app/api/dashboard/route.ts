@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
           name: repo.name,
           updatedAt: repo.updatedAt,
         }));
-        return NextResponse.json({
+        const emptyDashboardData: DashboardData = {
             overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
             recentAnalyses: [],
             qualityTrends: [],
@@ -92,7 +92,12 @@ export async function GET(request: NextRequest) {
             securityHotspots: [],
             teamMetrics: [],
             connectedRepositories,
-        } as DashboardData);
+        };
+        return NextResponse.json(emptyDashboardData, {
+          headers: {
+            'Cache-Control': 'no-store, max-age=0, must-revalidate',
+          },
+        });
       }
       relevantAnalysesQuery = { pullRequestId: { $in: userPullRequestIds } };
     }
@@ -123,7 +128,7 @@ export async function GET(request: NextRequest) {
     }
     
     if (relevantAnalyses.length === 0 && !isAdmin) {
-        return NextResponse.json({
+        const emptyDashboardDataWithRepos: DashboardData = {
             overview: { totalAnalyses: 0, avgQualityScore: 0, securityIssuesCount: 0, trendsUp: false },
             recentAnalyses: [],
             qualityTrends: [],
@@ -132,7 +137,12 @@ export async function GET(request: NextRequest) {
             securityHotspots: [],
             teamMetrics: [],
             connectedRepositories,
-        } as DashboardData);
+        };
+        return NextResponse.json(emptyDashboardDataWithRepos, {
+           headers: {
+            'Cache-Control': 'no-store, max-age=0, must-revalidate',
+          },
+        });
     }
 
 
@@ -330,11 +340,20 @@ export async function GET(request: NextRequest) {
       connectedRepositories,
     };
 
-    return NextResponse.json(dashboardData);
+    return NextResponse.json(dashboardData, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0, must-revalidate',
+      },
+    });
   } catch (error: any) {
     console.error('Error fetching dashboard data:', error, error.stack);
-    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error', details: error.message }, { 
+      status: 500,
+      headers: {
+        'Cache-Control': 'no-store, max-age=0, must-revalidate',
+      },
+    });
   }
 }
-
+    
     
