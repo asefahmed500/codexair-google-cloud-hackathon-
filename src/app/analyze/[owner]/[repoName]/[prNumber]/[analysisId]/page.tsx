@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { CodeAnalysis, PullRequest as PRType, SecurityIssue, Suggestion, FileAnalysisItem, SimilarCodeResult } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, GitBranch, CalendarDays, User } from 'lucide-react';
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, GitBranch, CalendarDays, User, ClipboardCopy } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -100,6 +100,21 @@ export default function AnalysisDetailsPage() {
     } finally {
       setIsSearchingSimilarCode(false);
     }
+  };
+
+  const handleCopyToClipboard = (text: string, itemName: string) => {
+    if (!navigator.clipboard) {
+      toast({ title: "Copy Failed", description: "Clipboard API not available in this browser.", variant: "destructive" });
+      return;
+    }
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        toast({ title: "Copied to clipboard!", description: `Suggested fix for "${itemName}" copied.` });
+      })
+      .catch(err => {
+        toast({ title: "Copy Failed", description: "Could not copy to clipboard. Please try again or copy manually.", variant: "destructive" });
+        console.error('Failed to copy: ', err);
+      });
   };
 
 
@@ -237,19 +252,29 @@ export default function AnalysisDetailsPage() {
                               </div>
                             </div>
                           </AccordionTrigger>
-                          <AccordionContent className="p-4 bg-secondary/30 rounded-b-md space-y-2">
+                          <AccordionContent className="p-4 bg-secondary/30 rounded-b-md space-y-3">
                             <p className="text-sm"><strong className="text-foreground">Description:</strong> {issue.description}</p>
                             <p className="text-sm"><strong className="text-foreground">File:</strong> {issue.file} {issue.line && `(Line: ${issue.line})`}</p>
                             <p className="text-sm font-medium text-foreground mb-1">Suggested Fix / Code:</p>
                             <ScrollArea className="max-h-60 w-full rounded-md border bg-background p-2 shadow-inner">
                                 <pre className="text-xs font-code whitespace-pre-wrap">{issue.suggestion}</pre>
                             </ScrollArea>
+                             {issue.suggestion && issue.suggestion.trim() !== "" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-2"
+                                  onClick={() => handleCopyToClipboard(issue.suggestion, `Security Issue: ${issue.title}`)}
+                                >
+                                  <ClipboardCopy className="mr-2 h-4 w-4" /> Copy Fix
+                                </Button>
+                            )}
                             {issue.cwe && <p className="text-sm mt-2"><strong className="text-foreground">CWE:</strong> <Badge variant="outline">{issue.cwe}</Badge></p>}
                             <DialogTrigger asChild>
                               <Button 
                                 variant="link" 
                                 size="sm" 
-                                className="p-0 h-auto text-xs mt-2 text-primary hover:underline"
+                                className="p-0 h-auto text-xs mt-2 text-primary hover:underline block" // Added block to ensure it takes own line if needed
                                 onClick={() => handleFindSimilarCode(issue.file, issue.title, 'security')}
                                 disabled={isSearchingSimilarCode && currentSearchContext?.filename === issue.file && currentSearchContext?.title === issue.title}
                               >
@@ -286,7 +311,7 @@ export default function AnalysisDetailsPage() {
                               </div>
                             </div>
                           </AccordionTrigger>
-                          <AccordionContent className="p-4 bg-secondary/30 rounded-b-md space-y-2">
+                          <AccordionContent className="p-4 bg-secondary/30 rounded-b-md space-y-3">
                             <p className="text-sm"><strong className="text-foreground">Description:</strong> {suggestion.description}</p>
                             <p className="text-sm"><strong className="text-foreground">File:</strong> {suggestion.file} {suggestion.line && `(Line: ${suggestion.line})`}</p>
                             {suggestion.codeExample && (
@@ -295,13 +320,21 @@ export default function AnalysisDetailsPage() {
                                 <ScrollArea className="max-h-60 w-full rounded-md border bg-background p-2 shadow-inner">
                                   <pre className="text-xs font-code whitespace-pre-wrap">{suggestion.codeExample}</pre>
                                 </ScrollArea>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-2"
+                                  onClick={() => handleCopyToClipboard(suggestion.codeExample!, `Suggestion: ${suggestion.title}`)}
+                                >
+                                  <ClipboardCopy className="mr-2 h-4 w-4" /> Copy Fix
+                                </Button>
                               </>
                             )}
                             <DialogTrigger asChild>
                               <Button 
                                 variant="link" 
                                 size="sm" 
-                                className="p-0 h-auto text-xs mt-2 text-primary hover:underline"
+                                className="p-0 h-auto text-xs mt-2 text-primary hover:underline block" // Added block
                                 onClick={() => handleFindSimilarCode(suggestion.file, suggestion.title, 'suggestion')}
                                 disabled={isSearchingSimilarCode && currentSearchContext?.filename === suggestion.file && currentSearchContext?.title === suggestion.title}
                               >
