@@ -176,6 +176,7 @@ const pullRequestSchema = new mongoose.Schema<PRType>({
   title: String,
   body: String,
   state: { type: String, enum: ['open', 'closed', 'merged'] },
+  branch: String, // Added branch field
   author: {
     login: String,
     avatar: String,

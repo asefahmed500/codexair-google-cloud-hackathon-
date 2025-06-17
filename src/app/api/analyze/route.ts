@@ -332,6 +332,7 @@ export async function POST(request: NextRequest) {
     };
     savedPR.updatedAt = new Date(ghPullRequest.updated_at); 
     savedPR.githubId = ghPullRequest.id; 
+    savedPR.branch = ghPullRequest.head?.ref; // Save branch information
 
     if (savedPR.analysis) {
         let oldAnalysisId = savedPR.analysis;

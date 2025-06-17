@@ -14,12 +14,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import Navbar from '@/components/layout/navbar';
 import { PullRequest as PRType, CodeAnalysis, SecurityIssue, Suggestion, CodeFile, Repository as RepoType } from '@/types';
-import { ArrowLeftRight, Github, AlertTriangle, Lightbulb, FileText, CalendarDays, User, CheckCircle, XCircle, FileWarning, RefreshCw, GitPullRequest, GitBranch } from 'lucide-react';
+import { ArrowLeftRight, Github, AlertTriangle, Lightbulb, FileText, CalendarDays, User, CheckCircle, XCircle, FileWarning, RefreshCw, GitPullRequest, GitBranch, Brain, Clock } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
 interface FullPRData {
-  pullRequest: PRType & { repositoryId: string | RepoType }; // Ensure repositoryId is present
+  pullRequest: PRType & { repositoryId: string | RepoType }; 
   analysis?: CodeAnalysis;
 }
 
@@ -46,9 +46,10 @@ export default function PRComparisonPage() {
         throw new Error(`Failed to fetch PR #${prNumber}: ${errData.error || res.statusText}`);
       }
       const data = await res.json();
+      // The API populates pullRequest.analysis, so prData.analysis IS the detailed analysis object
       return { 
         pullRequest: data.pullRequest, 
-        analysis: data.pullRequest.analysis || undefined
+        analysis: data.pullRequest.analysis || undefined 
       };
     } catch (e: any) {
       console.error(`Error fetching PR #${prNumber}:`, e);
@@ -176,7 +177,7 @@ interface PRDetailsColumnProps {
 }
 
 function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVariant, getPriorityBadgeVariant, onAnalysisComplete }: PRDetailsColumnProps) {
-  const { pullRequest, analysis } = prData;
+  const { pullRequest, analysis } = prData; // analysis is the detailed CodeAnalysis object
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleAnalyzePR = async (prNumToAnalyze: number) => {
@@ -192,8 +193,7 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to start analysis');
       }
-      // const result = await response.json(); // Not strictly needed here unless we use result.analysis._id
-      toast({ title: "Analysis Started", description: `Analysis for PR #${prNumToAnalyze} is in progress. This view will update shortly.` });
+      toast({ title: "Analysis Started", description: `Analysis for PR #${prNumToAnalyze} is in progress. This view will update upon completion.` });
       onAnalysisComplete(); // Notify parent to refresh this PR's data
     } catch (err: any) {
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
@@ -201,6 +201,25 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
       setIsAnalyzing(false);
     }
   };
+
+  const getAnalyzeButtonContent = () => {
+    if (isAnalyzing) {
+      return { text: 'Analyzing...', Icon: RefreshCw, variant: 'outline' as const, animate: true };
+    }
+    if (pullRequest.analysisStatus === 'pending') {
+      return { text: 'Analysis Pending...', Icon: Clock, variant: 'outline' as const, disabled: true, animate: true };
+    }
+    if (pullRequest.analysisStatus === 'failed') {
+      return { text: 'Retry Analysis', Icon: RefreshCw, variant: 'destructive' as const };
+    }
+    // If no analysis object, or status is not_started
+    if (!analysis || pullRequest.analysisStatus === 'not_started') {
+      return { text: `Analyze PR #${pullRequest.number}`, Icon: Brain, variant: 'default' as const };
+    }
+    return null; // Analysis successful and present, no button needed here
+  };
+
+  const analyzeButtonInfo = getAnalyzeButtonContent();
 
 
   return (
@@ -219,14 +238,13 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
         <CardDescription className="text-xs flex flex-col gap-1 mt-1">
            <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />By: {pullRequest.author?.login || 'N/A'}</span>
            <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Created: {format(new Date(pullRequest.createdAt), "MMM d, yyyy")}</span>
-           {/* Branch name is not explicitly stored in PRType, would require GitHub API call or modification to how PRs are stored if vital here */}
-           {/* For now, it's shown on the PR listing page */}
+           <span className="flex items-center gap-1.5">
+                <GitBranch className="h-3.5 w-3.5" /> Branch: {pullRequest.branch || 'N/A'}
+           </span>
             <span className="flex items-center gap-1.5">
-                <GitBranch className="h-3.5 w-3.5" />
-                {/* Branch: {pullRequest.branch || 'N/A'}  This field isn't on PRType directly */}
                 Lines: <span className="text-green-600">+{pullRequest.files.reduce((sum, f) => sum + f.additions, 0)}</span> / <span className="text-red-600">-{pullRequest.files.reduce((sum, f) => sum + f.deletions, 0)}</span>
             </span>
-           <Badge variant={pullRequest.state === 'open' ? 'default' : 'secondary'} className={`w-fit mt-1 ${pullRequest.state === 'open' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
+           <Badge variant={pullRequest.state === 'open' ? 'default' : (pullRequest.state === 'merged' ? 'secondary' : 'destructive')} className={`w-fit mt-1 ${pullRequest.state === 'open' ? 'bg-green-100 text-green-700 border-green-300' : (pullRequest.state === 'merged' ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-red-100 text-red-700 border-red-300')}`}>
             {pullRequest.state}
            </Badge>
         </CardDescription>
@@ -249,7 +267,7 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
                  </ScrollArea>
               ) : <p className="text-xs text-muted-foreground italic">No description provided.</p>}
 
-              {analysis ? (
+              {analysis && pullRequest.analysisStatus === 'analyzed' ? (
                 <div className="mt-4 space-y-3">
                   <h4 className="font-semibold text-sm">Analysis Summary:</h4>
                   <div className="text-xs space-y-1">
@@ -270,22 +288,27 @@ function PRDetailsColumn({ prData, owner, repoName, prNumber, getSeverityBadgeVa
                 <Card className="mt-4 p-4 border-dashed text-center bg-muted/20">
                   <CardHeader className="p-0 mb-2">
                      <FileWarning className="mx-auto h-10 w-10 text-muted-foreground"/>
-                     <CardTitle className="text-md font-medium mt-1">No Analysis Data</CardTitle>
+                     <CardTitle className="text-md font-medium mt-1">
+                        {pullRequest.analysisStatus === 'pending' ? 'Analysis In Progress' : 'No Analysis Data'}
+                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <p className="text-xs text-muted-foreground mb-3">This pull request has not been analyzed yet.</p>
-                    {pullRequest.state === 'open' && (
+                    <p className="text-xs text-muted-foreground mb-3">
+                        {pullRequest.analysisStatus === 'pending' 
+                            ? 'AI is currently analyzing this pull request.' 
+                            : (pullRequest.analysisStatus === 'failed' 
+                                ? 'Previous analysis attempt failed.' 
+                                : 'This pull request has not been analyzed yet.')}
+                    </p>
+                    {analyzeButtonInfo && (
                        <Button 
                           size="sm" 
-                          variant="default" 
+                          variant={analyzeButtonInfo.variant} 
                           onClick={() => handleAnalyzePR(pullRequest.number)}
-                          disabled={isAnalyzing}
+                          disabled={analyzeButtonInfo.disabled || isAnalyzing}
                         >
-                          {isAnalyzing ? (
-                            <><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
-                          ) : (
-                            <><GitPullRequest className="mr-2 h-4 w-4" />Analyze PR #{pullRequest.number}</>
-                          )}
+                          <analyzeButtonInfo.Icon className={`mr-2 h-4 w-4 ${analyzeButtonInfo.animate && 'animate-spin'}`} /> 
+                          {analyzeButtonInfo.text}
                         </Button>
                     )}
                   </CardContent>
@@ -390,6 +413,7 @@ function PRComparisonLoadingSkeleton({owner, repoName, prNumber1, prNumber2} : {
                 <div className="space-y-1.5 mt-1">
                     <Skeleton className="h-4 w-1/2" /> {/* PR Meta 1 */}
                     <Skeleton className="h-4 w-1/3" /> {/* PR Meta 2 */}
+                    <Skeleton className="h-4 w-1/2" /> {/* Branch Skeleton */}
                     <Skeleton className="h-5 w-16 rounded-full" /> {/* Badge Skeleton */}
                 </div>
               </CardHeader>
