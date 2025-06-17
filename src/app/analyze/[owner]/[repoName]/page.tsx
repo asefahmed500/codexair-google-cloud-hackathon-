@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User, ExternalLink, GitCompareArrows, ScanSearch, Info } from 'lucide-react';
+import { Github, GitPullRequest, Eye, RefreshCw, CheckCircle, XCircle, Clock, ShieldAlert, GitBranch, User, ExternalLink, GitCompareArrows, ScanSearch, Info, Brain, GitMergeIcon } from 'lucide-react'; // Added Brain, GitMergeIcon
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -110,8 +110,7 @@ export default function RepositoryAnalysisPage() {
         throw new Error(result.details || result.error || 'Failed to start analysis');
       }
       
-      toast({ title: "Analysis Complete", description: `Analysis for PR #${pullNumber} is complete. View details or redirecting...` });
-      // Explicitly update the PR in local state with analysis results
+      toast({ title: "Analysis Complete", description: `Analysis for PR #${pullNumber} is complete.` });
       setPullRequests(prevPRs => 
         prevPRs.map(pr => 
           pr.number === pullNumber ? { 
@@ -122,8 +121,6 @@ export default function RepositoryAnalysisPage() {
           } : pr
         )
       );
-      // Optionally, redirect to the analysis details page
-      // router.push(`/analyze/${owner}/${repoName}/${pullNumber}/${result.analysis._id}`);
     } catch (err: any) {
       setError(err.message); 
       toast({ title: "Analysis Error", description: err.message, variant: "destructive" });
@@ -215,6 +212,33 @@ export default function RepositoryAnalysisPage() {
     }
   };
 
+  const getPrStateBadge = (state: DisplayablePullRequest['state']) => {
+    switch (state) {
+      case 'open':
+        return <Badge variant="default" className="bg-green-100 text-green-700 border-green-300">Open</Badge>;
+      case 'closed':
+        return <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-300">Closed</Badge>;
+      case 'merged':
+        return <Badge variant="default" className="bg-purple-100 text-purple-700 border-purple-300">Merged</Badge>;
+      default:
+        return <Badge variant="secondary">{state}</Badge>;
+    }
+  };
+  
+  const getAnalyzeButtonTextAndIcon = (pr: DisplayablePullRequest): {text: string, Icon: React.ElementType, variant: "default" | "destructive" | "outline" } => {
+    if (analyzingPR === pr.number || pr.analysisStatus === 'pending') {
+      return { text: 'Analyzing...', Icon: Clock, variant: 'outline' };
+    }
+    if (pr.analysisStatus === 'failed') {
+      return { text: 'Retry Analysis', Icon: RefreshCw, variant: 'destructive' };
+    }
+    if (pr.analysisStatus === 'analyzed') {
+      return { text: 'Re-analyze', Icon: Brain, variant: 'outline' };
+    }
+    return { text: 'Analyze with AI', Icon: Brain, variant: 'default' };
+  };
+
+
   if (status === 'loading') {
      return <div className="flex flex-col min-h-screen"><Navbar /><div className="flex-1 flex items-center justify-center">Loading session...</div></div>;
   }
@@ -256,7 +280,7 @@ export default function RepositoryAnalysisPage() {
                     variant="default"
                   >
                     <ScanSearch className={`mr-2 h-4 w-4 ${isScanningRepo && 'animate-spin'}`} />
-                    {isScanningRepo ? 'Scanning Repo...' : 'Analyze Repository Codebase'}
+                    {isScanningRepo ? 'Scanning Repo...' : 'Analyze Codebase with AI'}
                   </Button>
                 </div>
             </div>
@@ -266,7 +290,7 @@ export default function RepositoryAnalysisPage() {
                 <Info className="h-5 w-5 text-accent" />
                 <AlertBoxTitle className="text-md text-accent mb-1 font-semibold">Repository Codebase Analysis</AlertBoxTitle>
                 <AlertDescription className="text-sm text-accent-foreground/80">
-                    The "Analyze Repository Codebase" button will scan the current state of the default branch. 
+                    The "Analyze Codebase with AI" button will scan the current state of the default branch. 
                     For this version, AI analysis is limited to a small number of source files (e.g., up to 5) to ensure timely results.
                     This is different from PR analysis, which focuses on changes within a pull request.
                 </AlertDescription>
@@ -281,7 +305,7 @@ export default function RepositoryAnalysisPage() {
             ) : pullRequests.length === 0 ? (
                 <div className="text-center py-10">
                     <GitPullRequest className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-lg text-muted-foreground mb-2">No pull requests found in this repository yet.</p>
+                    <p className="text-lg text-muted-foreground mb-2">No pull requests found in this repository (open, closed, or merged).</p>
                     <p className="text-sm text-muted-foreground mb-4">You can still run an AI analysis on the entire codebase.</p>
                      <Button 
                         onClick={handleAnalyzeFullRepository} 
@@ -302,13 +326,16 @@ export default function RepositoryAnalysisPage() {
                       <TableHead>PR</TableHead>
                       <TableHead>Branch</TableHead>
                       <TableHead>Author</TableHead>
+                      <TableHead>State</TableHead>
                       <TableHead>Last Updated</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Analysis</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pullRequests.map(pr => (
+                    {pullRequests.map(pr => {
+                      const { text: analyzeBtnText, Icon: AnalyzeBtnIcon, variant: analyzeBtnVariant } = getAnalyzeButtonTextAndIcon(pr);
+                      return (
                       <TableRow key={pr.id} className={selectedPRsForCompare.includes(pr.number) ? 'bg-primary/10' : ''}>
                         <TableCell>
                           <input 
@@ -331,37 +358,35 @@ export default function RepositoryAnalysisPage() {
                         <TableCell className="text-xs text-muted-foreground">
                            <span className="flex items-center gap-1" title={pr.user?.login || pr.author?.login}><User className="h-3.5 w-3.5"/> {pr.user?.login || pr.author?.login || 'N/A'}</span>
                         </TableCell>
+                        <TableCell>
+                           {getPrStateBadge(pr.state)}
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(pr.updated_at), { addSuffix: true })}
                         </TableCell>
                         <TableCell>{getAnalysisStatusContent(pr)}</TableCell>
                         <TableCell className="text-right space-x-2">
-                          {pr.analysisStatus === 'analyzed' && pr.analysisId ? (
+                          {pr.analysisStatus === 'analyzed' && pr.analysisId && (
                             <Button asChild variant="outline" size="sm">
                               <Link href={`/analyze/${owner}/${repoName}/${pr.number}/${pr.analysisId}`}>
                                 <Eye className="mr-1 h-4 w-4" /> View
                               </Link>
                             </Button>
-                          ) : (
-                            <Button
-                              onClick={() => handleAnalyzePR(pr.number)}
-                              disabled={analyzingPR === pr.number || pr.state.toLowerCase() !== 'open' || pr.analysisStatus === 'pending' || isScanningRepo}
-                              title={pr.state.toLowerCase() !== 'open' ? "Can only analyze open PRs" : (pr.analysisStatus === 'pending' ? "Analysis in progress..." : (pr.analysisStatus === 'failed' ? "Analysis failed, try again?" : `Analyze PR #${pr.number}`))}
-                              size="sm"
-                              variant={pr.analysisStatus === 'failed' ? 'destructive' : 'default'}
-                            >
-                              {analyzingPR === pr.number || pr.analysisStatus === 'pending' ? (
-                                <><Clock className="mr-1 h-4 w-4 animate-spin-slow" /> Analyzing...</>
-                              ) : pr.analysisStatus === 'failed' ? (
-                                <><RefreshCw className="mr-1 h-4 w-4" /> Retry</>
-                              ) : (
-                                <><GitPullRequest className="mr-1 h-4 w-4" /> Analyze</>
-                              )}
-                            </Button>
                           )}
+                           <Button
+                              onClick={() => handleAnalyzePR(pr.number)}
+                              disabled={analyzingPR === pr.number || pr.analysisStatus === 'pending' || isScanningRepo}
+                              title={pr.analysisStatus === 'pending' ? "Analysis in progress..." : `${analyzeBtnText} PR #${pr.number}`}
+                              size="sm"
+                              variant={analyzeBtnVariant as any} // Cast because variant type might be too broad
+                            >
+                              <AnalyzeBtnIcon className={`mr-1 h-4 w-4 ${(analyzingPR === pr.number || pr.analysisStatus === 'pending') && 'animate-spin-slow'}`} /> 
+                              {analyzeBtnText}
+                            </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                       );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -394,4 +419,3 @@ function SkeletonPRRow() {
     </div>
   )
 }
-

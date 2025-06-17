@@ -37,8 +37,8 @@ export async function GET(
         return NextResponse.json({ error: `Repository ${repoFullName} not associated with user or not found in system.` }, { status: 404 });
     }
 
-    // getGitHubPullRequests now fetches all PRs due to pagination in lib/github.ts
-    const githubPRs = await getGitHubPullRequests(owner, repoName, 'open'); 
+    // Fetch ALL pull requests (open, closed, merged)
+    const githubPRs = await getGitHubPullRequests(owner, repoName, 'all'); 
 
     const prNumbersFromGithub = githubPRs.map(pr => pr.number);
 
@@ -52,19 +52,24 @@ export async function GET(
       const localMatch = localPRs.find(localDbPr => localDbPr.number === ghPR.number);
       
       let analysisStatus: 'analyzed' | 'pending' | 'failed' | 'not_started' = 'not_started';
-      if (localMatch?.analysisStatus) { // Prefer status from local DB if explicitly set
+      if (localMatch?.analysisStatus) { 
         analysisStatus = localMatch.analysisStatus;
       } else if (localMatch?.analysis) {
         analysisStatus = 'analyzed';
       }
+
+      let currentPRState: "open" | "closed" | "merged" = ghPR.state as "open" | "closed";
+      if (ghPR.state === 'closed' && ghPR.merged_at) {
+        currentPRState = 'merged';
+      }
       
       return {
         id: ghPR.id, 
-        _id: localMatch?._id?.toString(), // Our DB PullRequest document _id
+        _id: localMatch?._id?.toString(), 
         number: ghPR.number,
         title: ghPR.title,
         body: ghPR.body,
-        state: ghPR.state as "open" | "closed" | "merged", 
+        state: currentPRState, 
         html_url: ghPR.html_url,
         created_at: ghPR.created_at,
         updated_at: ghPR.updated_at,
@@ -73,7 +78,7 @@ export async function GET(
             avatar_url: ghPR.user?.avatar_url || ''
         },
         author: localMatch?.author || { login: ghPR.user?.login || 'unknown', avatar: ghPR.user?.avatar_url || '' },
-        branch: ghPR.head?.ref,
+        branch: ghPR.head?.ref, // branch name is in head.ref
         analysisStatus: analysisStatus,
         analysisId: localMatch?.analysis?._id?.toString() || (typeof localMatch?.analysis === 'string' ? localMatch.analysis : undefined),
         qualityScore: (localMatch?.analysis as any)?.qualityScore, 
