@@ -3,7 +3,7 @@
 
 ## 1. Introduction
 
-codexair is an AI-powered Code Review Intelligence Platform designed to help developers and teams enhance code quality, identify security vulnerabilities, and gain actionable insights from their codebase. It leverages generative AI to automate parts of the code review process, provide explanations, and enable semantic understanding of code.
+codexair is an AI-powered Code Review Intelligence Platform, meticulously engineered to enhance the software development lifecycle. It provides developers and teams with sophisticated tools to improve code quality, identify security vulnerabilities with precision, and extract actionable insights from their codebase. By leveraging generative AI, codexair automates critical aspects of code review, offers intelligent code explanations, and enables a deeper, semantic understanding of software projects.
 
 ## 2. Core Technologies
 
@@ -37,45 +37,49 @@ Provides a comprehensive overview of the user's (or platform's for admin) code a
 - **GitHub Connection Prompt:** If a user is logged in (e.g., via Google) but hasn't connected their GitHub account, a prompt encourages them to link GitHub to enable full functionality.
 
 ### 3.3. Repository Management & Sync (`/analyze`)
-- **List Synced Repositories:** Displays repositories the user has connected from GitHub, with server-side pagination and search.
+- **List Synced Repositories:** Displays repositories the user has connected from GitHub, with server-side pagination and search. Also shows the total open PR count for each repository.
 - **Server-Side Search:** Users can search their synced repositories by name, full name, or primary language. The search is performed on the server.
 - **Comprehensive Sync:** Allows users to fetch and update their list of repositories from GitHub. This process attempts to retrieve up to 10 pages (approx. 300 repos) of the user's most recently updated repositories from GitHub, stores/updates their metadata in the local database, and also fetches the user's total repository count from GitHub.
 
 ### 3.4. Pull Request (PR) Analysis (`/analyze/[owner]/[repoName]`)
 - **PR Listing:** View all open and recently closed pull requests for a selected repository, along with their current analysis status (e.g., Not Analyzed, Pending, Analyzed, Failed).
-- **AI-Powered PR Analysis Initiation:** Users can initiate an in-depth analysis for any open pull request by clicking the "Analyze" button. This process generates vector embeddings for changed/added files, which are stored in the `Analyses` collection.
+- **AI-Powered PR Analysis Initiation:** Users can initiate an in-depth analysis for any open pull request by clicking "**Analyze with AI**". This process generates vector embeddings for changed/added files, which are stored in the `Analyses` collection for semantic search.
 - **Detailed Analysis View (`/analyze/[owner]/[repoName]/[prNumber]/[analysisId]`):**
     - **AI Review Summary (Overall PR):** A concise, AI-generated summary of the key findings for the entire pull request.
     - **Overall Metrics:** Displays aggregated quality score, complexity, and maintainability scores for the PR.
-    - **Security Issues Tab:** Lists all identified security vulnerabilities, filterable by severity, with details.
-    - **Suggestions Tab:** Lists all improvement suggestions, filterable by priority, with details.
+    - **Security Issues Tab:** Lists all identified security vulnerabilities, filterable by severity, with details including file and line numbers.
+    - **Suggestions Tab:** Lists all improvement suggestions, filterable by priority, with details including file and line numbers.
     - **File Details Tab:** An accordion view breaking down the analysis file-by-file, showing individual scores, issues/suggestions, and a file-level AI insight.
 
 ### 3.5. Full Repository Codebase Analysis
-- **Initiation:** From the repository's PR listing page (`/analyze/[owner]/[repoName]`), users can click "Analyze Repository Codebase".
+- **Initiation:** From the repository's PR listing page (`/analyze/[owner]/[repoName]`), users can click "**Analyze Codebase with AI**".
 - **Scope:** This feature analyzes the current state of the repository's default branch (e.g., `main`, `master`).
     - **Note:** The current version analyzes a limited number of source files (e.g., up to 5) from the default branch to ensure timely results in a synchronous operation. This is clearly communicated to the user on the scan results page.
-    - Vector embeddings are generated for analyzed files and stored in the `RepositoryScans` collection.
+    - Vector embeddings are generated for analyzed files and stored in the `RepositoryScans` collection for semantic search.
 - **Analysis Output (`/analyze/[owner]/[repoName]/scan/[scanId]`):**
     - Provides overall quality, complexity, maintainability scores, lists of security issues and suggestions, and file-by-file breakdowns for the analyzed files.
     - Includes an AI-generated summary for the entire repository scan (based on the analyzed files).
     - Clearly indicates that it's a full repository scan, not tied to a specific PR, and mentions the file analysis limitation.
 
-### 3.6. Semantic Code Search
-Leverages AI-generated vector embeddings to find semantically similar code snippets or issue resolutions across **both PR analyses and full repository scans**.
-- **Contextual Search (from PR Analysis or Repository Scan):**
-    - When viewing a detailed PR analysis or repository scan, users can click "Find similar past issues" or "Find similar past patterns" next to identified security issues or improvement suggestions.
-    - This automatically uses the context of that specific issue/suggestion to search for semantically similar occurrences in other recently analyzed pull requests and full repository scans.
-    - The system uses a `sourceType` parameter ('pr_analysis' or 'repo_scan') to fetch the source embedding from the correct collection (`analyses` or `repositoryscans`).
-- **General Search Page (`/search`):**
-    - A dedicated page for free-form semantic search across all indexed PR analyses and full repository scans.
-    - **User Input:** Code snippets or natural language descriptions of problems/patterns.
-    - **How it works:** The input text is converted to a vector embedding. This embedding is compared against the embeddings of all analyzed files from past PRs (from `analyses` collection) and full repository scans (from `repositoryscans` collection).
-    - **Results:** Shows files (and their parent PRs or repository scans) that are most semantically similar to the query, along with AI insights for those files.
+### 3.6. Semantic Code Search (AI-Powered)
+codexair's Semantic Code Search transcends traditional keyword-based searching by understanding the *meaning* behind code and queries. This is achieved through:
+- **AI-Driven Embedding Generation (Data Indexing):**
+    - During both PR analysis (`/api/analyze`) and full repository scans (`/api/repository-scan`), the content of each analyzed code file is processed by the `googleai/text-embedding-004` AI model.
+    - This model converts the code/text into a high-dimensional vector embedding, a numerical fingerprint that captures its semantic essence.
+    - These embeddings are stored within the `Analyses` and `RepositoryScans` collections in MongoDB, associated with their respective files.
+- **AI-Driven Query Transformation (Search Time):**
+    - **General Search (`/search` page):** When a user types a natural language query or pastes a code snippet, this input is sent to the `embedText` Genkit flow. This flow, utilizing the same `text-embedding-004` model, converts the user's query into a vector embedding.
+    - **Contextual Search (from analysis/scan pages):** When a user clicks "Find similar past issues/patterns," the system retrieves the pre-computed AI-generated vector embedding for the specific file and issue context from the database.
+- **Intelligent Matching (MongoDB Atlas Vector Search):**
+    - The query vector (either newly generated or retrieved) is then used to perform a similarity search against the stored embeddings in the `Analyses` and `RepositoryScans` collections using MongoDB Atlas's `$vectorSearch` capabilities.
+    - This returns files and their parent PRs/scans that are semantically closest to the user's query, enabling discovery of related solutions, patterns, or previously addressed issues even if the exact wording or syntax differs.
+- **Functionality:**
+    - **Contextual Search:** From PR analysis or repository scan pages, allows users to find semantically similar occurrences related to a specific issue or suggestion by clicking "**Find similar past issues/patterns**".
+    - **General Search Page (`/search`):** A dedicated page for "**Run Semantic Search**" allowing free-form queries (code or natural language) across all indexed PR analyses and repository scans. Results display similar code snippets and their AI-generated insights.
 
 ### 3.7. PullRequest Comparison (`/analyze/[owner]/[repoName]/compare/[prNumber1]/vs/[prNumber2]`)
 - **Side-by-Side View:** Compares metadata and, if available, full analysis summaries of two pull requests from the same repository.
-- **Analysis Initiation:** Option to initiate analysis for unanalyzed PRs directly from the comparison view.
+- **Analysis Initiation:** Option to initiate analysis via "**Analyze PR with AI**" for unanalyzed PRs directly from the comparison view.
 
 ### 3.8. "Explain My Code" AI Tool (`/explain`)
 - **Input:** Users can paste any code snippet and optionally select the programming language.
@@ -90,6 +94,7 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
 
 ### 4.1. Admin Dashboard (`/admin`)
 - **Platform-wide Overview:** Displays statistics like total users, total repositories synced, and total PR analyses.
+- **Navigation Cards:** Provides quick navigation to User Management (integrated), Contact Messages, Analysis Reports, and Audit Logs.
 - **User Management Section:** Integrated into the main admin page.
 
 ### 4.2. User Management (on `/admin` page)
@@ -105,7 +110,7 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
 
 ### 4.4. Analysis Summary Reports (`/admin/reports`)
 - **System-Wide Reports:** Generates a report summarizing all pull request analyses.
-- **CSV Download:** Allows admins to download the report as a CSV file.
+- **CSV Download:** Allows admins to "**Download Report (CSV)**".
 
 ### 4.5. Audit Logs (`/admin/audit`)
 - **Track Admin Actions:** Logs important administrative actions such as user role changes, user status updates, and when admin reports are fetched.
@@ -127,7 +132,7 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
     - Semantic search operations (`/api/search/semantic-text-search`, `/api/search/similar-code`).
     - Contact form submissions (`/api/contact`).
     - Admin operations (`/api/admin/...`, including `/api/admin/messages`, `/api/admin/messages/[messageId]`).
-- The `/api/repositories` route now supports server-side search via a `searchTerm` parameter.
+- The `/api/repositories` route now supports server-side search via a `searchTerm` parameter and displays total open PR counts for repositories.
 
 ### 5.3. Database (MongoDB with Mongoose)
 - **MongoDB, Mongoose.**
@@ -181,39 +186,39 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
 ## 7. API Workflow Examples (High-Level)
 
 ### 7.1. Pull Request Analysis
-- User initiates analysis.
+- User initiates analysis via "**Analyze with AI**".
 - Backend (`/api/analyze/route.ts`): Fetches PR details, files from GitHub. Filters files (e.g., up to `MAX_FILES_TO_ANALYZE`). For each selected file:
-    - Fetches content, truncates if needed.
-    - Calls `analyzeCode` Genkit flow.
-    - Generates vector embedding via `ai.embed()`.
-- Aggregates results, calls `summarizePrAnalysis` flow.
-- Saves results to `PullRequests` and `Analyses` collections (including embeddings in `Analyses.fileAnalyses.vectorEmbedding`).
+    - Fetches content (diff or full, truncates if needed for analysis, uses full for embedding).
+    - Calls `analyzeCode` Genkit flow for quality, security, suggestions.
+    - Generates vector embedding for file content via `ai.embed()` using `text-embedding-004`.
+- Aggregates results, calls `summarizePrAnalysis` flow for overall PR summary.
+- Saves analysis results to `Analyses` collection (including `fileAnalyses.vectorEmbedding`). Updates `PullRequests` document.
 
 ### 7.2. Full Repository Codebase Scan
-- User initiates scan.
+- User initiates scan via "**Analyze Codebase with AI**".
 - Backend (`/api/repository-scan/route.ts`): Determines default branch, fetches file tree. Filters and selects a limited number of source files (up to `MAX_FILES_TO_SCAN`). For each file:
-    - Fetches content, truncates.
+    - Fetches full content (truncates if needed for analysis, uses full for embedding).
     - Calls `analyzeCode` flow.
-    - Generates embedding via `ai.embed()`.
+    - Generates vector embedding for file content via `ai.embed()` using `text-embedding-004`.
 - Aggregates results and generates an overall summary by calling `summarizePrAnalysis` flow.
-- Saves results to `RepositoryScans` collection (including embeddings in `RepositoryScans.fileAnalyses.vectorEmbedding`).
+- Saves results to `RepositoryScans` collection (including `fileAnalyses.vectorEmbedding`).
 
 ### 7.3. Semantic Search (General Query via `/search` page)
-- User submits query.
+- User submits query on `/search` page.
 - Backend (`/api/search/semantic-text-search/route.ts`):
-    - Calls `embedText` Genkit flow for query embedding.
+    - Calls `embedText` Genkit flow to generate an embedding for the user's query text using `text-embedding-004`.
     - Calls `findSimilarCode` (from `src/lib/vector-search.ts`).
-    - `findSimilarCode` executes two MongoDB Atlas `$vectorSearch` aggregations: one on `analyses` and one on `repositoryscans`. Results are combined, sorted, and limited.
+    - `findSimilarCode` executes two MongoDB Atlas `$vectorSearch` aggregations: one on `analyses` (for PRs) and one on `repositoryscans` (for full scans), comparing the query embedding against stored `fileAnalyses.vectorEmbedding`. Results are combined, sorted by similarity, and limited.
 - Returns list of `SimilarCodeResult` objects.
 
 ### 7.4. Semantic Search (Contextual from Analysis/Scan Page)
-- User clicks "Find similar...".
+- User clicks "**Find similar past issues/patterns**" on a PR analysis or repository scan page.
 - Frontend calls `POST /api/search/similar-code` with `queryAnalysisId` (ID of the current PR Analysis or Repo Scan), `queryFilename`, and `sourceType` ('pr_analysis' or 'repo_scan').
 - Backend (`/api/search/similar-code/route.ts`):
     - Fetches the specified `Analysis` or `RepositoryScan` document based on `sourceType`.
-    - Extracts pre-computed `vectorEmbedding` for `queryFilename`.
+    - Extracts the pre-computed `vectorEmbedding` for the `queryFilename` from that document.
     - Calls `findSimilarCode`, passing this embedding, `queryAnalysisId` (for exclusion), and `queryFilename`.
-- Returns results.
+- Returns list of `SimilarCodeResult` objects.
 
 ## 8. Security Considerations
 - Authentication & Authorization by NextAuth.js.
@@ -245,3 +250,4 @@ Leverages AI-generated vector embeddings to find semantically similar code snipp
 - Team Collaboration Features.
 - IDE Integration.
 - Expanded Language Support.
+
