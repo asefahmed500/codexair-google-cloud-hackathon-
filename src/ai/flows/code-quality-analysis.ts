@@ -35,6 +35,7 @@ const CodeAnalysisOutputSchema = z.object({
         line: z.number().optional().describe('Line number where the issue begins.'),
         suggestion: z.string().describe('Actionable suggestion, ideally with a corrected code example (the "fix") on how to resolve the issue. For example: "Use res.send(escape(req.query.name))" for an XSS. For hardcoded secrets, suggest environment variables or a secrets manager.'),
         cwe: z.string().optional().describe('Common Weakness Enumeration (CWE) identifier (e.g., "CWE-79", "CWE-89", "CWE-798" for Use of Hardcoded Credentials). If a CWE is identified, use the fetchCveDetails tool to get more information.'),
+        resolved: z.boolean().optional().default(false).describe('Indicates if the user has marked this issue as resolved.'),
       })
     )
     .describe('List of security vulnerabilities or warnings found in the code.'),
@@ -48,6 +49,7 @@ const CodeAnalysisOutputSchema = z.object({
         file: z.string().describe('File the suggestion applies to.'),
         line: z.number().optional().describe('Line number the suggestion applies to.'),
         codeExample: z.string().optional().describe('Improved code example demonstrating the suggestion or fix.'),
+        resolved: z.boolean().optional().default(false).describe('Indicates if the user has marked this suggestion as resolved.'),
       })
     )
     .describe('List of suggestions to improve the code quality, performance, or style. Cover aspects like readability, duplication, maintainability (magic numbers, poor naming, missing docs), complexity (deeply nested code, long methods).'),
@@ -143,3 +145,4 @@ const analyzeCodeFlow = ai.defineFlow(
     return output!;
   }
 );
+

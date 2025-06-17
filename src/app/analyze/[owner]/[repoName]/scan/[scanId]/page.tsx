@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { RepositoryScanResult, SecurityIssue, Suggestion, FileAnalysisItem, SimilarCodeResult } from '@/types';
-import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, ScanSearch, GitBranch, CalendarDays, ClipboardCopy, FileSliders, CheckSquare, Square } from 'lucide-react'; // Added FileSliders, CheckSquare, Square
+import { BarChartBig, ChevronDown, LogOut, UserCircle, Settings, AlertTriangle, Lightbulb, FileText, Thermometer, Zap, ShieldCheck, Activity, GitPullRequest, Github, Code2, Search, ThumbsUp, Info, RefreshCw, CheckCircle, ScanSearch, GitBranch, CalendarDays, ClipboardCopy, FileSliders, CheckSquare, Square } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
@@ -190,7 +190,7 @@ export default function RepositoryScanDetailsPage() {
             title: itemToUpdate.title,
             file: itemToUpdate.file,
             line: itemToUpdate.line,
-            description: itemToUpdate.description, // Crucial for matching
+            description: itemToUpdate.description, 
           },
           resolved: !currentResolvedStatus,
         }),
@@ -747,3 +747,4 @@ function ScanDetailsLoadingSkeleton({owner, repoName}: {owner: string, repoName:
     </div>
   );
 }
+
